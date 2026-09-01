@@ -1,0 +1,96 @@
+# Modal-first Aegis geometry PoC configuration.
+# Upload demo01/video.mp4 to aegis-poc-data before running. The default demo
+# estimates intrinsics with DroidCalib; a measured calib.txt is optional.
+
+storage:
+  data_volume: aegis-poc-data
+  model_cache_volume: aegis-model-cache
+  data_mount: /data
+  model_mount: /models
+
+video:
+  filename: video.mp4
+  sample_fps: 15
+  width: 960
+  height: 540
+
+camera:
+  calibration_filename: calib.txt
+  # Use "provided" for a measured calibration file, or "self_calibrated"
+  # to estimate intrinsics from the normalized video with DroidCalib.
+  calibration_mode: self_calibrated
+  # Intrinsics are [fx, fy, cx, cy] for the source video. Leave null when
+  # demo01/calib.txt is uploaded to the data Volume.
+  intrinsics: null
+  intrinsics_resolution: null
+  allow_approximate: false
+  self_calibration_weights_filename: droidcalib.pth
+  self_calibration_weights_url: https://raw.githubusercontent.com/boschresearch/DroidCalib/main/droidcalib.pth
+  self_calibration_camera_model: pinhole
+  self_calibration_stride: 1
+  self_calibration_max_frames: 0
+  self_calibration_width: 517
+  self_calibration_height: 384
+
+depth:
+  model_id: depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf
+  mode: metric
+  batch_size: 2
+  fp16: true
+
+pose:
+  weights_filename: droid.pth
+  # The default is the official DROID-SLAM checkpoint. It is downloaded once
+  # into the model-cache Volume by the remote pose worker.
+  weights_url: https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh
+  stride: 1
+  buffer: 512
+  filter_thresh: 2.4
+  beta: 0.3
+  frontend_thresh: 16.0
+  frontend_window: 25
+  frontend_radius: 2
+  frontend_nms: 1
+  backend_thresh: 22.0
+  backend_radius: 2
+  backend_nms: 3
+  asynchronous: false
+
+dust3r:
+  model_name: DUSt3R_ViTLarge_BaseDecoder_512_dpt
+  weights_filename: DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth
+  weights_url: https://download.europe.naverlabs.com/ComputerVision/DUSt3R/DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth
+  image_size: 512
+  keyframe_stride: 6
+  min_conf_thr: 1.85
+  niter: 300
+  batch_size: 1
+
+perception:
+  detector_model: yolov8m-worldv2.pt
+  target_classes:
+    - shoes
+    - shoe
+    - storage cabinet
+    - cabinet
+    - shelf
+  confidence_threshold: 0.35
+  iou_threshold: 0.45
+  min_points_in_box: 15
+
+geometry:
+  max_points_per_frame: 5000
+  max_total_points: 150000
+  depth_min: 0.1
+  depth_max: 20.0
+  # Metric depth is retained as-is by default. DROID translation remains
+  # monocular/arbitrary-scale; tune these values only for visualization.
+  depth_scale: 1.0
+  pose_scale: 1.0
+
+visualization:
+  log_video: true
+  video_stride: 1
+  point_radius: 0.01
+  camera_radius: 0.04
+

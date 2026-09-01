@@ -1,0 +1,1 @@
+"""Remote visualization artifact generation."""

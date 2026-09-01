@@ -1,0 +1,32 @@
+[project]
+name = "aegis"
+version = "0.1.0"
+description = "A Modal-first spatio-temporal memory proof of concept for assistive care"
+readme = "README.md"
+authors = [
+    { name = "pez-Ox", email = "rfaizan15@gmail.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "modal>=1.5.4",
+    "numpy>=1.26,<3",
+    "pyyaml>=6.0,<7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0,<9",
+]
+viewer = [
+    "rerun-sdk>=0.23,<0.30",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["poc/tests"]
+
+[project.scripts]
+aegis = "aegis:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"

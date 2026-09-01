@@ -94,6 +94,10 @@ ipython_config.py
 #   install all needed dependencies.
 # Pipfile.lock
 
+# Aegis PoC inputs and generated artifacts
+/poc/data/
+/poc/outputs/
+
 # UV
 #   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
@@ -216,3 +220,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Pi / Local agent state
+.pi/
+
