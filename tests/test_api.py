@@ -45,7 +45,8 @@ def test_query_shoes_endpoint() -> None:
     assert "Shoes #1" in res["instance_label"]
     assert res["relation"] == "inside"
     assert "Storage Cabinet #1" in res["anchor_label"]
-    assert "Inside Storage Cabinet #1" in res["location_summary"]
+    assert "Storage Cabinet #1" in res["location_summary"]
+    assert "inside" in res["location_summary"].lower()
     assert res["crop_url"] is not None
     assert res["is_persistent_memory"] is True  # In frame 642, shoes are occluded / stored
 

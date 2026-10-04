@@ -245,13 +245,16 @@ def query_memory(
     data = load_scene_graph_data(dataset_id)
     latest_states = find_latest_objects_state(data)
 
-    normalized_item = item.strip().lower()
+    from aegis.memory.reasoning import QueryReasoningEngine
+
+    events = data.get("events", [])
+    canonical_item = QueryReasoningEngine.extract_target_item(item)
 
     # Find matching instances
     matches: list[dict[str, Any]] = []
     for state in latest_states.values():
         label = state.get("label", "").lower()
-        if normalized_item in label or (normalized_item == "shoes" and "shoe" in label):
+        if canonical_item in label or (canonical_item == "shoes" and "shoe" in label):
             matches.append(state)
 
     if not matches:
@@ -270,22 +273,15 @@ def query_memory(
     matches.sort(key=sort_key, reverse=True)
     primary = matches[0]
 
-    anchor_label = primary.get("anchor_label", "Unknown Anchor")
-    relation = primary.get("relation", "near")
-    dist_m = primary.get("relative_distance")
-    dist_val = float(dist_m) if dist_m is not None else 0.1
-    is_active_view = primary.get("is_active_view", True)
-    is_persistent = not is_active_view
+    reasoning = QueryReasoningEngine.reason_spatio_temporal_state(
+        canonical_item, primary, events
+    )
 
-    # Construct plain-English location summary for dementia patient
-    if relation == "inside":
-        summary = f"Inside {anchor_label} (approx {dist_val * 100:.0f} cm from center)."
-    elif relation == "on_floor":
-        summary = f"On the floor right near {anchor_label}."
-    elif relation == "moving_towards":
-        summary = f"Near {anchor_label}, moving towards it."
-    else:
-        summary = f"Located near {anchor_label} ({relation})."
+    anchor_label = reasoning["anchor_label"]
+    relation = reasoning["relation"]
+    dist_val = reasoning["relative_distance_m"]
+    is_persistent = reasoning["is_persistent_memory"]
+    summary = reasoning["explanation"]
 
     other_instances = [
         {
