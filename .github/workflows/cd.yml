@@ -51,9 +51,6 @@ jobs:
   deploy-flutter-web:
     name: Build & Deploy Flutter Web to GitHub Pages
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,6 +61,12 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Ensure Flutter Web Platform Support
+        working-directory: apps/mobile
+        run: |
+          flutter config --enable-web
+          flutter create --platforms=web --org com.aegis .
+
       - name: Install Flutter dependencies
         working-directory: apps/mobile
         run: flutter pub get
@@ -72,13 +75,23 @@ jobs:
         working-directory: apps/mobile
         run: flutter build web --release --base-href /aegis/
 
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: apps/mobile/build/web
+          publish_branch: gh-pages
+          force_orphan: true
+
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
+        continue-on-error: true
         with:
           path: apps/mobile/build/web
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (Actions Environment)
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4
 
   build-release-apk:
@@ -99,6 +112,10 @@ jobs:
         with:
           channel: 'stable'
           cache: true
+
+      - name: Ensure Android Platform Support
+        working-directory: apps/mobile
+        run: flutter create --platforms=android --org com.aegis .
 
       - name: Install Flutter dependencies
         working-directory: apps/mobile

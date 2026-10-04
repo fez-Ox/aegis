@@ -62,6 +62,11 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Ensure Platform Support
+        if: steps.check_flutter.outputs.exists == 'true'
+        working-directory: apps/mobile
+        run: flutter create --platforms=web --org com.aegis .
+
       - name: Install Flutter dependencies
         if: steps.check_flutter.outputs.exists == 'true'
         working-directory: apps/mobile
