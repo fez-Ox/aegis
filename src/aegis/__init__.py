@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from aegis!")
+"""Aegis proposal-defense proof-of-concept implementation."""

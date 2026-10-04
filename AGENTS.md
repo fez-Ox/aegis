@@ -15,24 +15,25 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 - **Language:** Python 3.12.
 - Use `uv` for dependency management and running scripts (`uv add`, `uv run`); avoid ad-hoc pip installs.
 - Build/test commands:
-  - Lint: `uvx ruff check src poc examples`
-  - Tests: `uv run pytest` (All 16 tests passing)
+  - Lint: `uvx ruff check src tests run_pipeline.py`
+  - Tests: `uv run pytest` (All 18 tests passing)
 
 ## Repository Layout
 
-- `poc/` is the runnable proposal-defense workspace:
-  - `poc/config/demo.yaml`: PoC runtime configuration (15 FPS ingestion, target classes, DUSt3R, YOLO-World, visualization).
-  - `poc/run_pipeline.py`: Modal pipeline entrypoint (`preprocess`, `reconstruct`, `detect`, `rerun`, `all`).
-  - `poc/docs/`: Design documents and implementation plans.
-  - `poc/data/demo01/`: Local input video metadata (`#05_iPhone_Put_Shoes_Into_The_Cabinet`) and extracted frames.
-  - `poc/outputs/`: Downloaded artifacts (`poc/outputs/demo.rrd`, `poc/outputs/demo01/objects/r4d_scene_graph.json`, etc.).
-  - `poc/tests/`: Unit tests (`test_config.py`, `test_geometry.py`, `test_lifting.py`, `test_scene_graph.py`).
-- `src/aegis/poc/`:
-  - `core/`: Config (`config.py`), data models (`models.py`: `BoundingBox3D`, `Detection2D`), canonical volume paths (`paths.py`).
-  - `geometry/`: `dust3r_runner.py` (multi-view 3D reconstruction & global alignment), `lifting.py` (2D-to-3D lifting, 3D voxel downsampling, containment states), `backproject.py`, `transforms.py`.
-  - `perception/`: `detector.py` (open-vocab 2D object detection & tracking via YOLO-World).
+- `config/demo.yaml`: Runtime configuration (15 FPS ingestion, target classes, VGGT-Ω, YOLO-World + SAM 2, visualization).
+- `run_pipeline.py`: Modal pipeline entrypoint (`preprocess`, `reconstruct`, `detect`, `rerun`, `all`).
+- `docs/`: Design documents and implementation plans.
+- `data/demo01/`: Local input video metadata (`#05_iPhone_Put_Shoes_Into_The_Cabinet`) and extracted frames.
+- `outputs/`: Downloaded artifacts (`outputs/demo.rrd`, `outputs/demo01/objects/r4d_scene_graph.json`, etc.).
+- `tests/`: Automated unit tests (`test_config.py`, `test_geometry.py`, `test_lifting.py`, `test_scene_graph.py`).
+- `src/aegis/`:
+  - `core/`: Config (`config.py`), data models (`models.py`: `BoundingBox3D` with rotation/yaw, `Detection2D` with masks), canonical volume paths (`paths.py`).
+  - `geometry/`: `vggt_runner.py` (VGGT-Ω feed-forward 3D reconstruction), `lifting.py` (SAM 2 mask-grounded 2D-to-3D lifting, Z-aligned OBB fitting, containment states), `backproject.py`, `transforms.py`.
+  - `perception/`: `detector.py` (open-vocab 2D object detection via YOLO-World + SAM 2 instance segmentation).
   - `memory/`: `scene_graph.py` (R4DSG Relative 4D Scene Graph memory engine, spatial anchors, multi-instance object permanence, 3D-grounded instance association).
-  - `remote/`: `modal_app.py` (Modal GPU/CPU images on L4 GPUs), `workers.py` (orchestration of DUSt3R, object lifting, R4DSG memory construction, and juxtaposed 2D/3D Rerun logging).
+  - `remote/`: `modal_app.py` (Modal GPU/CPU images on L4 GPUs with secret injection), `workers.py` (orchestration of VGGT-Ω, SAM 2 mask lifting, R4DSG memory construction, and juxtaposed 2D/3D Rerun logging).
+  - `ingestion/`: Video normalization and frame extraction.
+  - `visualization/`: Visualization utilities.
 
 ---
 
@@ -78,6 +79,6 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 ## How to Run & Visualize
 
 ```bash
-rerun poc/outputs/demo.rrd
+rerun outputs/demo.rrd
 ```
 

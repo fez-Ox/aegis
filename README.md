@@ -2,39 +2,45 @@
 
 A spatio-temporal memory system for assistive care.
 
-The current implementation is a Modal-first geometry proof of concept. It is
-kept in a dedicated [`poc/`](poc/) workspace so future production components
-can grow independently.
+Stores and retrieves memories that are grounded in both *when* (temporal) and *where* (spatial) events occurred, supporting assistive-care applications (e.g., context-aware reminders, activity recall for users and caregivers).
 
-## Repository layout
+## Repository Layout
 
 ```text
-poc/                    # runnable proposal-defense demonstration
-  config/               # demo runtime configuration
-  data/                 # local input videos (ignored)
-  docs/                 # PoC implementation notes
-  outputs/              # downloaded/generated artifacts (ignored)
-  run_pipeline.py       # Modal pipeline entrypoint
-  README.md             # PoC setup and usage
-src/aegis/poc/          # PoC Python implementation
-  core/                 # configuration, paths, and data contracts
-  geometry/             # depth lifting and pose transforms
-  ingestion/            # video normalization
-  remote/               # Modal workers and model adapters
-  visualization/        # package exports for visualization code
-examples/               # standalone examples
-  modal/                # Modal SDK starter example
-poc/tests/              # PoC automated tests
+config/               # Runtime pipeline configuration (demo.yaml)
+data/                 # Local input videos and frames (ignored)
+docs/                 # Architecture, design notes, and implementation plans
+outputs/              # Downloaded/generated artifacts and Rerun recordings (.rrd)
+run_pipeline.py       # Modal pipeline entrypoint
+src/aegis/            # Core aegis Python package
+  core/               # Configuration, paths, and data contracts
+  geometry/           # VGGT-Ω 3D reconstruction, point lifting, and OBB fitting
+  ingestion/          # Video normalization and frame extraction
+  memory/             # R4DSG Relative 4D Scene Graph memory engine
+  perception/         # YOLO-World + SAM 2 instance detection & segmentation
+  remote/             # Modal worker functions and remote container images
+  visualization/      # Rerun visualization utilities
+tests/                # Automated test suite
 ```
 
-## Run the PoC
+## Quickstart
 
-See [`poc/README.md`](poc/README.md) for Modal setup, input upload, pipeline
-commands, calibration options, and artifact download instructions.
-
-## Development
+### Development
 
 ```bash
 uv sync --dev
 uv run pytest
+uvx ruff check src tests run_pipeline.py
+```
+
+### Running the Pipeline on Modal
+
+Execute the end-to-end pipeline remotely on Modal:
+
+```bash
+# Full pipeline (ingest, reconstruct with VGGT-Ω, detect with YOLO-World + SAM 2, lift & build R4DSG)
+uv run modal run run_pipeline.py --dataset-id demo01 --stage all
+
+# Visualize results in Rerun
+rerun outputs/demo.rrd
 ```
