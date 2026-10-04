@@ -1,5 +1,10 @@
 # Aegis
 
+[![Aegis CI](https://github.com/fez-Ox/aegis/actions/workflows/ci.yml/badge.svg)](https://github.com/fez-Ox/aegis/actions/workflows/ci.yml)
+[![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A spatio-temporal memory system for assistive care.
 
 Stores and retrieves memories that are grounded in both *when* (temporal) and *where* (spatial) events occurred, supporting assistive-care applications (e.g., context-aware reminders, activity recall for users and caregivers).
