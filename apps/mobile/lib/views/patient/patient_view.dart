@@ -21,7 +21,7 @@ class _PatientViewState extends State<PatientView> {
     {'label': 'Shoes', 'query': 'shoes', 'icon': Icons.snowshoeing_rounded, 'color': AppTheme.tealAccent},
     {'label': 'Keys', 'query': 'keys', 'icon': Icons.key_rounded, 'color': AppTheme.royalAmethyst},
     {'label': 'Glasses', 'query': 'glasses', 'icon': Icons.visibility_rounded, 'color': AppTheme.alertAmber},
-    {'label': 'Medicine', 'query': 'medicine', 'icon': Icons.medication_rounded, 'color': Color(0xFFEC4899)},
+    {'label': 'Medicine', 'query': 'medicine', 'icon': Icons.medication_rounded, 'color': const Color(0xFFEC4899)},
   ];
 
   Future<void> _executeQuery(String item) async {
