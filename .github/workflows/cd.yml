@@ -83,16 +83,11 @@ jobs:
           publish_branch: gh-pages
           force_orphan: true
 
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
-        continue-on-error: true
-        with:
-          path: apps/mobile/build/web
+      - name: Report Pages Deployment URL
+        run: |
+          echo "Flutter Web successfully deployed to gh-pages branch."
+          echo "Live Application URL: https://fez-ox.github.io/aegis/"
 
-      - name: Deploy to GitHub Pages (Actions Environment)
-        id: deployment
-        continue-on-error: true
-        uses: actions/deploy-pages@v4
 
   build-release-apk:
     name: Build Android Release APK
