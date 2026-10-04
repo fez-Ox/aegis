@@ -1,0 +1,83 @@
+name: Aegis CI (Quality & Tests)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-ci:
+    name: Python Core CI (Lint, Format, Test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Static Code Analysis (Ruff Lint)
+        run: uvx ruff check src tests run_pipeline.py
+
+      - name: Formatting Compliance (Ruff Format)
+        run: uvx ruff format --check src tests run_pipeline.py
+
+      - name: Run Pytest Test Suite
+        run: uv run pytest -v tests/
+
+  flutter-ci:
+    name: Flutter Mobile CI (Analyze & Test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if Flutter app exists
+        id: check_flutter
+        run: |
+          if [ -f "apps/mobile/pubspec.yaml" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Flutter
+        if: steps.check_flutter.outputs.exists == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter dependencies
+        if: steps.check_flutter.outputs.exists == 'true'
+        working-directory: apps/mobile
+        run: flutter pub get
+
+      - name: Verify Dart Formatting
+        if: steps.check_flutter.outputs.exists == 'true'
+        working-directory: apps/mobile
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Flutter Static Analysis
+        if: steps.check_flutter.outputs.exists == 'true'
+        working-directory: apps/mobile
+        run: flutter analyze
+
+      - name: Run Flutter Tests
+        if: steps.check_flutter.outputs.exists == 'true'
+        working-directory: apps/mobile
+        run: flutter test
