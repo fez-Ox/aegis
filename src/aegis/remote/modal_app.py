@@ -35,6 +35,9 @@ CPU_IMAGE = (
         "pyyaml>=6.0,<7",
         "opencv-python-headless>=4.10,<5",
         "rerun-sdk>=0.23,<0.30",
+        "fastapi>=0.110.0",
+        "uvicorn>=0.28.0",
+        "pydantic>=2.0.0",
     )
     .add_local_python_source("aegis", copy=True)
 )
