@@ -1,0 +1,45 @@
+name: Sprint Task
+description: Track an assigned implementation task mapped to a team member and FR
+title: "[TASK]: "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Track an implementation task for the FYP-1 milestone.
+  - type: input
+    id: owner
+    attributes:
+      label: Assigned Member
+      description: Who is implementing this task?
+      placeholder: "Shahmeer | Faizan | Ali Sher"
+    validations:
+      required: true
+  - type: dropdown
+    id: fr
+    attributes:
+      label: Associated Requirement
+      options:
+        - "FR1: Video Ingestion & Frame Normalization"
+        - "FR2: Dementia-Accessible Patient & Caregiver UI"
+        - "FR3: 3D Spatial Anchor & Persistent Instance Graph"
+        - "FR4: Anchor-Relative Query & Fast Coordinate Reasoning API"
+        - "FR5: Natural Language / Voice Query Disambiguation"
+        - "FR6: Spatial-Temporal Grounding & Relation Validation"
+        - "DevOps / CI-CD / Architecture"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description & Deliverables
+      description: Detailed breakdown of the work to be done.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria & Tests
+      description: How will this task be verified?
+    validations:
+      required: true

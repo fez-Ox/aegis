@@ -1,0 +1,35 @@
+name: Bug Report
+description: File a bug or unexpected behavior in Aegis
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        File a defect discovered during testing.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Defect Severity
+      options:
+        - "Critical (System Crash / Pipeline Failure)"
+        - "High (Incorrect 3D Coordinates / Failed Bounding)"
+        - "Medium (UI Glitch / Transient Network Issue)"
+        - "Low (Cosmetic / Typography)"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: How to reproduce the bug?
+      placeholder: "1. Run modal run ...\n2. Open UI ...\n3. Observe ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What should have happened vs what happened?
+    validations:
+      required: true
