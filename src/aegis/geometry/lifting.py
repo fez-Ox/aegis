@@ -147,16 +147,30 @@ def lift_detection_to_3d(
                 _evals, evecs = np.linalg.eigh(cov)
                 v = evecs[:, -1]
                 yaw = float(np.arctan2(v[1], v[0]))
-                rot_quat = (0.0, 0.0, float(np.sin(yaw / 2.0)), float(np.cos(yaw / 2.0)))
+                rot_quat = (
+                    0.0,
+                    0.0,
+                    float(np.sin(yaw / 2.0)),
+                    float(np.cos(yaw / 2.0)),
+                )
 
         cos_y, sin_y = np.cos(-yaw), np.sin(-yaw)
         x_rot = inlier_pts[:, 0] * cos_y - inlier_pts[:, 1] * sin_y
         y_rot = inlier_pts[:, 0] * sin_y + inlier_pts[:, 1] * cos_y
         z_pts = inlier_pts[:, 2]
 
-        q_min_x, q_max_x = np.quantile(x_rot, lower_quantile), np.quantile(x_rot, upper_quantile)
-        q_min_y, q_max_y = np.quantile(y_rot, lower_quantile), np.quantile(y_rot, upper_quantile)
-        q_min_z, q_max_z = np.quantile(z_pts, lower_quantile), np.quantile(z_pts, upper_quantile)
+        q_min_x, q_max_x = (
+            np.quantile(x_rot, lower_quantile),
+            np.quantile(x_rot, upper_quantile),
+        )
+        q_min_y, q_max_y = (
+            np.quantile(y_rot, lower_quantile),
+            np.quantile(y_rot, upper_quantile),
+        )
+        q_min_z, q_max_z = (
+            np.quantile(z_pts, lower_quantile),
+            np.quantile(z_pts, upper_quantile),
+        )
 
         cx_rot = float(np.median(x_rot))
         cy_rot = float(np.median(y_rot))
@@ -184,10 +198,27 @@ def lift_detection_to_3d(
     lbl = detection.label.lower()
     max_dim = max(extent)
     volume = extent[0] * extent[1] * extent[2]
-    compact_classes = ("shoe", "pot", "bowl", "basket", "container", "cup", "bottle", "plate")
+    compact_classes = (
+        "shoe",
+        "pot",
+        "bowl",
+        "basket",
+        "container",
+        "cup",
+        "bottle",
+        "plate",
+    )
     if any(k in lbl for k in compact_classes) and (max_dim > 0.85 or volume > 0.25):
         return None
-    anchor_classes = ("counter", "refrigerator", "fridge", "sink", "cabinet", "shelf", "table")
+    anchor_classes = (
+        "counter",
+        "refrigerator",
+        "fridge",
+        "sink",
+        "cabinet",
+        "shelf",
+        "table",
+    )
     if any(k in lbl for k in anchor_classes) and (max_dim > 4.5 or volume > 15.0):
         return None
 
@@ -241,8 +272,7 @@ CONTAINER_LABELS = {
 def _is_container_label(label: str) -> bool:
     normalized = " ".join(label.lower().split())
     return any(
-        token == normalized or token in normalized.split()
-        for token in CONTAINER_LABELS
+        token == normalized or token in normalized.split() for token in CONTAINER_LABELS
     )
 
 
@@ -264,7 +294,9 @@ def _smooth_track_boxes(
             center = np.asarray(box.center, dtype=np.float64)
             size = np.asarray(box.size, dtype=np.float64)
             if previous_center is not None and previous_size is not None:
-                center = smoothing_alpha * previous_center + (1.0 - smoothing_alpha) * center
+                center = (
+                    smoothing_alpha * previous_center + (1.0 - smoothing_alpha) * center
+                )
                 size = smoothing_alpha * previous_size + (1.0 - smoothing_alpha) * size
             previous_center = center
             previous_size = size
@@ -410,7 +442,9 @@ def voxel_downsample(
     min_bound = np.min(points, axis=0)
     voxel_coords = np.floor((points - min_bound) / voxel_size).astype(np.int32)
 
-    unique_voxels, inverse_indices = np.unique(voxel_coords, axis=0, return_inverse=True)
+    unique_voxels, inverse_indices = np.unique(
+        voxel_coords, axis=0, return_inverse=True
+    )
     n_voxels = len(unique_voxels)
 
     down_points = np.zeros((n_voxels, 3), dtype=np.float32)

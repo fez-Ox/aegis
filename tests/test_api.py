@@ -48,7 +48,9 @@ def test_query_shoes_endpoint() -> None:
     assert "Storage Cabinet #1" in res["location_summary"]
     assert "inside" in res["location_summary"].lower()
     assert res["crop_url"] is not None
-    assert res["is_persistent_memory"] is True  # In frame 642, shoes are occluded / stored
+    assert (
+        res["is_persistent_memory"] is True
+    )  # In frame 642, shoes are occluded / stored
 
 
 def test_query_unfound_item() -> None:
@@ -88,4 +90,6 @@ def test_query_latency_performance_claim() -> None:
     duration = time.perf_counter() - start_time
     assert response.status_code == 200
     # Strict validation of Acceptance Criteria AC-03
-    assert duration < 0.500, f"Query took {duration*1000:.1f}ms, exceeding 500ms limit"
+    assert duration < 0.500, (
+        f"Query took {duration * 1000:.1f}ms, exceeding 500ms limit"
+    )

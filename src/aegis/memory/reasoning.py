@@ -34,7 +34,19 @@ class QueryReasoningEngine:
 
         # Fallback to single word if query is brief
         tokens = re.findall(r"\w+", clean)
-        ignore_words = {"where", "is", "my", "are", "did", "i", "put", "leave", "the", "find", "show"}
+        ignore_words = {
+            "where",
+            "is",
+            "my",
+            "are",
+            "did",
+            "i",
+            "put",
+            "leave",
+            "the",
+            "find",
+            "show",
+        }
         meaningful = [t for t in tokens if t not in ignore_words]
         return meaningful[0] if meaningful else clean
 
@@ -97,5 +109,7 @@ class QueryReasoningEngine:
             "is_persistent_memory": not is_active_view,
             "transition_history": prior_state if transition_found else None,
             "explanation": explanation,
-            "edge_case_handled": "occlusion_object_permanence" if not is_active_view else "active_visibility",
+            "edge_case_handled": "occlusion_object_permanence"
+            if not is_active_view
+            else "active_visibility",
         }

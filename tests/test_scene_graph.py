@@ -127,7 +127,9 @@ def test_kitchen_objects_r4dsg() -> None:
         size=(0.25, 0.25, 0.2),
         bbox_2d=(32.0, 30.0, 62.0, 60.0),
     )
-    graph = build_relative_4d_scene_graph([counter, pot1, pot2], [1, 2, 3], [0.2, 0.4, 0.6])
+    graph = build_relative_4d_scene_graph(
+        [counter, pot1, pot2], [1, 2, 3], [0.2, 0.4, 0.6]
+    )
     assert len(graph.anchors) >= 1
     assert "Kitchen Counter" in graph.anchors[0].label
 
@@ -145,4 +147,3 @@ def test_kitchen_objects_r4dsg() -> None:
     f3 = graph.memory_timeline[3]
     assert len(f3) == 1
     assert f3[0].is_active_view is False
-

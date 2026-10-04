@@ -189,9 +189,7 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         or os.getenv("HUGGING_FACE_HUB_TOKEN")
         or os.getenv("hf_token")
     )
-    rec_result = run_vggt_reconstruction(
-        image_paths, config.vggt, hf_token=hf_token
-    )
+    rec_result = run_vggt_reconstruction(image_paths, config.vggt, hf_token=hf_token)
 
     # Save pointmaps and confidence maps
     paths.pointmaps_npz.parent.mkdir(parents=True, exist_ok=True)
@@ -209,7 +207,9 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         points=rec_result["global_points"],
         colors=rec_result["global_colors"],
     )
-    _write_ply(paths.pointcloud_ply, rec_result["global_points"], rec_result["global_colors"])
+    _write_ply(
+        paths.pointcloud_ply, rec_result["global_points"], rec_result["global_colors"]
+    )
 
     # Save camera poses
     pose_records: list[dict[str, Any]] = []
@@ -336,7 +336,9 @@ def run_detect_and_lift(
         weights_dir=weights_dir,
     )
 
-    frame_res = tuple(metadata.get("resolution", (pointmaps[0].shape[1], pointmaps[0].shape[0])))
+    frame_res = tuple(
+        metadata.get("resolution", (pointmaps[0].shape[1], pointmaps[0].shape[0]))
+    )
     raw_lifted_boxes: list[BoundingBox3D] = []
     masks_generated = sum(1 for det in detections_2d if det.mask is not None)
 
@@ -458,10 +460,10 @@ def run_detect_and_lift(
 
 
 TRACK_PALETTE = [
-    [34, 197, 94],   # Emerald Green
+    [34, 197, 94],  # Emerald Green
     [59, 130, 246],  # Vibrant Blue
-    [239, 68, 68],   # Red
-    [234, 179, 8],   # Amber
+    [239, 68, 68],  # Red
+    [234, 179, 8],  # Amber
     [168, 85, 247],  # Purple
     [236, 72, 153],  # Pink
     [20, 184, 166],  # Teal
@@ -711,7 +713,9 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         zup_trajectory = np.asarray([to_zup(pt) for pt in trajectory], dtype=np.float32)
         rr.log(
             "spatial_memory/camera_trajectory",
-            rr.LineStrips3D([zup_trajectory], radii=0.015, colors=[[251, 191, 36]]),  # Amber
+            rr.LineStrips3D(
+                [zup_trajectory], radii=0.015, colors=[[251, 191, 36]]
+            ),  # Amber
             static=True,
         )
 
@@ -742,13 +746,19 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     for value in grid_values:
         grid_strips.append(
             np.asarray(
-                [[-reference_extent, float(value), 0.0], [reference_extent, float(value), 0.0]],
+                [
+                    [-reference_extent, float(value), 0.0],
+                    [reference_extent, float(value), 0.0],
+                ],
                 dtype=np.float32,
             )
         )
         grid_strips.append(
             np.asarray(
-                [[float(value), -reference_extent, 0.0], [float(value), reference_extent, 0.0]],
+                [
+                    [float(value), -reference_extent, 0.0],
+                    [float(value), reference_extent, 0.0],
+                ],
                 dtype=np.float32,
             )
         )
@@ -761,8 +771,6 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         ),
         static=True,
     )
-
-
 
     if not r4d_events and paths.events_json.exists():
         r4d_events = _read_json(paths.events_json).get("events", [])
@@ -857,9 +865,7 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                         [box["bbox_2d"] for box in clean_boxes], dtype=np.float32
                     ),
                     array_format=rr.Box2DFormat.XYXY,
-                    colors=[
-                        _track_color(int(box["track_id"])) for box in clean_boxes
-                    ],
+                    colors=[_track_color(int(box["track_id"])) for box in clean_boxes],
                     labels=[
                         f"{box['label']} #{box['track_id']}" for box in clean_boxes
                     ],
@@ -948,4 +954,3 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     }
     _record_benchmark_stats(paths, dataset_id, "rerun", stage_result)
     return stage_result
-

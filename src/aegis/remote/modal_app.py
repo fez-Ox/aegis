@@ -72,9 +72,7 @@ VGGT_IMAGE = (
         "scikit-image>=0.22,<1",
         "matplotlib>=3.9,<4",
     )
-    .run_commands(
-        "pip install git+https://github.com/facebookresearch/vggt-omega.git"
-    )
+    .run_commands("pip install git+https://github.com/facebookresearch/vggt-omega.git")
     .env(
         {
             "HF_HOME": f"{MODEL_MOUNT}/huggingface",
@@ -182,4 +180,3 @@ def rerun_remote(dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
     result = run_rerun(dataset_id, config)
     data_volume.commit()
     return result
-

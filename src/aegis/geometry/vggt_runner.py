@@ -21,7 +21,8 @@ def run_vggt_reconstruction(
     config: VggtConfig,
     *,
     hf_token: str | None = None,
-    actor_boxes_by_image: Sequence[list[tuple[float, float, float, float]]] | None = None,
+    actor_boxes_by_image: Sequence[list[tuple[float, float, float, float]]]
+    | None = None,
 ) -> dict[str, Any]:
     """Execute VGGT-Ω feed-forward multi-view reconstruction and point cloud fusion.
 
@@ -132,9 +133,7 @@ def run_vggt_reconstruction(
         img_np = predictions["images"].squeeze(0).detach().float().cpu().numpy()
         if img_np.ndim == 4 and img_np.shape[1] == 3:
             img_np = np.transpose(img_np, (0, 2, 3, 1))
-        loaded_images = [
-            (img * 255.0).clip(0, 255).astype(np.uint8) for img in img_np
-        ]
+        loaded_images = [(img * 255.0).clip(0, 255).astype(np.uint8) for img in img_np]
         h, w = depth_maps.shape[1], depth_maps.shape[2]
 
         # Unproject depth maps to world pointmaps
@@ -188,9 +187,11 @@ def run_vggt_reconstruction(
             ],
             axis=1,
         )
-        pointmaps = (homogeneous @ p_cw_0.T)[:, :3].reshape(
-            n_images, depth_maps.shape[1], depth_maps.shape[2], 3
-        ).astype(np.float32)
+        pointmaps = (
+            (homogeneous @ p_cw_0.T)[:, :3]
+            .reshape(n_images, depth_maps.shape[1], depth_maps.shape[2], 3)
+            .astype(np.float32)
+        )
 
     except Exception as e:
         if device == "cuda":
@@ -233,8 +234,8 @@ def run_vggt_reconstruction(
             pm = pointmaps[i]
             flat = pm.reshape(-1, 3).astype(np.float64)
             homo = np.concatenate([flat, np.ones((len(flat), 1))], axis=1)
-            pointmaps[i] = (homo @ origin_inv.T)[:, :3].reshape(h, w, 3).astype(
-                np.float32
+            pointmaps[i] = (
+                (homo @ origin_inv.T)[:, :3].reshape(h, w, 3).astype(np.float32)
             )
 
     # Build filtered global point cloud with dynamic actor masking
@@ -249,7 +250,9 @@ def run_vggt_reconstruction(
     else:
         conf_thr = 1e-4
 
-    for i, (pm, cm, img_rgb) in enumerate(zip(pointmaps, confmaps, loaded_images, strict=True)):
+    for i, (pm, cm, img_rgb) in enumerate(
+        zip(pointmaps, confmaps, loaded_images, strict=True)
+    ):
         valid_mask = (
             (cm >= conf_thr)
             & np.isfinite(pm).all(axis=2)
@@ -287,7 +290,7 @@ def run_vggt_reconstruction(
 
     return {
         "pointmaps": pointmaps,  # (N, H, W, 3)
-        "confmaps": confmaps,    # (N, H, W)
+        "confmaps": confmaps,  # (N, H, W)
         "poses": poses.astype(np.float32),  # (N, 4, 4)
         "intrinsics": intrinsics.astype(np.float32),  # (N, 3, 3)
         "depth_maps": depth_maps,  # (N, H, W)

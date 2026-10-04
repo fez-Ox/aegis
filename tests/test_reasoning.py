@@ -8,9 +8,15 @@ from aegis.memory.reasoning import QueryReasoningEngine
 def test_extract_target_item_synonyms() -> None:
     """Test natural language queries map to canonical items."""
     assert QueryReasoningEngine.extract_target_item("Where are my sneakers?") == "shoes"
-    assert QueryReasoningEngine.extract_target_item("Did I leave my car key somewhere?") == "keys"
+    assert (
+        QueryReasoningEngine.extract_target_item("Did I leave my car key somewhere?")
+        == "keys"
+    )
     assert QueryReasoningEngine.extract_target_item("Where is my eyewear?") == "glasses"
-    assert QueryReasoningEngine.extract_target_item("Where did I leave my pills?") == "medicine"
+    assert (
+        QueryReasoningEngine.extract_target_item("Where did I leave my pills?")
+        == "medicine"
+    )
 
 
 def test_reason_occluded_object_permanence_edge_case() -> None:
@@ -30,7 +36,9 @@ def test_reason_occluded_object_permanence_edge_case() -> None:
         }
     ]
 
-    reasoning = QueryReasoningEngine.reason_spatio_temporal_state("shoes", primary, events)
+    reasoning = QueryReasoningEngine.reason_spatio_temporal_state(
+        "shoes", primary, events
+    )
     assert reasoning["is_persistent_memory"] is True
     assert reasoning["edge_case_handled"] == "occlusion_object_permanence"
     assert "safely put away inside Storage Cabinet #1" in reasoning["explanation"]

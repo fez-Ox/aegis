@@ -98,7 +98,9 @@ class TimelineEventModel(BaseModel):
 def get_search_paths(dataset_id: str) -> list[Path]:
     """Return priority paths to locate r4d_scene_graph.json."""
     return [
-        Path(f"/data/{dataset_id}/objects/r4d_scene_graph.json"),  # Modal persistent volume
+        Path(
+            f"/data/{dataset_id}/objects/r4d_scene_graph.json"
+        ),  # Modal persistent volume
         Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),  # Local output
         Path("outputs/demo01/objects/r4d_scene_graph.json"),
         Path(f"data/{dataset_id}/objects/r4d_scene_graph.json"),
@@ -234,7 +236,9 @@ def get_anchors(dataset_id: str = DEFAULT_DATASET_ID) -> list[AnchorModel]:
 
 @app.get("/api/v1/query", response_model=MemoryQueryResponse)
 def query_memory(
-    item: str = Query(..., description="Query item name, e.g. 'shoes', 'keys', 'glasses'"),
+    item: str = Query(
+        ..., description="Query item name, e.g. 'shoes', 'keys', 'glasses'"
+    ),
     dataset_id: str = DEFAULT_DATASET_ID,
 ) -> MemoryQueryResponse:
     """Query the memory graph for the current location of an item.

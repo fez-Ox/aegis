@@ -96,11 +96,7 @@ def model_paths(config: RuntimeConfig) -> tuple[Path, Path, Path]:
 def dust3r_model_path(config: RuntimeConfig) -> Path:
     """Return the DUSt3R checkpoint path in the model Volume."""
 
-    return (
-        Path(config.storage.model_mount)
-        / "dust3r"
-        / config.dust3r.weights_filename
-    )
+    return Path(config.storage.model_mount) / "dust3r" / config.dust3r.weights_filename
 
 
 def calibration_model_path(config: RuntimeConfig) -> Path:
@@ -111,4 +107,3 @@ def calibration_model_path(config: RuntimeConfig) -> Path:
         / "droid-calib"
         / config.camera.self_calibration_weights_filename
     )
-

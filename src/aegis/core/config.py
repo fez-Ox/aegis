@@ -17,8 +17,6 @@ DEFAULT_DROID_CALIB_WEIGHTS_URL = (
 )
 
 
-
-
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
     if value is None:
         return {}
@@ -404,7 +402,9 @@ class RuntimeConfig:
             if not isinstance(target_classes_raw, Sequence) or isinstance(
                 target_classes_raw, (str, bytes)
             ):
-                raise TypeError("perception.target_classes must be a sequence of strings")
+                raise TypeError(
+                    "perception.target_classes must be a sequence of strings"
+                )
             target_classes = tuple(str(item) for item in target_classes_raw)
         else:
             target_classes = perception_defaults.target_classes
@@ -420,9 +420,7 @@ class RuntimeConfig:
                 )
             ),
             iou_threshold=float(
-                perception_raw.get(
-                    "iou_threshold", perception_defaults.iou_threshold
-                )
+                perception_raw.get("iou_threshold", perception_defaults.iou_threshold)
             ),
             min_points_in_box=int(
                 perception_raw.get(
@@ -549,4 +547,3 @@ def config_to_dict(config: RuntimeConfig) -> dict[str, Any]:
     """Convert a runtime configuration to a Modal-serializable dictionary."""
 
     return asdict(config)
-

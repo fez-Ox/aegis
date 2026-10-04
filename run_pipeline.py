@@ -72,6 +72,7 @@ def main(
 
     # Inject Hugging Face token for gated models (e.g. facebook/VGGT-Omega)
     import os
+
     token = (
         os.getenv("HF_TOKEN")
         or os.getenv("HUGGING_FACE_HUB_TOKEN")
@@ -136,7 +137,9 @@ def _print_benchmark_summary(results: list[dict[str, Any]]) -> None:
     print("\n" + "=" * 80)
     print("                AEGIS PIPELINE EXECUTION & BENCHMARK REPORT")
     print("=" * 80)
-    header = f"{'Stage':<18} | {'Duration (s)':<12} | {'Peak VRAM (GB)':<14} | {'Details'}"
+    header = (
+        f"{'Stage':<18} | {'Duration (s)':<12} | {'Peak VRAM (GB)':<14} | {'Details'}"
+    )
     print(header)
     print("-" * 80)
     total_time = 0.0
@@ -185,9 +188,18 @@ def _download_outputs(dataset_id: str) -> None:
 
     paths_to_fetch = [
         (f"{dataset_id}/outputs/viewer/demo.rrd", local_root / "demo.rrd"),
-        (f"{dataset_id}/outputs/viewer/demo.rrd", local_root / dataset_id / "viewer" / "demo.rrd"),
-        (f"{dataset_id}/outputs/benchmark_stats.json", local_root / "benchmark_stats.json"),
-        (f"{dataset_id}/outputs/benchmark_stats.json", local_root / dataset_id / "benchmark_stats.json"),
+        (
+            f"{dataset_id}/outputs/viewer/demo.rrd",
+            local_root / dataset_id / "viewer" / "demo.rrd",
+        ),
+        (
+            f"{dataset_id}/outputs/benchmark_stats.json",
+            local_root / "benchmark_stats.json",
+        ),
+        (
+            f"{dataset_id}/outputs/benchmark_stats.json",
+            local_root / dataset_id / "benchmark_stats.json",
+        ),
         (
             f"{dataset_id}/outputs/objects/detected_objects_3d.json",
             local_root / dataset_id / "objects" / "detected_objects_3d.json",
@@ -228,4 +240,3 @@ def _download_outputs(dataset_id: str) -> None:
             print(
                 f"  ⚠ Could not download {remote_path}: {res.stderr.strip() or res.stdout.strip()}"
             )
-

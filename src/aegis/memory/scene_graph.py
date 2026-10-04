@@ -128,7 +128,9 @@ def _normalise_label(label: str) -> str:
 def _is_anchor_label(label: str) -> bool:
     normalized = _normalise_label(label)
     return normalized in ANCHOR_CLASS_NAMES or any(
-        anchor in normalized.split() for anchor in ANCHOR_CLASS_NAMES if " " not in anchor
+        anchor in normalized.split()
+        for anchor in ANCHOR_CLASS_NAMES
+        if " " not in anchor
     )
 
 
@@ -173,7 +175,9 @@ def extract_spatial_anchors(boxes_3d: Sequence[BoundingBox3D]) -> list[SpatialAn
         canonical_center = np.median(centers, axis=0)
         canonical_size = np.quantile(sizes, 0.85, axis=0)
         display_name = label.replace("_", " ").title()
-        if not display_name.endswith(f"#{index}") and not display_name.endswith(str(index)):
+        if not display_name.endswith(f"#{index}") and not display_name.endswith(
+            str(index)
+        ):
             display_name = f"{display_name} #{index}"
         anchors.append(
             SpatialAnchor(
@@ -196,7 +200,9 @@ def _anchor_for_box(
     obj_center = np.asarray(box.center, dtype=np.float64)
     return min(
         anchors,
-        key=lambda a: float(np.linalg.norm(obj_center - np.asarray(a.center, dtype=np.float64))),
+        key=lambda a: float(
+            np.linalg.norm(obj_center - np.asarray(a.center, dtype=np.float64))
+        ),
     )
 
 
@@ -223,7 +229,9 @@ def classify_unique_instance(
     if existing_instances:
         for iid, info in existing_instances.items():
             if info["label_key"] == lbl:
-                dist = float(np.linalg.norm(c - np.asarray(info["center"], dtype=np.float64)))
+                dist = float(
+                    np.linalg.norm(c - np.asarray(info["center"], dtype=np.float64))
+                )
                 if dist < 0.28:
                     info["count"] = info.get("count", 1) + 1
                     return iid, info["display_name"]
@@ -280,8 +288,7 @@ def _build_events(
             )
             displacement = float(
                 np.linalg.norm(
-                    np.asarray(current_start.center)
-                    - np.asarray(previous_end.center)
+                    np.asarray(current_start.center) - np.asarray(previous_end.center)
                 )
             )
             events.append(
@@ -343,7 +350,9 @@ def build_relative_4d_scene_graph(
         active_instances = set(best_by_instance)
         for inst_id, (inst_name, box) in best_by_instance.items():
             anchor = _anchor_for_box(box, anchors)
-            anc_center = np.asarray(anchor.center, dtype=np.float64) if anchor else np.zeros(3)
+            anc_center = (
+                np.asarray(anchor.center, dtype=np.float64) if anchor else np.zeros(3)
+            )
             b_center = np.asarray(box.center, dtype=np.float64)
             rel_vec = b_center - anc_center
             rel_dist = float(np.linalg.norm(rel_vec))
@@ -354,18 +363,34 @@ def build_relative_4d_scene_graph(
                     relation = "inside"
                 elif rel_vec[1] > 0.15 and frame_id < 300:
                     relation = "on_floor"
-                elif box.spatial_state == "in_motion" or (inst_id == 1 and 300 <= frame_id < 480):
+                elif box.spatial_state == "in_motion" or (
+                    inst_id == 1 and 300 <= frame_id < 480
+                ):
                     relation = "moving_towards"
-                elif rel_dist < 0.20 or box.spatial_state.startswith("inside") or frame_id >= 480:
+                elif (
+                    rel_dist < 0.20
+                    or box.spatial_state.startswith("inside")
+                    or frame_id >= 480
+                ):
                     relation = "inside"
                 else:
                     relation = "moving_towards" if inst_id == 1 else "on_surface"
             else:
                 anc_lbl = anchor.label.lower() if anchor else ""
                 is_closed_container = any(
-                    k in anc_lbl for k in ("cabinet", "fridge", "cupboard", "drawer", "box", "closet")
+                    k in anc_lbl
+                    for k in (
+                        "cabinet",
+                        "fridge",
+                        "cupboard",
+                        "drawer",
+                        "box",
+                        "closet",
+                    )
                 )
-                if box.container_relation is not None or box.spatial_state.startswith("inside"):
+                if box.container_relation is not None or box.spatial_state.startswith(
+                    "inside"
+                ):
                     relation = "inside" if is_closed_container else "on_surface"
                 elif box.spatial_state == "in_motion":
                     relation = "moving_towards"

@@ -15,7 +15,9 @@ from aegis.core.config import PerceptionConfig, Sam2Config
 from aegis.core.models import Detection2D
 
 
-def _compute_iou(box_a: tuple[float, float, float, float], box_b: tuple[float, float, float, float]) -> float:
+def _compute_iou(
+    box_a: tuple[float, float, float, float], box_b: tuple[float, float, float, float]
+) -> float:
     """Compute Intersection-over-Union between two bounding boxes (x1, y1, x2, y2)."""
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b
@@ -105,9 +107,11 @@ def _track_match_cost(
 
     # IoU is strongest when available; center and scale keep tracks alive when
     # egocentric camera motion makes the overlap small.
-    return (1.0 - iou) * 0.55 + min(normalized_distance, 2.0) * 0.35 + min(
-        size_change, 2.0
-    ) * 0.10
+    return (
+        (1.0 - iou) * 0.55
+        + min(normalized_distance, 2.0) * 0.35
+        + min(size_change, 2.0) * 0.10
+    )
 
 
 def _update_track(
@@ -226,7 +230,9 @@ def detect_and_track_objects(
             verbose=False,
         )
 
-        current_frame_boxes: list[tuple[str, float, tuple[float, float, float, float]]] = []
+        current_frame_boxes: list[
+            tuple[str, float, tuple[float, float, float, float]]
+        ] = []
         if len(results) > 0 and results[0].boxes is not None:
             boxes = results[0].boxes
             for idx in range(len(boxes)):
@@ -239,16 +245,22 @@ def detect_and_track_objects(
                 label = _canonical_label(raw_label)
                 conf = float(boxes.conf[idx].item())
                 xyxy = tuple(float(v) for v in boxes.xyxy[idx].tolist())
-                current_frame_boxes.append((label, conf, (xyxy[0], xyxy[1], xyxy[2], xyxy[3])))
+                current_frame_boxes.append(
+                    (label, conf, (xyxy[0], xyxy[1], xyxy[2], xyxy[3]))
+                )
 
         # Class-agnostic NMS to eliminate overlapping duplicate detections
         # and prevent visual clutter (at most 3-4 clean non-overlapping boxes per frame)
         if len(current_frame_boxes) > 1:
             current_frame_boxes.sort(key=lambda item: item[1], reverse=True)
-            suppressed_boxes: list[tuple[str, float, tuple[float, float, float, float]]] = []
+            suppressed_boxes: list[
+                tuple[str, float, tuple[float, float, float, float]]
+            ] = []
             for item in current_frame_boxes:
                 bbox_i = item[2]
-                if any(_compute_iou(bbox_i, kept[2]) > 0.35 for kept in suppressed_boxes):
+                if any(
+                    _compute_iou(bbox_i, kept[2]) > 0.35 for kept in suppressed_boxes
+                ):
                     continue
                 suppressed_boxes.append(item)
                 if len(suppressed_boxes) >= 4:

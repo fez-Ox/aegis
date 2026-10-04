@@ -64,11 +64,15 @@ def test_lift_detection_with_confmap() -> None:
         bbox=(2.0, 2.0, 6.0, 6.0),
     )
     # Requires min_points=10 -> should return None
-    box_3d = lift_detection_to_3d(det, pointmap, confmap=confmap, min_conf_thr=1.5, min_points=10)
+    box_3d = lift_detection_to_3d(
+        det, pointmap, confmap=confmap, min_conf_thr=1.5, min_points=10
+    )
     assert box_3d is None
 
     # With min_points=3 -> should succeed
-    box_3d = lift_detection_to_3d(det, pointmap, confmap=confmap, min_conf_thr=1.5, min_points=3)
+    box_3d = lift_detection_to_3d(
+        det, pointmap, confmap=confmap, min_conf_thr=1.5, min_points=3
+    )
     assert box_3d is not None
 
 
@@ -145,8 +149,16 @@ def test_voxel_downsample() -> None:
     from aegis.geometry.lifting import voxel_downsample
 
     # Create 100 points clustered around (0, 0, 0) and (1, 1, 1)
-    pts1 = np.random.default_rng(42).normal(loc=0.0, scale=0.001, size=(50, 3)).astype(np.float32)
-    pts2 = np.random.default_rng(42).normal(loc=1.0, scale=0.001, size=(50, 3)).astype(np.float32)
+    pts1 = (
+        np.random.default_rng(42)
+        .normal(loc=0.0, scale=0.001, size=(50, 3))
+        .astype(np.float32)
+    )
+    pts2 = (
+        np.random.default_rng(42)
+        .normal(loc=1.0, scale=0.001, size=(50, 3))
+        .astype(np.float32)
+    )
     points = np.concatenate([pts1, pts2], axis=0)
     colors = np.full((100, 3), 200, dtype=np.uint8)
 
@@ -197,7 +209,9 @@ def test_evaluate_spatial_containment_and_states() -> None:
         bbox_2d=(150.0, 30.0, 170.0, 50.0),
     )
 
-    evaluated = evaluate_spatial_containment_and_states([cab, shoes_inside, shoes_moving])
+    evaluated = evaluate_spatial_containment_and_states(
+        [cab, shoes_inside, shoes_moving]
+    )
     assert len(evaluated) == 3
     # Check cabinet
     assert evaluated[0].spatial_state == "static_structure"
@@ -274,6 +288,3 @@ def test_lift_detection_oriented_bounding_box() -> None:
     # Angle should be approx pi/4 (0.785 rad)
     np.testing.assert_allclose(abs(box_3d.yaw), np.pi / 4, atol=0.15)
     assert len(box_3d.rotation) == 4
-
-
-
