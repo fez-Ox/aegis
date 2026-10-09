@@ -268,10 +268,9 @@ def detect_and_track_objects(
                 suppress = False
                 for kept in suppressed_boxes:
                     is_hand_kept = kept[0] == "hand"
-                    if is_hand_i == is_hand_kept:
-                        if _compute_iou(bbox_i, kept[2]) > 0.35:
-                            suppress = True
-                            break
+                    if is_hand_i == is_hand_kept and _compute_iou(bbox_i, kept[2]) > 0.35:
+                        suppress = True
+                        break
                 if not suppress:
                     suppressed_boxes.append(item)
                 if len(suppressed_boxes) >= 6:

@@ -93,12 +93,27 @@ class QueryReasoningEngine:
                 )
             else:
                 explanation = f"Your {target_item} are inside {anchor}."
+        elif relation == "carried_by_user" or primary_match.get("is_in_hand", False):
+            if not is_active_view:
+                explanation = (
+                    f"You recently picked up your {target_item}. "
+                    f"Even though they are currently obstructed by your hands or body, "
+                    f"Aegis tracks that you are carrying them right now."
+                )
+            else:
+                explanation = f"You are currently holding and carrying your {target_item} in your hands."
         elif relation == "on_floor":
             explanation = f"Your {target_item} are on the floor right near {anchor}."
         elif relation == "moving_towards":
             explanation = f"Your {target_item} are near {anchor}."
         else:
             explanation = f"Your {target_item} are located at {anchor} ({relation})."
+
+        edge_case = "active_visibility"
+        if relation == "carried_by_user" or primary_match.get("is_in_hand", False):
+            edge_case = "in_hand_obstruction_persistence"
+        elif not is_active_view:
+            edge_case = "occlusion_object_permanence"
 
         return {
             "canonical_item": target_item,
@@ -109,7 +124,6 @@ class QueryReasoningEngine:
             "is_persistent_memory": not is_active_view,
             "transition_history": prior_state if transition_found else None,
             "explanation": explanation,
-            "edge_case_handled": "occlusion_object_permanence"
-            if not is_active_view
-            else "active_visibility",
+            "edge_case_handled": edge_case,
         }
+

@@ -147,3 +147,149 @@ def test_kitchen_objects_r4dsg() -> None:
     f3 = graph.memory_timeline[3]
     assert len(f3) == 1
     assert f3[0].is_active_view is False
+
+
+def test_in_hand_kinematic_attachment_during_occlusion() -> None:
+    # Cabinet anchor
+    cab = BoundingBox3D(
+        frame_id=1,
+        timestamp=0.1,
+        track_id=10,
+        label="storage cabinet",
+        confidence=0.9,
+        center=(0.0, 3.0, 1.0),
+        size=(1.0, 0.6, 1.5),
+        bbox_2d=(10.0, 10.0, 100.0, 100.0),
+    )
+    # Shoe lifted in hand at frame 300
+    shoes_in_hand = BoundingBox3D(
+        frame_id=300,
+        timestamp=20.0,
+        track_id=1,
+        label="shoes",
+        confidence=0.9,
+        center=(0.0, 0.5, 0.2),
+        size=(0.2, 0.2, 0.2),
+        bbox_2d=(50.0, 50.0, 120.0, 120.0),
+        spatial_state="in_hand",
+        is_in_hand=True,
+    )
+
+    poses = {
+        300: [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        350: [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 1.0],  # Camera moved 1m forward
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        400: [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 2.0],  # Camera moved 2m forward
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    }
+
+    all_frames = [300, 350, 400]
+    all_ts = [20.0, 23.3, 26.6]
+
+    graph = build_relative_4d_scene_graph(
+        [cab, shoes_in_hand], all_frames, all_ts, camera_poses=poses
+    )
+
+    # Frame 300: active in hand
+    f300 = graph.memory_timeline[300]
+    shoes_300 = next(e for e in f300 if "shoe" in e.label.lower())
+    assert shoes_300.is_in_hand is True
+    assert shoes_300.relation == "carried_by_user"
+    assert shoes_300.carrier == "camera_wearer"
+
+    # Frame 350: completely occluded (not detected), but kinematically transported with camera!
+    f350 = graph.memory_timeline[350]
+    shoes_350 = next(e for e in f350 if "shoe" in e.label.lower())
+    assert shoes_350.is_active_view is False  # Natural obstruction / occluded!
+    assert shoes_350.is_in_hand is True
+    assert shoes_350.relation == "carried_by_user"
+    assert abs(shoes_350.center[1] - (shoes_300.center[1] + 1.0)) < 0.01
+
+    # Frame 400: still occluded, moved +2.0m forward with camera
+    f400 = graph.memory_timeline[400]
+    shoes_400 = next(e for e in f400 if "shoe" in e.label.lower())
+    assert shoes_400.is_in_hand is True
+    assert abs(shoes_400.center[1] - (shoes_300.center[1] + 2.0)) < 0.01
+
+
+def test_hybrid_release_gate_and_events() -> None:
+    cab = BoundingBox3D(
+        frame_id=1,
+        timestamp=0.1,
+        track_id=10,
+        label="storage cabinet",
+        confidence=0.9,
+        center=(0.0, 3.0, 1.0),
+        size=(1.0, 0.6, 1.5),
+        bbox_2d=(10.0, 10.0, 100.0, 100.0),
+    )
+    # Shoe on floor initially at frame 100
+    shoes_floor = BoundingBox3D(
+        frame_id=100,
+        timestamp=6.6,
+        track_id=1,
+        label="shoes",
+        confidence=0.9,
+        center=(0.0, 0.0, 0.1),
+        size=(0.2, 0.2, 0.2),
+        bbox_2d=(50.0, 50.0, 120.0, 120.0),
+        spatial_state="on_surface",
+    )
+    # Shoe lifted in hand at frame 300
+    shoes_lifted = BoundingBox3D(
+        frame_id=300,
+        timestamp=20.0,
+        track_id=1,
+        label="shoes",
+        confidence=0.9,
+        center=(0.0, 0.5, 0.3),
+        size=(0.2, 0.2, 0.2),
+        bbox_2d=(50.0, 50.0, 120.0, 120.0),
+        spatial_state="in_hand",
+        is_in_hand=True,
+    )
+
+    all_frames = [100, 300, 480]
+    all_ts = [6.6, 20.0, 32.0]
+
+    graph = build_relative_4d_scene_graph(
+        [cab, shoes_floor, shoes_lifted], all_frames, all_ts
+    )
+
+    # Frame 100: on floor
+    f100 = graph.memory_timeline[100]
+    s100 = next(e for e in f100 if "shoe" in e.label.lower())
+    assert s100.relation == "on_floor"
+    assert s100.is_in_hand is False
+
+    # Frame 300: carried by user
+    f300 = graph.memory_timeline[300]
+    s300 = next(e for e in f300 if "shoe" in e.label.lower())
+    assert s300.relation == "carried_by_user"
+    assert s300.is_in_hand is True
+
+    # Frame 480: placed inside cabinet
+    f480 = graph.memory_timeline[480]
+    s480 = next(e for e in f480 if "shoe" in e.label.lower())
+    assert s480.relation == "inside"
+    assert s480.is_in_hand is False
+
+    # Events should record pickup and placement
+    event_types = [e["event_type"] for e in graph.events]
+    assert "pickup" in event_types
+    assert "placement" in event_types
+
+
