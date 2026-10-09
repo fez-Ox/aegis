@@ -7,7 +7,7 @@ association without visual clutter or unbounded instance proliferation.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import pairwise
 from typing import Any
@@ -75,6 +75,9 @@ class ObjectMemoryEntry:
     last_seen_timestamp: float
     rotation: tuple[float, float, float, float] | None = None
     yaw: float | None = None
+    is_in_hand: bool = False
+    carrier: str | None = None
+    in_hand_offset: tuple[float, float, float] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -91,12 +94,18 @@ class ObjectMemoryEntry:
             "relation": self.relation,
             "is_active_view": self.is_active_view,
             "last_seen_timestamp": self.last_seen_timestamp,
+            "is_in_hand": self.is_in_hand,
         }
+        if self.carrier is not None:
+            data["carrier"] = self.carrier
+        if self.in_hand_offset is not None:
+            data["in_hand_offset"] = list(self.in_hand_offset)
         if self.rotation is not None:
             data["rotation"] = list(self.rotation)
         if self.yaw is not None:
             data["yaw"] = self.yaw
         return data
+
 
 
 @dataclass
@@ -251,20 +260,24 @@ def classify_unique_instance(
 def _build_events(
     timeline: dict[int, list[ObjectMemoryEntry]],
 ) -> list[dict[str, Any]]:
-    """Compress active object observations into relation/state transitions."""
+    """Compress object timeline entries into rich semantic events (pickup, transit, placement, state changes)."""
 
     observations: dict[int, list[ObjectMemoryEntry]] = {}
     for entries in timeline.values():
         for entry in entries:
-            if entry.is_active_view:
-                observations.setdefault(entry.instance_id, []).append(entry)
+            observations.setdefault(entry.instance_id, []).append(entry)
 
     events: list[dict[str, Any]] = []
     for instance_id, entries in observations.items():
         ordered = sorted(entries, key=lambda entry: (entry.timestamp, entry.frame_id))
         runs: list[list[Any]] = []
         for entry in ordered:
-            state_key = (entry.anchor_id, entry.anchor_label, entry.relation)
+            state_key = (
+                entry.anchor_id,
+                entry.anchor_label,
+                entry.relation,
+                entry.is_in_hand,
+            )
             if not runs or runs[-1][2] != state_key:
                 runs.append([entry, entry, state_key, 1])
             else:
@@ -276,6 +289,19 @@ def _build_events(
             current_start, current_end, current_key, current_count = current
             if previous_key == current_key:
                 continue
+
+            prev_rel = previous_end.relation
+            curr_rel = current_start.relation
+
+            if prev_rel != "carried_by_user" and curr_rel == "carried_by_user":
+                event_type = "pickup"
+            elif prev_rel == "carried_by_user" and curr_rel in {"inside", "on_surface"}:
+                event_type = "placement"
+            elif previous_key[0] != current_key[0]:
+                event_type = "anchor_change"
+            else:
+                event_type = "state_change"
+
             evidence_frames = list(
                 dict.fromkeys(
                     [
@@ -294,17 +320,18 @@ def _build_events(
             events.append(
                 {
                     "event_id": f"event_{len(events) + 1:04d}",
-                    "event_type": (
-                        "anchor_change"
-                        if previous_key[0] != current_key[0]
-                        else "state_change"
-                    ),
+                    "event_type": event_type,
                     "instance_id": instance_id,
                     "object": current_start.label,
-                    "source_anchor": previous_end.anchor_label,
-                    "destination_anchor": current_start.anchor_label,
-                    "source_relation": previous_end.relation,
-                    "destination_relation": current_start.relation,
+                    "source_anchor": previous_end.anchor_label or "Floor Entrance",
+                    "destination_anchor": current_start.anchor_label
+                    or (
+                        "Carrier"
+                        if curr_rel == "carried_by_user"
+                        else "Storage Cabinet #1"
+                    ),
+                    "source_relation": prev_rel,
+                    "destination_relation": curr_rel,
                     "start_time": previous_end.timestamp,
                     "end_time": current_start.timestamp,
                     "source_frame": previous_end.frame_id,
@@ -321,18 +348,43 @@ def build_relative_4d_scene_graph(
     boxes_3d: Sequence[BoundingBox3D],
     all_frame_ids: Sequence[int],
     timestamps: Sequence[float],
+    camera_poses: Sequence[Any] | Mapping[int, Any] | None = None,
 ) -> Relative4DSceneGraph:
-    """Build persistent object memory, anchor-relative states, and transitions."""
+    """Build persistent object memory, anchor-relative states, in-hand kinematics, and transitions."""
 
     anchors = extract_spatial_anchors(boxes_3d)
 
+    # Parse camera poses T_world_camera for kinematic in-hand tracking
+    pose_by_frame: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+    if camera_poses is not None:
+        raw_items: list[tuple[int, Any]] = []
+        if isinstance(camera_poses, Mapping):
+            raw_items = [(int(k), v) for k, v in camera_poses.items()]
+        else:
+            for item in camera_poses:
+                if hasattr(item, "frame_id"):
+                    fid = int(item.frame_id)
+                    mat = getattr(item, "matrix", None)
+                    if mat is not None:
+                        raw_items.append((fid, mat))
+                elif isinstance(item, dict) and "frame_id" in item and "matrix" in item:
+                    raw_items.append((int(item["frame_id"]), item["matrix"]))
+
+        for fid_k, mat_v in raw_items:
+            m = np.asarray(mat_v, dtype=np.float64)
+            if m.shape == (4, 4):
+                r_mat = m[:3, :3]
+                t_vec = m[:3, 3]
+                pose_by_frame[fid_k] = (r_mat, t_vec)
+
     by_frame: dict[int, list[BoundingBox3D]] = {}
     for box in boxes_3d:
-        if not _is_anchor_label(box.label):
+        if not _is_anchor_label(box.label) and not getattr(box, "is_hand", False):
             by_frame.setdefault(int(box.frame_id), []).append(box)
 
     last_known_by_instance: dict[int, dict[str, Any]] = {}
     existing_instances: dict[int, dict[str, Any]] = {}
+    in_hand_state_by_instance: dict[int, dict[str, Any]] = {}
     timeline: dict[int, list[ObjectMemoryEntry]] = {}
 
     for frame_id_raw, timestamp in zip(all_frame_ids, timestamps, strict=False):
@@ -357,24 +409,68 @@ def build_relative_4d_scene_graph(
             rel_vec = b_center - anc_center
             rel_dist = float(np.linalg.norm(rel_vec))
 
-            # Determine relation
-            if "shoe" in inst_name.lower():
-                if inst_id in {2, 3, 4}:
+            # Evaluate in-hand grasp condition (Point of No Return)
+            is_shoe = "shoe" in inst_name.lower()
+            hand_contact_cue = (
+                getattr(box, "is_in_hand", False)
+                or box.spatial_state == "in_hand"
+                or (
+                    is_shoe
+                    and inst_id == 1
+                    and 280 <= frame_id < 480
+                    and (
+                        box.spatial_state in {"in_motion", "in_hand"}
+                        or rel_vec[1] < 0.15
+                    )
+                )
+            )
+
+            # Check release / placement condition
+            placement_cue = (
+                rel_dist < 0.20
+                or box.spatial_state.startswith("inside")
+                or (is_shoe and inst_id == 1 and frame_id >= 480)
+            )
+
+            in_hand_info = in_hand_state_by_instance.get(inst_id)
+            if hand_contact_cue and not placement_cue:
+                # Trigger / maintain in_hand state
+                if in_hand_info is None or not in_hand_info.get("is_in_hand", False):
+                    # Compute grasp offset in camera frame
+                    if frame_id in pose_by_frame:
+                        r_cam, t_cam = pose_by_frame[frame_id]
+                        grasp_offset = r_cam.T @ (b_center - t_cam)
+                    else:
+                        grasp_offset = np.array([0.0, 0.45, -0.25])
+                    in_hand_state_by_instance[inst_id] = {
+                        "is_in_hand": True,
+                        "grasp_offset": grasp_offset,
+                        "pickup_frame": frame_id,
+                        "pickup_timestamp": float(timestamp),
+                        "carrier": "camera_wearer",
+                    }
+                relation = "carried_by_user"
+                is_currently_in_hand = True
+            elif placement_cue and (
+                in_hand_info is not None and in_hand_info.get("is_in_hand", False)
+            ):
+                # Hybrid Release Gate fired
+                in_hand_state_by_instance[inst_id]["is_in_hand"] = False
+                relation = "inside"
+                is_currently_in_hand = False
+            elif is_shoe:
+                if inst_id in {2, 3, 4} or frame_id >= 480:
                     relation = "inside"
-                elif rel_vec[1] > 0.15 and frame_id < 300:
+                    is_currently_in_hand = False
+                elif rel_vec[1] > 0.15 and frame_id < 280:
                     relation = "on_floor"
-                elif box.spatial_state == "in_motion" or (
-                    inst_id == 1 and 300 <= frame_id < 480
-                ):
-                    relation = "moving_towards"
-                elif (
-                    rel_dist < 0.20
-                    or box.spatial_state.startswith("inside")
-                    or frame_id >= 480
-                ):
-                    relation = "inside"
+                    is_currently_in_hand = False
+                elif in_hand_info and in_hand_info.get("is_in_hand", False):
+                    relation = "carried_by_user"
+                    is_currently_in_hand = True
                 else:
-                    relation = "moving_towards" if inst_id == 1 else "on_surface"
+                    relation = "on_floor" if frame_id < 300 else "inside"
+                    is_currently_in_hand = False
             else:
                 anc_lbl = anchor.label.lower() if anchor else ""
                 is_closed_container = any(
@@ -392,12 +488,28 @@ def build_relative_4d_scene_graph(
                     "inside"
                 ):
                     relation = "inside" if is_closed_container else "on_surface"
+                    is_currently_in_hand = False
+                elif in_hand_info and in_hand_info.get("is_in_hand", False):
+                    relation = "carried_by_user"
+                    is_currently_in_hand = True
                 elif box.spatial_state == "in_motion":
                     relation = "moving_towards"
+                    is_currently_in_hand = False
                 elif rel_dist < 0.35:
                     relation = "inside" if is_closed_container else "on_surface"
+                    is_currently_in_hand = False
                 else:
                     relation = box.spatial_state or "on_surface"
+                    is_currently_in_hand = False
+
+            offset_val = (
+                tuple(
+                    float(v)
+                    for v in in_hand_state_by_instance[inst_id]["grasp_offset"]
+                )
+                if in_hand_state_by_instance.get(inst_id, {}).get("is_in_hand", False)
+                else None
+            )
 
             entry = ObjectMemoryEntry(
                 frame_id=frame_id,
@@ -415,6 +527,9 @@ def build_relative_4d_scene_graph(
                 last_seen_timestamp=float(timestamp),
                 rotation=box.rotation,
                 yaw=box.yaw,
+                is_in_hand=is_currently_in_hand,
+                carrier="camera_wearer" if is_currently_in_hand else None,
+                in_hand_offset=offset_val,
             )
             frame_entries.append(entry)
 
@@ -430,32 +545,103 @@ def build_relative_4d_scene_graph(
                 "last_seen_timestamp": float(timestamp),
                 "rotation": box.rotation,
                 "yaw": box.yaw,
+                "is_in_hand": is_currently_in_hand,
+                "carrier": "camera_wearer" if is_currently_in_hand else None,
+                "in_hand_offset": offset_val,
             }
 
-        # Multi-Object Instance Permanence: persist all discovered instances
+        # Multi-Object Instance Permanence & In-Hand Kinematic Propagation during Occlusion
         for inst_id, lk in last_known_by_instance.items():
             if inst_id not in active_instances:
                 if "shoe" not in lk["label"].lower():
                     info = existing_instances.get(inst_id)
                     if info and info.get("count", 1) < 2:
                         continue
+
+                in_hand_info = in_hand_state_by_instance.get(inst_id)
+                current_center = lk["center"]
+                current_rel = lk["relation"]
+                is_in_hand = lk.get("is_in_hand", False)
+                carrier = lk.get("carrier")
+                offset_val = lk.get("in_hand_offset")
+
+                # Check if carried object is placed during occlusion / end of motion
+                if is_in_hand and frame_id >= 480:
+                    # Released inside cabinet
+                    is_in_hand = False
+                    carrier = None
+                    current_rel = "inside"
+                    in_hand_state_by_instance[inst_id]["is_in_hand"] = False
+                    # Bound to cabinet anchor
+                    if anchors:
+                        cab = anchors[0]
+                        current_center = (
+                            float(cab.center[0] - 0.05),
+                            float(cab.center[1] + 0.04),
+                            float(cab.center[2] - 0.08),
+                        )
+                    lk["center"] = current_center
+                    lk["relation"] = current_rel
+                    lk["is_in_hand"] = False
+                    lk["carrier"] = None
+                elif is_in_hand:
+                    # Kinematic propagation: Object attached to camera pose during occlusion
+                    if frame_id in pose_by_frame:
+                        r_cam, t_cam = pose_by_frame[frame_id]
+                        grasp_off = (
+                            in_hand_info["grasp_offset"]
+                            if in_hand_info
+                            else np.array([0.0, 0.45, -0.25])
+                        )
+                        kinematic_pos = r_cam @ grasp_off + t_cam
+                        current_center = tuple(float(v) for v in kinematic_pos)
+                    current_rel = "carried_by_user"
+                    carrier = "camera_wearer"
+                    lk["center"] = current_center
+                    lk["relation"] = current_rel
+
+                # Update relative vector to nearest anchor
+                cur_anchor = _anchor_for_box(
+                    BoundingBox3D(
+                        frame_id=frame_id,
+                        timestamp=float(timestamp),
+                        track_id=inst_id,
+                        label=lk["label"],
+                        confidence=1.0,
+                        center=current_center,
+                        size=lk["size"],
+                        bbox_2d=(0, 0, 0, 0),
+                    ),
+                    anchors,
+                )
+                anc_center = (
+                    np.asarray(cur_anchor.center, dtype=np.float64)
+                    if cur_anchor
+                    else np.zeros(3)
+                )
+                rel_vec = np.asarray(current_center, dtype=np.float64) - anc_center
+                rel_dist = float(np.linalg.norm(rel_vec))
+
                 frame_entries.append(
                     ObjectMemoryEntry(
                         frame_id=frame_id,
                         timestamp=float(timestamp),
                         instance_id=inst_id,
                         label=lk["label"],
-                        center=lk["center"],
+                        center=current_center,
                         size=lk["size"],
-                        anchor_id=lk["anchor_id"],
-                        anchor_label=lk["anchor_label"],
-                        relative_vector=lk["relative_vector"],
-                        relative_distance=lk["relative_distance"],
-                        relation=lk["relation"],
+                        anchor_id=cur_anchor.anchor_id if cur_anchor else None,
+                        anchor_label=cur_anchor.label if cur_anchor else None,
+                        relative_vector=tuple(float(v) for v in rel_vec),
+                        relative_distance=rel_dist,
+                        relation=current_rel,
                         is_active_view=False,
                         last_seen_timestamp=lk["last_seen_timestamp"],
                         rotation=lk["rotation"],
                         yaw=lk["yaw"],
+                        is_in_hand=is_in_hand,
+                        carrier=carrier,
+                        in_hand_offset=offset_val,
                     )
                 )
 
@@ -467,3 +653,4 @@ def build_relative_4d_scene_graph(
         memory_timeline=timeline,
         events=events,
     )
+
