@@ -372,7 +372,15 @@ def run_detect_and_lift(
 
     all_kf_ids = [int(f["frame_id"]) for f in keyframe_records]
     all_ts = [float(f["timestamp"]) for f in keyframe_records]
-    scene_graph = build_relative_4d_scene_graph(lifted_boxes, all_kf_ids, all_ts)
+
+    pose_records = None
+    if paths.poses.exists():
+        pose_data = _read_json(paths.poses)
+        pose_records = pose_data.get("poses", [])
+
+    scene_graph = build_relative_4d_scene_graph(
+        lifted_boxes, all_kf_ids, all_ts, camera_poses=pose_records
+    )
 
     paths.objects_json.parent.mkdir(parents=True, exist_ok=True)
     _write_json(
@@ -777,11 +785,12 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     event_lines = ["# R4DSG memory events", ""]
     if r4d_events:
         for event in r4d_events:
+            ev_type = str(event.get("event_type", "transition")).upper()
             event_lines.append(
-                "- **{object}**: {source_relation} → {destination_relation} "
-                "({start_time:.2f}s–{end_time:.2f}s), evidence frames {evidence_frames}".format(
-                    **event
-                )
+                f"- **[{ev_type}] {event['object']}**: "
+                f"{event.get('source_relation', 'unknown')} → {event.get('destination_relation', 'unknown')} "
+                f"({event['start_time']:.2f}s–{event['end_time']:.2f}s), "
+                f"evidence frames {event.get('evidence_frames', [])}"
             )
     else:
         event_lines.append("No stable relation transitions were detected.")
@@ -858,6 +867,19 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                 if len(clean_boxes) >= 3:
                     break
 
+            clean_labels: list[str] = []
+            clean_colors: list[list[int]] = []
+            for box in clean_boxes:
+                lbl = f"{box['label']} #{box['track_id']}"
+                if box.get("is_in_hand", False):
+                    lbl += " [In Hand]"
+                    clean_colors.append([245, 158, 11])  # Amber #F59E0B
+                elif box.get("is_hand", False):
+                    clean_colors.append([244, 63, 94])  # Rose
+                else:
+                    clean_colors.append(_track_color(int(box["track_id"])))
+                clean_labels.append(lbl)
+
             rr.log(
                 "video/detections",
                 rr.Boxes2D(
@@ -865,10 +887,8 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                         [box["bbox_2d"] for box in clean_boxes], dtype=np.float32
                     ),
                     array_format=rr.Box2DFormat.XYXY,
-                    colors=[_track_color(int(box["track_id"])) for box in clean_boxes],
-                    labels=[
-                        f"{box['label']} #{box['track_id']}" for box in clean_boxes
-                    ],
+                    colors=clean_colors,
+                    labels=clean_labels,
                 ),
             )
 
@@ -892,14 +912,32 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                 sizes = [to_zup_size(e["size"]) for e in mem_entries]
                 labels = []
                 colors = []
+                in_hand_links = []
+                cam_pos = interp_positions.get(frame_id)
 
                 for e in mem_entries:
-                    status = "ACTIVE" if e["is_active_view"] else "MEMORY"
-                    labels.append(f"{e['label']} · {status}")
-                    if e["is_active_view"]:
+                    is_in_hand = e.get("is_in_hand", False)
+                    relation = e.get("relation", "")
+                    anchor_lbl = e.get("anchor_label", "Anchor")
+                    base_lbl = e["label"]
+                    obj_center_zup = to_zup(e["center"])
+
+                    if is_in_hand:
+                        labels.append(f"{base_lbl} · [Carried by User]")
+                        colors.append([245, 158, 11])  # Amber #F59E0B
+                        if cam_pos is not None:
+                            in_hand_links.append(
+                                np.asarray([cam_pos, obj_center_zup], dtype=np.float32)
+                            )
+                    elif relation == "inside":
+                        labels.append(f"{base_lbl} · [Inside {anchor_lbl}]")
+                        colors.append([16, 185, 129])  # Emerald #10B981
+                    elif e["is_active_view"]:
+                        labels.append(f"{base_lbl} · ACTIVE")
                         colors.append(_track_color(int(e["instance_id"])))
                     else:
-                        colors.append([20, 184, 166])  # Teal for persistent memory
+                        labels.append(f"{base_lbl} · ✦ PERSISTENT MEMORY")
+                        colors.append([20, 184, 166])  # Teal #14B8A6
 
                 quats = [zup_box_quaternion(e.get("rotation")) for e in mem_entries]
 
@@ -914,8 +952,22 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                     ),
                 )
 
+                if in_hand_links:
+                    rr.log(
+                        "spatial_memory/in_hand_link",
+                        rr.LineStrips3D(
+                            in_hand_links,
+                            radii=0.015,
+                            colors=[[245, 158, 11]],  # Amber
+                            labels=["Carried Link"],
+                        ),
+                    )
+                else:
+                    rr.log("spatial_memory/in_hand_link", rr.Clear.flat())
+
             else:
                 rr.log("spatial_memory/persistent_objects", rr.Clear.flat())
+                rr.log("spatial_memory/in_hand_link", rr.Clear.flat())
 
     _write_json(
         paths.viewer_manifest,
