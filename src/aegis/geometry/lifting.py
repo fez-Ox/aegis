@@ -233,7 +233,10 @@ def lift_detection_to_3d(
         bbox_2d=(float(x1), float(y1), float(x2), float(y2)),
         rotation=rot_quat,
         yaw=yaw,
+        is_hand=detection.is_hand,
+        held_by_hand_track_id=detection.contact_target_track_id,
     )
+
 
 
 def compute_motion_trails(
@@ -313,7 +316,12 @@ def _smooth_track_boxes(
                 container_relation=box.container_relation,
                 rotation=box.rotation,
                 yaw=box.yaw,
+                is_hand=box.is_hand,
+                is_in_hand=box.is_in_hand,
+                carrier=box.carrier,
+                held_by_hand_track_id=box.held_by_hand_track_id,
             )
+
 
     return [box for box in smoothed if box is not None]
 
@@ -364,11 +372,13 @@ def evaluate_spatial_containment_and_states(
     for frame_id in sorted(by_frame):
         frame_boxes = by_frame[frame_id]
         containers = [box for box in frame_boxes if _is_container_label(box.label)]
+        hands = [box for box in frame_boxes if box.is_hand]
 
         for box in frame_boxes:
             is_container = _is_container_label(box.label)
+            is_hand_box = box.is_hand
             contained_in: str | None = None
-            if not is_container:
+            if not is_container and not is_hand_box:
                 object_center = np.asarray(box.center)
                 object_half_size = np.asarray(box.size) * 0.5
                 object_min = object_center - object_half_size
@@ -386,12 +396,38 @@ def evaluate_spatial_containment_and_states(
                         break
 
             velocity = velocities.get((box.track_id, box.frame_id), 0.0)
+
+            # Check hand-object grasp / in-hand state
+            is_in_hand = box.is_in_hand
+            carrier = box.carrier
+            held_by_hand_id = box.held_by_hand_track_id
+
+            if not is_container and not is_hand_box:
+                for hand in hands:
+                    dist_to_hand = float(
+                        np.linalg.norm(
+                            np.asarray(box.center) - np.asarray(hand.center)
+                        )
+                    )
+                    if (
+                        hand.held_by_hand_track_id == box.track_id
+                        or dist_to_hand <= 0.35
+                    ):
+                        is_in_hand = True
+                        carrier = "camera_wearer"
+                        held_by_hand_id = hand.track_id
+                        break
+
             if contained_in is not None:
                 spatial_state = f"inside_{contained_in.split()[0]}"
-            elif velocity > velocity_threshold and not is_container:
+                is_in_hand = False
+                carrier = None
+            elif is_in_hand:
+                spatial_state = "in_hand"
+            elif velocity > velocity_threshold and not is_container and not is_hand_box:
                 spatial_state = "in_motion"
-            elif is_container:
-                spatial_state = "static_structure"
+            elif is_container or is_hand_box:
+                spatial_state = "static_structure" if is_container else "hand"
             else:
                 spatial_state = "on_surface"
 
@@ -409,10 +445,15 @@ def evaluate_spatial_containment_and_states(
                     container_relation=contained_in,
                     rotation=box.rotation,
                     yaw=box.yaw,
+                    is_hand=is_hand_box,
+                    is_in_hand=is_in_hand,
+                    carrier=carrier,
+                    held_by_hand_track_id=held_by_hand_id,
                 )
             )
 
     return updated_boxes
+
 
 
 def voxel_downsample(

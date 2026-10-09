@@ -143,7 +143,12 @@ def _update_track(
 
 def _canonical_label(label: str) -> str:
     normalized = " ".join(label.lower().strip().split())
-    return "shoes" if normalized in {"shoe", "shoes"} else normalized
+    if normalized in {"shoe", "shoes"}:
+        return "shoes"
+    if normalized in {"hand", "human hand", "hands"}:
+        return "hand"
+    return normalized
+
 
 
 def detect_and_track_objects(
@@ -249,21 +254,26 @@ def detect_and_track_objects(
                     (label, conf, (xyxy[0], xyxy[1], xyxy[2], xyxy[3]))
                 )
 
-        # Class-agnostic NMS to eliminate overlapping duplicate detections
-        # and prevent visual clutter (at most 3-4 clean non-overlapping boxes per frame)
+        # Class-aware NMS to eliminate duplicate detections per category
+        # without suppressing hands that overlap objects during interaction/grasping.
         if len(current_frame_boxes) > 1:
             current_frame_boxes.sort(key=lambda item: item[1], reverse=True)
             suppressed_boxes: list[
                 tuple[str, float, tuple[float, float, float, float]]
             ] = []
             for item in current_frame_boxes:
+                lbl_i = item[0]
                 bbox_i = item[2]
-                if any(
-                    _compute_iou(bbox_i, kept[2]) > 0.35 for kept in suppressed_boxes
-                ):
-                    continue
-                suppressed_boxes.append(item)
-                if len(suppressed_boxes) >= 4:
+                is_hand_i = lbl_i == "hand"
+                suppress = False
+                for kept in suppressed_boxes:
+                    is_hand_kept = kept[0] == "hand"
+                    if is_hand_i == is_hand_kept and _compute_iou(bbox_i, kept[2]) > 0.35:
+                        suppress = True
+                        break
+                if not suppress:
+                    suppressed_boxes.append(item)
+                if len(suppressed_boxes) >= 6:
                     break
             current_frame_boxes = suppressed_boxes
 
@@ -314,6 +324,29 @@ def detect_and_track_objects(
             matched_detection_to_track[b_idx] = track_id
             used_track_ids.add(track_id)
 
+        # Compute hand-object contact association
+        contact_pairs: dict[int, int] = {}  # hand_box_index -> object_track_id
+        hand_indices = [
+            idx
+            for idx, (lbl, _, _) in enumerate(current_frame_boxes)
+            if lbl == "hand"
+        ]
+        object_indices = [
+            idx
+            for idx, (lbl, _, _) in enumerate(current_frame_boxes)
+            if lbl != "hand"
+        ]
+
+        for h_idx in hand_indices:
+            h_box = current_frame_boxes[h_idx][2]
+            for o_idx in object_indices:
+                o_box = current_frame_boxes[o_idx][2]
+                o_track_id = matched_detection_to_track.get(o_idx)
+                iou = _compute_iou(h_box, o_box)
+                if iou >= config.hand_contact_iou_threshold and o_track_id is not None:
+                    contact_pairs[h_idx] = o_track_id
+                    break
+
         for b_idx, (label, conf, bbox) in enumerate(current_frame_boxes):
             assigned_id = matched_detection_to_track.get(b_idx)
             if assigned_id is None:
@@ -333,6 +366,8 @@ def detect_and_track_objects(
                 )
 
             mask_val = masks_by_idx.get(b_idx)
+            is_hand = label == "hand"
+            target_obj_track_id = contact_pairs.get(b_idx) if is_hand else None
             all_detections.append(
                 Detection2D(
                     frame_id=frame_id,
@@ -342,7 +377,10 @@ def detect_and_track_objects(
                     confidence=conf,
                     bbox=bbox,
                     mask=mask_val,
+                    is_hand=is_hand,
+                    contact_target_track_id=target_obj_track_id,
                 )
             )
 
     return all_detections
+

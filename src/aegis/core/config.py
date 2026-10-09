@@ -191,6 +191,8 @@ class PerceptionConfig:
     min_points_in_box: int = 15
     track_max_gap: int = 3
     track_smoothing: float = 0.65
+    hand_contact_iou_threshold: float = 0.10
+    hand_contact_max_distance: float = 0.35
 
 
 @dataclass(frozen=True, slots=True)
@@ -435,7 +437,20 @@ class RuntimeConfig:
                     "track_smoothing", perception_defaults.track_smoothing
                 )
             ),
+            hand_contact_iou_threshold=float(
+                perception_raw.get(
+                    "hand_contact_iou_threshold",
+                    perception_defaults.hand_contact_iou_threshold,
+                )
+            ),
+            hand_contact_max_distance=float(
+                perception_raw.get(
+                    "hand_contact_max_distance",
+                    perception_defaults.hand_contact_max_distance,
+                )
+            ),
         )
+
         if (
             perception.confidence_threshold <= 0
             or perception.confidence_threshold > 1.0

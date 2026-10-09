@@ -76,12 +76,17 @@ perception:
     - storage cabinet
     - cabinet
     - shelf
+    - hand
+    - human hand
   confidence_threshold: 0.45
   iou_threshold: 0.45
   min_points_in_box: 25
   # Keep identities alive across short detector misses between keyframes.
   track_max_gap: 3
   track_smoothing: 0.65
+  hand_contact_iou_threshold: 0.10
+  hand_contact_max_distance: 0.35
+
 
 geometry:
   max_points_per_frame: 5000

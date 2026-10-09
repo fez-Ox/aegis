@@ -109,17 +109,23 @@ class Detection2D:
     confidence: float
     bbox: tuple[float, float, float, float]  # (x1, y1, x2, y2)
     mask: Any = None  # Optional binary np.ndarray mask (H, W)
+    is_hand: bool = False
+    contact_target_track_id: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable 2D detection record."""
-        return {
+        data: dict[str, Any] = {
             "frame_id": self.frame_id,
             "timestamp": self.timestamp,
             "track_id": self.track_id,
             "label": self.label,
             "confidence": self.confidence,
             "bbox": list(self.bbox),
+            "is_hand": self.is_hand,
         }
+        if self.contact_target_track_id is not None:
+            data["contact_target_track_id"] = self.contact_target_track_id
+        return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +144,10 @@ class BoundingBox3D:
     container_relation: str | None = None
     rotation: tuple[float, float, float, float] | None = None  # Quaternion (x, y, z, w)
     yaw: float | None = None  # Yaw angle in radians around vertical Z axis
+    is_hand: bool = False
+    is_in_hand: bool = False
+    carrier: str | None = None
+    held_by_hand_track_id: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable 3D bounding box record."""
@@ -152,9 +162,16 @@ class BoundingBox3D:
             "bbox_2d": list(self.bbox_2d),
             "spatial_state": self.spatial_state,
             "container_relation": self.container_relation,
+            "is_hand": self.is_hand,
+            "is_in_hand": self.is_in_hand,
         }
+        if self.carrier is not None:
+            data["carrier"] = self.carrier
+        if self.held_by_hand_track_id is not None:
+            data["held_by_hand_track_id"] = self.held_by_hand_track_id
         if self.rotation is not None:
             data["rotation"] = list(self.rotation)
         if self.yaw is not None:
             data["yaw"] = self.yaw
         return data
+
