@@ -4,13 +4,55 @@ import '../models/query_result.dart';
 import '../models/timeline_event.dart';
 
 class ApiService {
-  final String baseUrl;
+  String baseUrl;
   final http.Client _client;
 
   ApiService({
     this.baseUrl = 'http://127.0.0.1:8000',
     http.Client? client,
   }) : _client = client ?? http.Client();
+
+  /// Dynamically update the backend host URL
+  void updateBaseUrl(String newUrl) {
+    String trimmed = newUrl.trim();
+    if (trimmed.endsWith('/')) {
+      trimmed = trimmed.substring(0, trimmed.length - 1);
+    }
+    baseUrl = trimmed;
+  }
+
+  /// Check server health and connectivity
+  Future<bool> checkHealth() async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/health');
+      final response = await _client.get(uri).timeout(const Duration(seconds: 2));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Trigger dynamic spatial state simulation (floor, cabinet, in_hand)
+  Future<bool> simulatePreset(String preset) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/simulate/$preset');
+      final response = await _client.get(uri).timeout(const Duration(seconds: 3));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Reset memory cache to baseline
+  Future<bool> resetMemory() async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/v1/reset');
+      final response = await _client.post(uri).timeout(const Duration(seconds: 3));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Query location of a tracked item
   Future<QueryResult> queryItem(String item) async {

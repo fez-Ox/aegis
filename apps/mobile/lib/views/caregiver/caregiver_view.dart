@@ -80,41 +80,69 @@ class _CaregiverViewState extends State<CaregiverView> {
             ),
             const SizedBox(height: 20),
 
-            // Displaced Item Warning Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.alertAmber.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.alertAmber, width: 1.5),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, color: AppTheme.alertAmber, size: 24),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      "All tracked items are safely inside their designated room anchors.",
-                      style: TextStyle(color: Color(0xFFFDE68A), fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
+            // Dynamic Displaced Item Warning / Status Card
+            Builder(
+              builder: (context) {
+                final lastEvent = _events.isNotEmpty ? _events.last : null;
+                final isOnFloor = lastEvent != null && lastEvent.destinationRelation == 'on_floor';
+                final isCarried = lastEvent != null && lastEvent.destinationRelation == 'carried_by_user';
+
+                Color cardColor = const Color(0xFF10B981); // Emerald
+                IconData cardIcon = Icons.check_circle_outline_rounded;
+                String cardText = "All tracked items are safely stored in their designated room anchors.";
+
+                if (isOnFloor) {
+                  cardColor = AppTheme.alertAmber;
+                  cardIcon = Icons.warning_amber_rounded;
+                  cardText = "Displaced Item Alert: ${lastEvent.object} left on the entrance floor (Fall Hazard)!";
+                } else if (isCarried) {
+                  cardColor = AppTheme.royalAmethyst;
+                  cardIcon = Icons.pan_tool_rounded;
+                  cardText = "In-Transit Activity: ${lastEvent.object} is currently held and being moved.";
+                }
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: cardColor, width: 1.5),
                   ),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      Icon(cardIcon, color: cardColor, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          cardText,
+                          style: TextStyle(color: cardColor, fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 24),
 
-            // Timeline Header
-            const Row(
+            // Timeline Header with Refresh Action
+            Row(
               children: [
-                Icon(Icons.timeline_rounded, color: AppTheme.tealAccent, size: 20),
-                SizedBox(width: 8),
-                Text(
+                const Icon(Icons.timeline_rounded, color: AppTheme.tealAccent, size: 20),
+                const SizedBox(width: 8),
+                const Text(
                   "Activity History Log",
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textHighContrast),
                 ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, color: AppTheme.tealAccent, size: 20),
+                  tooltip: "Refresh Timeline",
+                  onPressed: _loadTimeline,
+                ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
 
             if (_isLoading)
               const Center(
