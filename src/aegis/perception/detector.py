@@ -150,7 +150,6 @@ def _canonical_label(label: str) -> str:
     return normalized
 
 
-
 def detect_and_track_objects(
     frame_records: Sequence[dict[str, Any]],
     frames_dir: Path,
@@ -268,7 +267,10 @@ def detect_and_track_objects(
                 suppress = False
                 for kept in suppressed_boxes:
                     is_hand_kept = kept[0] == "hand"
-                    if is_hand_i == is_hand_kept and _compute_iou(bbox_i, kept[2]) > 0.35:
+                    if (
+                        is_hand_i == is_hand_kept
+                        and _compute_iou(bbox_i, kept[2]) > 0.35
+                    ):
                         suppress = True
                         break
                 if not suppress:
@@ -327,14 +329,10 @@ def detect_and_track_objects(
         # Compute hand-object contact association
         contact_pairs: dict[int, int] = {}  # hand_box_index -> object_track_id
         hand_indices = [
-            idx
-            for idx, (lbl, _, _) in enumerate(current_frame_boxes)
-            if lbl == "hand"
+            idx for idx, (lbl, _, _) in enumerate(current_frame_boxes) if lbl == "hand"
         ]
         object_indices = [
-            idx
-            for idx, (lbl, _, _) in enumerate(current_frame_boxes)
-            if lbl != "hand"
+            idx for idx, (lbl, _, _) in enumerate(current_frame_boxes) if lbl != "hand"
         ]
 
         for h_idx in hand_indices:
@@ -383,4 +381,3 @@ def detect_and_track_objects(
             )
 
     return all_detections
-

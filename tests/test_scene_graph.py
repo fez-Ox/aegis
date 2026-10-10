@@ -291,5 +291,3 @@ def test_hybrid_release_gate_and_events() -> None:
     event_types = [e["event_type"] for e in graph.events]
     assert "pickup" in event_types
     assert "placement" in event_types
-
-

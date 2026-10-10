@@ -15,8 +15,8 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 - **Language:** Python 3.12.
 - Use `uv` for dependency management and running scripts (`uv add`, `uv run`); avoid ad-hoc pip installs.
 - Build/test commands:
-  - Lint: `uvx ruff check src tests run_pipeline.py`
-  - Tests: `uv run pytest` (All 18 tests passing)
+  - Lint: `uvx ruff check src tests run_pipeline.py run_server.py && uvx ruff format --check src tests run_pipeline.py run_server.py`
+  - Tests: `uv run pytest` (All 35 tests passing)
 
 ## Repository Layout
 

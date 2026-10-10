@@ -107,7 +107,6 @@ class ObjectMemoryEntry:
         return data
 
 
-
 @dataclass
 class Relative4DSceneGraph:
     """Relative 4D Scene Graph memory store."""
@@ -504,8 +503,7 @@ def build_relative_4d_scene_graph(
 
             offset_val = (
                 tuple(
-                    float(v)
-                    for v in in_hand_state_by_instance[inst_id]["grasp_offset"]
+                    float(v) for v in in_hand_state_by_instance[inst_id]["grasp_offset"]
                 )
                 if in_hand_state_by_instance.get(inst_id, {}).get("is_in_hand", False)
                 else None
@@ -653,4 +651,3 @@ def build_relative_4d_scene_graph(
         memory_timeline=timeline,
         events=events,
     )
-

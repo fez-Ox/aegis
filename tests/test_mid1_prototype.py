@@ -66,7 +66,10 @@ def test_dynamic_transition_to_in_hand() -> None:
     assert query_resp.status_code == 200
     query_data = query_resp.json()
     assert query_data["relation"] == "carried_by_user"
-    assert "carrying" in query_data["location_summary"].lower() or "holding" in query_data["location_summary"].lower()
+    assert (
+        "carrying" in query_data["location_summary"].lower()
+        or "holding" in query_data["location_summary"].lower()
+    )
 
 
 def test_reset_memory_reverts_state() -> None:
