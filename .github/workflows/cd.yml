@@ -8,8 +8,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -47,47 +45,6 @@ jobs:
         if: env.MODAL_TOKEN_ID == '' || env.MODAL_TOKEN_SECRET == ''
         run: |
           echo "Modal credentials not configured in repository secrets; skipping live modal deploy."
-
-  deploy-flutter-web:
-    name: Build & Deploy Flutter Web to GitHub Pages
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-
-      - name: Ensure Flutter Web Platform Support
-        working-directory: apps/mobile
-        run: |
-          flutter config --enable-web
-          flutter create --platforms=web --org com.aegis .
-
-      - name: Install Flutter dependencies
-        working-directory: apps/mobile
-        run: flutter pub get
-
-      - name: Build Flutter Web
-        working-directory: apps/mobile
-        run: flutter build web --release --base-href /aegis/
-
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: apps/mobile/build/web
-          publish_branch: gh-pages
-          force_orphan: true
-
-      - name: Report Pages Deployment URL
-        run: |
-          echo "Flutter Web successfully deployed to gh-pages branch."
-          echo "Live Application URL: https://fez-ox.github.io/aegis/"
-
 
   build-release-apk:
     name: Build Android Release APK
