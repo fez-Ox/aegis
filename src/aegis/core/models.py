@@ -174,4 +174,3 @@ class BoundingBox3D:
         if self.yaw is not None:
             data["yaw"] = self.yaw
         return data
-

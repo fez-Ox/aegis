@@ -90,9 +90,37 @@ class TimelineEventModel(BaseModel):
     summary: str
 
 
+class SimulateTransitionRequest(BaseModel):
+    instance_id: int = 1
+    new_relation: str = Field(
+        ...,
+        description="'inside', 'on_floor', or 'carried_by_user'",
+    )
+    anchor_id: int = 1
+    anchor_label: str = "Storage Cabinet #1"
+    relative_distance_m: float = 0.45
+    is_in_hand: bool = False
+    is_active_view: bool = False
+    dataset_id: str = DEFAULT_DATASET_ID
+
+
+class SimulateTransitionResponse(BaseModel):
+    status: str = "ok"
+    message: str
+    event_id: str
+    instance_id: int
+    object_label: str
+    new_relation: str
+    anchor_label: str
+    relative_distance_m: float
+    is_persistent_memory: bool
+
+
 # ---------------------------------------------------------------------------
 # Memory Loader & Store
 # ---------------------------------------------------------------------------
+
+_GRAPH_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def get_search_paths(dataset_id: str) -> list[Path]:
@@ -108,17 +136,28 @@ def get_search_paths(dataset_id: str) -> list[Path]:
 
 
 def load_scene_graph_data(dataset_id: str = DEFAULT_DATASET_ID) -> dict[str, Any]:
-    """Load the scene graph JSON with graceful fallback."""
+    """Load the scene graph JSON with in-memory caching and graceful fallback."""
+    import copy
+
+    if dataset_id in _GRAPH_CACHE:
+        return _GRAPH_CACHE[dataset_id]
+
+    loaded_data: dict[str, Any] | None = None
     for path in get_search_paths(dataset_id):
         if path.is_file():
             try:
                 with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    loaded_data = json.load(f)
+                    break
             except (OSError, json.JSONDecodeError) as e:
                 logger.warning(f"Failed to parse {path}: {e}")
 
+    if loaded_data is not None:
+        _GRAPH_CACHE[dataset_id] = copy.deepcopy(loaded_data)
+        return _GRAPH_CACHE[dataset_id]
+
     # Fallback fixture if running before any pipeline execution
-    return {
+    fallback_data = {
         "anchors": [
             {
                 "anchor_id": 1,
@@ -157,6 +196,8 @@ def load_scene_graph_data(dataset_id: str = DEFAULT_DATASET_ID) -> dict[str, Any
             ]
         },
     }
+    _GRAPH_CACHE[dataset_id] = copy.deepcopy(fallback_data)
+    return _GRAPH_CACHE[dataset_id]
 
 
 def find_latest_objects_state(data: dict[str, Any]) -> dict[int, dict[str, Any]]:
@@ -379,6 +420,160 @@ def get_crop(instance_id: int) -> Response:
   <text x="120" y="219" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#2DD4BF" text-anchor="middle">&#10003; 3D Grounded</text>
 </svg>"""
     return Response(content=svg, media_type="image/svg+xml")
+
+
+# ---------------------------------------------------------------------------
+# Dynamic Memory Simulation & Testing Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/v1/simulate_transition", response_model=SimulateTransitionResponse)
+def simulate_transition(
+    req: SimulateTransitionRequest,
+) -> SimulateTransitionResponse:
+    """Simulate a dynamic spatial state transition in real-time.
+
+    Updates the in-memory R4DSG memory graph and chronological event log,
+    enabling live demonstration of Aegis spatial reasoning and instant Flutter
+    client reactivity.
+    """
+    data = load_scene_graph_data(req.dataset_id)
+    latest_states = find_latest_objects_state(data)
+
+    current_state = latest_states.get(req.instance_id)
+    old_relation = (
+        current_state.get("relation", "inside") if current_state else "inside"
+    )
+    old_anchor = (
+        current_state.get("anchor_label", req.anchor_label)
+        if current_state
+        else req.anchor_label
+    )
+    current_label = (
+        current_state.get("label", f"Object #{req.instance_id}")
+        if current_state
+        else f"Object #{req.instance_id}"
+    )
+
+    timeline = data.setdefault("timeline", {})
+    # Determine next frame key and timestamp
+    existing_frame_keys = [int(k) for k in timeline if str(k).isdigit()]
+    max_frame = max(existing_frame_keys) if existing_frame_keys else 642
+    new_frame = max_frame + 1
+    new_timestamp = (
+        float(current_state.get("last_seen_timestamp", 42.0)) + 5.0
+        if current_state
+        else 45.0
+    )
+
+    new_obj_state = {
+        "anchor_id": req.anchor_id,
+        "anchor_label": req.anchor_label,
+        "instance_id": req.instance_id,
+        "label": current_label,
+        "relation": req.new_relation,
+        "relative_distance": req.relative_distance_m,
+        "last_seen_timestamp": new_timestamp,
+        "timestamp": new_timestamp,
+        "is_active_view": req.is_active_view,
+        "is_in_hand": req.is_in_hand,
+    }
+
+    timeline[str(new_frame)] = [new_obj_state]
+
+    events = data.setdefault("events", [])
+    event_id = f"event_{len(events) + 1:04d}"
+    new_event = {
+        "event_id": event_id,
+        "event_type": "state_change",
+        "instance_id": req.instance_id,
+        "object": current_label,
+        "source_relation": old_relation,
+        "destination_relation": req.new_relation,
+        "source_anchor": old_anchor,
+        "destination_anchor": req.anchor_label,
+        "start_time": new_timestamp - 2.0,
+        "end_time": new_timestamp,
+    }
+    events.append(new_event)
+
+    msg = (
+        f"Simulated {current_label} transition from {old_relation} "
+        f"to {req.new_relation} at {req.anchor_label}."
+    )
+    return SimulateTransitionResponse(
+        status="ok",
+        message=msg,
+        event_id=event_id,
+        instance_id=req.instance_id,
+        object_label=current_label,
+        new_relation=req.new_relation,
+        anchor_label=req.anchor_label,
+        relative_distance_m=req.relative_distance_m,
+        is_persistent_memory=not req.is_active_view,
+    )
+
+
+@app.post("/api/v1/reset")
+def reset_memory(dataset_id: str = DEFAULT_DATASET_ID) -> dict[str, str]:
+    """Reset the in-memory scene graph back to the original baseline file."""
+    _GRAPH_CACHE.pop(dataset_id, None)
+    load_scene_graph_data(dataset_id)
+    return {
+        "status": "ok",
+        "message": f"Memory cache for {dataset_id} reset to baseline.",
+    }
+
+
+@app.get("/api/v1/simulate/floor", response_model=SimulateTransitionResponse)
+def quick_simulate_floor(
+    dataset_id: str = DEFAULT_DATASET_ID,
+) -> SimulateTransitionResponse:
+    """Quick preset: Move Shoes #1 onto the entrance floor (hazard warning)."""
+    return simulate_transition(
+        SimulateTransitionRequest(
+            instance_id=1,
+            new_relation="on_floor",
+            relative_distance_m=0.42,
+            is_active_view=True,
+            is_in_hand=False,
+            dataset_id=dataset_id,
+        )
+    )
+
+
+@app.get("/api/v1/simulate/cabinet", response_model=SimulateTransitionResponse)
+def quick_simulate_cabinet(
+    dataset_id: str = DEFAULT_DATASET_ID,
+) -> SimulateTransitionResponse:
+    """Quick preset: Store Shoes #1 inside cabinet (occlusion persistence)."""
+    return simulate_transition(
+        SimulateTransitionRequest(
+            instance_id=1,
+            new_relation="inside",
+            relative_distance_m=0.09,
+            is_active_view=False,
+            is_in_hand=False,
+            dataset_id=dataset_id,
+        )
+    )
+
+
+@app.get("/api/v1/simulate/in_hand", response_model=SimulateTransitionResponse)
+def quick_simulate_in_hand(
+    dataset_id: str = DEFAULT_DATASET_ID,
+) -> SimulateTransitionResponse:
+    """Quick preset: Pick up Shoes #1 in hands (in-hand kinematic tracking)."""
+    return simulate_transition(
+        SimulateTransitionRequest(
+            instance_id=1,
+            new_relation="carried_by_user",
+            relative_distance_m=0.25,
+            is_active_view=False,
+            is_in_hand=True,
+            dataset_id=dataset_id,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------

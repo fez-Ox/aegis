@@ -238,7 +238,6 @@ def lift_detection_to_3d(
     )
 
 
-
 def compute_motion_trails(
     boxes_3d: Sequence[BoundingBox3D],
 ) -> dict[int, list[tuple[float, float, float]]]:
@@ -322,7 +321,6 @@ def _smooth_track_boxes(
                 held_by_hand_track_id=box.held_by_hand_track_id,
             )
 
-
     return [box for box in smoothed if box is not None]
 
 
@@ -405,9 +403,7 @@ def evaluate_spatial_containment_and_states(
             if not is_container and not is_hand_box:
                 for hand in hands:
                     dist_to_hand = float(
-                        np.linalg.norm(
-                            np.asarray(box.center) - np.asarray(hand.center)
-                        )
+                        np.linalg.norm(np.asarray(box.center) - np.asarray(hand.center))
                     )
                     if (
                         hand.held_by_hand_track_id == box.track_id
@@ -453,7 +449,6 @@ def evaluate_spatial_containment_and_states(
             )
 
     return updated_boxes
-
 
 
 def voxel_downsample(

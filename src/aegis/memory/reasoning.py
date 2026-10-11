@@ -126,4 +126,3 @@ class QueryReasoningEngine:
             "explanation": explanation,
             "edge_case_handled": edge_case,
         }
-
