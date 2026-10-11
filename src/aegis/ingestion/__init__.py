@@ -6,11 +6,13 @@ from aegis.ingestion.live_source import (
     OpenCVMjpegSource,
     safe_url,
 )
+from aegis.ingestion.live_storage import LiveSessionWriter
 from aegis.ingestion.video import preprocess_video
 
 __all__ = [
     "DecodedFrame",
     "FrameSource",
+    "LiveSessionWriter",
     "OpenCVMjpegSource",
     "preprocess_video",
     "safe_url",
