@@ -97,6 +97,7 @@ ipython_config.py
 # Aegis inputs and generated artifacts
 /data/
 /outputs/
+/captures/
 
 # UV
 #   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
