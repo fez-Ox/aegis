@@ -72,11 +72,14 @@ def test_live_ingestion_samples_at_target_rate(tmp_path) -> None:
 
     assert result.status == "disconnected"
     assert result.frames == 3
-    assert len(
-        (tmp_path / "sample-test" / "index.jsonl")
-        .read_text(encoding="utf-8")
-        .splitlines()
-    ) == 3
+    assert (
+        len(
+            (tmp_path / "sample-test" / "index.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
+        == 3
+    )
 
 
 def test_each_live_session_has_unique_output_directory(tmp_path) -> None:

@@ -47,9 +47,7 @@ class LiveSessionWriter:
             "source_id": source_id,
             "capture_timestamp": timestamp.isoformat().replace("+00:00", "Z"),
             "timestamp_source": "laptop_receive_decode",
-            "ingestion_timestamp": datetime.now(UTC).isoformat().replace(
-                "+00:00", "Z"
-            ),
+            "ingestion_timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "width": int(width),
             "height": int(height),
             "encoding": "jpeg",
@@ -74,9 +72,7 @@ class LiveSessionWriter:
             self._index.close()
         self.manifest.update(
             {
-                "ended_at": ended_at.astimezone(UTC).isoformat().replace(
-                    "+00:00", "Z"
-                ),
+                "ended_at": ended_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
                 "emitted_frame_count": self.count,
                 "status": status,
             }
