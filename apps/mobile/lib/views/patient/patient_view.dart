@@ -31,6 +31,7 @@ class _PatientViewState extends State<PatientView> {
     });
 
     final res = await widget.apiService.queryItem(item);
+    widget.apiService.recordSearch(res);
 
     setState(() {
       _isLoading = false;
