@@ -1,16 +1,79 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/patient_search_record.dart';
 import '../models/query_result.dart';
 import '../models/timeline_event.dart';
 
 class ApiService {
   String baseUrl;
   final http.Client _client;
+  final List<PatientSearchRecord> _searchHistory = [];
 
   ApiService({
     this.baseUrl = 'http://127.0.0.1:8000',
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? http.Client() {
+    _seedInitialSearchHistory();
+  }
+
+  void _seedInitialSearchHistory() {
+    final now = DateTime.now();
+    _searchHistory.addAll([
+      PatientSearchRecord(
+        query: 'shoes',
+        found: true,
+        instanceLabel: 'Shoes #1 [Active Pair]',
+        anchorLabel: 'Storage Cabinet #1',
+        locationSummary: 'Inside Storage Cabinet #1, bottom shelf near entrance.',
+        timeAgo: '15m ago',
+        timestamp: now.subtract(const Duration(minutes: 15)),
+        isPersistentMemory: true,
+      ),
+      PatientSearchRecord(
+        query: 'keys',
+        found: true,
+        instanceLabel: 'Keys #1 [Keychain]',
+        anchorLabel: 'Entrance Console Table',
+        locationSummary: 'On the Entrance Console Table beside doorway.',
+        timeAgo: '1h ago',
+        timestamp: now.subtract(const Duration(hours: 1)),
+        isPersistentMemory: true,
+      ),
+      PatientSearchRecord(
+        query: 'glasses',
+        found: true,
+        instanceLabel: 'Reading Glasses #1',
+        anchorLabel: 'Living Room Coffee Table',
+        locationSummary: 'Resting on the Living Room Coffee Table.',
+        timeAgo: '3h ago',
+        timestamp: now.subtract(const Duration(hours: 3)),
+        isPersistentMemory: false,
+      ),
+    ]);
+  }
+
+  /// Retrieve the most recent patient searches (default up to 3)
+  List<PatientSearchRecord> getRecentSearches({int limit = 3}) {
+    return _searchHistory.take(limit).toList();
+  }
+
+  /// Append a new search record to the front of history
+  void recordSearch(QueryResult result) {
+    _searchHistory.removeWhere((item) => item.query.toLowerCase() == result.query.toLowerCase());
+    _searchHistory.insert(
+      0,
+      PatientSearchRecord(
+        query: result.query,
+        found: result.found,
+        instanceLabel: result.instanceLabel,
+        anchorLabel: result.anchorLabel,
+        locationSummary: result.locationSummary,
+        timeAgo: 'Just now',
+        timestamp: DateTime.now(),
+        isPersistentMemory: result.isPersistentMemory,
+      ),
+    );
+  }
 
   /// Dynamically update the backend host URL
   void updateBaseUrl(String newUrl) {
