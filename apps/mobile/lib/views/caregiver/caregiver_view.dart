@@ -68,16 +68,49 @@ class _CaregiverViewState extends State<CaregiverView> {
                     style: TextStyle(fontSize: 15, color: AppTheme.textMuted),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _buildMetricTile("1 Active Anchor", "Storage Cabinet #1", AppTheme.royalAmethyst),
-                      const SizedBox(width: 12),
-                      _buildMetricTile("4 Instances", "Shoes #1, #2, #3, #4", AppTheme.tealAccent),
-                    ],
+                  Builder(
+                    builder: (context) {
+                      final anchors = _events
+                          .map((e) => e.destinationAnchor)
+                          .where((a) => a != null && a.isNotEmpty)
+                          .toSet()
+                          .toList();
+                      final anchorDisplay = anchors.isNotEmpty
+                          ? anchors.join(", ")
+                          : "Grounded Room Anchors";
+                      final anchorCount = anchors.isNotEmpty ? anchors.length : 1;
+
+                      final objects = _events
+                          .map((e) => e.object)
+                          .where((o) => o.isNotEmpty)
+                          .toSet()
+                          .toList();
+                      final objectDisplay = objects.isNotEmpty
+                          ? objects.join(", ")
+                          : "Tracked Object";
+                      final objectCount = objects.isNotEmpty ? objects.length : 1;
+
+                      return Row(
+                        children: [
+                          _buildMetricTile(
+                            "$anchorCount Active Anchor${anchorCount > 1 ? 's' : ''}",
+                            anchorDisplay,
+                            AppTheme.royalAmethyst,
+                          ),
+                          const SizedBox(width: 12),
+                          _buildMetricTile(
+                            "$objectCount Instance${objectCount > 1 ? 's' : ''}",
+                            objectDisplay,
+                            AppTheme.tealAccent,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
             ),
+
             const SizedBox(height: 20),
 
             // Dynamic Displaced Item Warning / Status Card

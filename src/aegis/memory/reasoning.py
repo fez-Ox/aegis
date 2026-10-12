@@ -15,6 +15,7 @@ class QueryReasoningEngine:
 
     ITEM_SYNONYMS: ClassVar[dict[str, list[str]]] = {
         "shoes": ["shoe", "sneaker", "sneakers", "boots", "footwear"],
+        "bottle": ["bottle", "water bottle", "flask", "cup", "drink", "tumbler"],
         "keys": ["key", "keychain", "car key", "house key"],
         "glasses": ["glasses", "spectacles", "eyewear", "sunglasses"],
         "medicine": ["medicine", "pills", "meds", "prescription", "vitamins"],
@@ -102,6 +103,15 @@ class QueryReasoningEngine:
                 )
             else:
                 explanation = f"You are currently holding and carrying your {target_item} in your hands."
+        elif relation == "on_surface":
+            if not is_active_view:
+                explanation = (
+                    f"Your {target_item} is sitting on {anchor}. "
+                    f"Even though it is currently out of direct view, "
+                    f"Aegis remembers it remains safely on {anchor}."
+                )
+            else:
+                explanation = f"Your {target_item} is currently resting on {anchor}."
         elif relation == "on_floor":
             explanation = f"Your {target_item} are on the floor right near {anchor}."
         elif relation == "moving_towards":

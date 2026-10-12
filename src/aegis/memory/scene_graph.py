@@ -130,6 +130,10 @@ def _normalise_label(label: str) -> str:
     normalized = " ".join(label.lower().strip().split())
     if normalized in {"shoe", "shoes"}:
         return "shoes"
+    if normalized in {"bottle", "water bottle"}:
+        return "bottle"
+    if normalized in {"phone", "cell phone", "mobile phone"}:
+        return "cell phone"
     return normalized
 
 
@@ -157,7 +161,10 @@ def _anchor_group_label(label: str) -> str:
     return normalized
 
 
-def extract_spatial_anchors(boxes_3d: Sequence[BoundingBox3D]) -> list[SpatialAnchor]:
+def extract_spatial_anchors(
+    boxes_3d: Sequence[BoundingBox3D],
+    cluster_threshold: float = 0.40,
+) -> list[SpatialAnchor]:
     """Extract robust semantic anchor estimates from recurring observations."""
 
     anchor_boxes = [box for box in boxes_3d if _is_anchor_label(box.label)]
@@ -177,25 +184,45 @@ def extract_spatial_anchors(boxes_3d: Sequence[BoundingBox3D]) -> list[SpatialAn
         groups.setdefault(_anchor_group_label(box.label), []).append(box)
 
     anchors: list[SpatialAnchor] = []
-    for index, (label, group) in enumerate(sorted(groups.items()), start=1):
-        centers = np.asarray([box.center for box in group], dtype=np.float64)
-        sizes = np.asarray([box.size for box in group], dtype=np.float64)
-        canonical_center = np.median(centers, axis=0)
-        canonical_size = np.quantile(sizes, 0.85, axis=0)
-        display_name = label.replace("_", " ").title()
-        if not display_name.endswith(f"#{index}") and not display_name.endswith(
-            str(index)
-        ):
-            display_name = f"{display_name} #{index}"
-        anchors.append(
-            SpatialAnchor(
-                anchor_id=index,
-                label=display_name,
-                center=tuple(float(value) for value in canonical_center),
-                size=tuple(float(value) for value in canonical_size),
-                observations_count=len(group),
+    anchor_idx = 1
+    for label, group in sorted(groups.items()):
+        clusters: list[list[BoundingBox3D]] = []
+        for box in group:
+            c = np.asarray(box.center, dtype=np.float64)
+            assigned = False
+            for cl in clusters:
+                cl_centers = np.asarray([b.center for b in cl], dtype=np.float64)
+                mean_c = np.mean(cl_centers, axis=0)
+                if np.linalg.norm(c - mean_c) < cluster_threshold:
+                    cl.append(box)
+                    assigned = True
+                    break
+            if not assigned:
+                clusters.append([box])
+
+        # Filter out stray single-frame noise if robust clusters exist
+        valid_clusters = [cl for cl in clusters if len(cl) >= 2] or clusters
+
+        for cl in valid_clusters:
+            centers = np.asarray([box.center for box in cl], dtype=np.float64)
+            sizes = np.asarray([box.size for box in cl], dtype=np.float64)
+            canonical_center = np.median(centers, axis=0)
+            canonical_size = np.quantile(sizes, 0.85, axis=0)
+            display_name = label.replace("_", " ").title()
+            if not display_name.endswith(
+                f"#{anchor_idx}"
+            ) and not display_name.endswith(str(anchor_idx)):
+                display_name = f"{display_name} #{anchor_idx}"
+            anchors.append(
+                SpatialAnchor(
+                    anchor_id=anchor_idx,
+                    label=display_name,
+                    center=tuple(float(value) for value in canonical_center),
+                    size=tuple(float(value) for value in canonical_size),
+                    observations_count=len(cl),
+                )
             )
-        )
+            anchor_idx += 1
     return anchors
 
 
@@ -233,16 +260,32 @@ def classify_unique_instance(
         else:
             return 1, "Shoes #1 [Active Pair]"
 
-    # For non-shoe objects: cluster into 3D spatial instances
+    # For non-shoe objects: cluster into 3D spatial instances with relocation association
     if existing_instances:
-        for iid, info in existing_instances.items():
-            if info["label_key"] == lbl:
-                dist = float(
-                    np.linalg.norm(c - np.asarray(info["center"], dtype=np.float64))
-                )
-                if dist < 0.28:
-                    info["count"] = info.get("count", 1) + 1
-                    return iid, info["display_name"]
+        same_label_matches = [
+            (iid, info)
+            for iid, info in existing_instances.items()
+            if info["label_key"] == lbl
+        ]
+        # 1. Proximity match (< 0.28m)
+        for iid, info in same_label_matches:
+            dist = float(
+                np.linalg.norm(c - np.asarray(info["center"], dtype=np.float64))
+            )
+            if dist < 0.28:
+                info["count"] = info.get("count", 1) + 1
+                info["center"] = box.center
+                info["last_assigned_frame"] = fid
+                return iid, info["display_name"]
+
+        # 2. Relocation re-identification across occlusion/transit
+        if len(same_label_matches) == 1:
+            iid, info = same_label_matches[0]
+            if info.get("last_assigned_frame") != fid:
+                info["count"] = info.get("count", 1) + 1
+                info["center"] = box.center
+                info["last_assigned_frame"] = fid
+                return iid, info["display_name"]
 
     next_id = (max(existing_instances.keys()) + 1) if existing_instances else 1
     display_name = f"{lbl.title()} #{next_id}"
@@ -252,6 +295,7 @@ def classify_unique_instance(
             "center": box.center,
             "display_name": display_name,
             "count": 1,
+            "last_assigned_frame": fid,
         }
     return next_id, display_name
 

@@ -815,27 +815,49 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         ):
             image_path = paths.frames / str(frame["filename"])
             if image_path.exists():
-                import cv2
+                try:
+                    import cv2
 
-                img = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-                if img is not None:
-                    ok, buf = cv2.imencode(
-                        ".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-                    )
-                    if ok:
-                        rr.log(
-                            "video/egocentric_stream",
-                            rr.EncodedImage(
-                                contents=buf.tobytes(), media_type="image/jpeg"
-                            ),
+                    img = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+                    if img is not None:
+                        ok, buf = cv2.imencode(
+                            ".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
                         )
+                        if ok:
+                            rr.log(
+                                "video/egocentric_stream",
+                                rr.EncodedImage(
+                                    contents=buf.tobytes(), media_type="image/jpeg"
+                                ),
+                            )
+                        else:
+                            rr.log(
+                                "video/egocentric_stream",
+                                rr.EncodedImage(path=image_path),
+                            )
                     else:
                         rr.log(
-                            "video/egocentric_stream",
-                            rr.EncodedImage(path=image_path),
+                            "video/egocentric_stream", rr.EncodedImage(path=image_path)
                         )
-                else:
-                    rr.log("video/egocentric_stream", rr.EncodedImage(path=image_path))
+                except ImportError:
+                    try:
+                        import io
+
+                        from PIL import Image
+
+                        with Image.open(image_path) as pil_img:
+                            buf = io.BytesIO()
+                            pil_img.convert("RGB").save(buf, format="JPEG", quality=80)
+                            rr.log(
+                                "video/egocentric_stream",
+                                rr.EncodedImage(
+                                    contents=buf.getvalue(), media_type="image/jpeg"
+                                ),
+                            )
+                    except (OSError, ValueError):
+                        rr.log(
+                            "video/egocentric_stream", rr.EncodedImage(path=image_path)
+                        )
 
         # 3B. Show clean lifted detections on the egocentric video at keyframes.
         frame_boxes = boxes_by_frame.get(frame_id, [])

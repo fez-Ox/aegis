@@ -18,10 +18,10 @@ class _PatientViewState extends State<PatientView> {
   String? _selectedCategory;
 
   final List<Map<String, dynamic>> _quickItems = [
-    {'label': 'Shoes', 'query': 'shoes', 'icon': Icons.snowshoeing_rounded, 'color': AppTheme.tealAccent},
-    {'label': 'Keys', 'query': 'keys', 'icon': Icons.key_rounded, 'color': AppTheme.royalAmethyst},
-    {'label': 'Glasses', 'query': 'glasses', 'icon': Icons.visibility_rounded, 'color': AppTheme.alertAmber},
-    {'label': 'Medicine', 'query': 'medicine', 'icon': Icons.medication_rounded, 'color': const Color(0xFFEC4899)},
+    {'label': 'Bottle', 'query': 'water bottle', 'icon': Icons.local_drink_rounded, 'color': AppTheme.tealAccent},
+    {'label': 'Shoes', 'query': 'shoes', 'icon': Icons.snowshoeing_rounded, 'color': AppTheme.royalAmethyst},
+    {'label': 'Keys', 'query': 'keys', 'icon': Icons.key_rounded, 'color': AppTheme.alertAmber},
+    {'label': 'Glasses', 'query': 'glasses', 'icon': Icons.visibility_rounded, 'color': const Color(0xFFEC4899)},
   ];
 
   Future<void> _executeQuery(String item) async {
@@ -120,7 +120,7 @@ class _PatientViewState extends State<PatientView> {
 
           // Voice Query Bar
           InkWell(
-            onTap: () => _executeQuery('shoes'),
+            onTap: () => _executeQuery(_selectedCategory ?? 'water bottle'),
             borderRadius: BorderRadius.circular(24),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),

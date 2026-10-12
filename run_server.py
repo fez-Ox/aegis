@@ -6,9 +6,17 @@ and prints network discovery info and quick simulation presets.
 
 from __future__ import annotations
 
+import argparse
+import os
 import socket
 
 import uvicorn
+
+from aegis.remote.api import (
+    find_latest_objects_state,
+    load_scene_graph_data,
+    set_active_dataset,
+)
 
 
 def get_local_ip() -> str:
@@ -26,23 +34,65 @@ def get_local_ip() -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Aegis Spatio-Temporal Memory Server")
+    parser.add_argument(
+        "--dataset-id",
+        type=str,
+        default=os.getenv("AEGIS_DATASET_ID", "Demo06-Self"),
+        help="Dataset identifier to load as primary scene graph (e.g. Demo06-Self, demo01)",
+    )
+    parser.add_argument("--port", type=int, default=8000, help="Port to bind server")
+    args = parser.parse_args()
+
+    dataset_id = args.dataset_id
+    set_active_dataset(dataset_id)
+    os.environ["AEGIS_DATASET_ID"] = dataset_id
+
+    # Load dynamic scene graph info
+    sg = load_scene_graph_data(dataset_id)
+    anchors = [a.get("label", "") for a in sg.get("anchors", [])]
+    latest = find_latest_objects_state(sg)
+    objects = [obj.get("label", "") for obj in latest.values() if obj.get("label")]
+
     host_ip = get_local_ip()
-    port = 8000
+    port = args.port
 
     print("=" * 68)
-    print("  🛡️  AEGIS SPATIO-TEMPORAL MEMORY SYSTEM — MID-1 PROTOTYPE SERVER")
+    print("  🛡️  AEGIS SPATIO-TEMPORAL MEMORY SYSTEM — SERVER RUNNER")
     print("=" * 68)
+    print(f"  • Primary Dataset:    {dataset_id}")
+    print(f"  • Grounded Anchors:   {', '.join(anchors) if anchors else 'None'}")
+    print(f"  • Tracked Objects:    {', '.join(objects) if objects else 'None'}")
     print(f"  • Localhost URL:      http://127.0.0.1:{port}")
-    print(f"  • Mobile Phone URL:   http://{host_ip}:{port}")
+    print(f"  • LAN Mobile URL:     http://{host_ip}:{port}")
     print(f"  • Swagger Docs:       http://{host_ip}:{port}/docs")
     print("-" * 68)
-    print("  QUICK SIMULATION PRESETS FOR LIVE PRESENTATION:")
-    print(f"  • [Move to Floor]:    http://{host_ip}:{port}/api/v1/simulate/floor")
-    print(f"  • [Store in Cabinet]: http://{host_ip}:{port}/api/v1/simulate/cabinet")
-    print(f"  • [Pick up In Hand]:  http://{host_ip}:{port}/api/v1/simulate/in_hand")
-    print(f"  • [Reset to Default]: curl -X POST http://{host_ip}:{port}/api/v1/reset")
+    print(f"  PRESETS FOR [{dataset_id.upper()}]:")
+    if dataset_id == "Demo06-Self":
+        print(
+            f"  • [Bottle on Desk 1]: http://{host_ip}:{port}/api/v1/simulate/bottle_table1"
+        )
+        print(
+            f"  • [Bottle Occluded]:  http://{host_ip}:{port}/api/v1/simulate/bottle_occluded"
+        )
+        print(
+            f"  • [Bottle on Desk 2]: http://{host_ip}:{port}/api/v1/simulate/bottle_table2"
+        )
+    else:
+        print(
+            f"  • [Move to Floor]:    http://{host_ip}:{port}/api/v1/simulate/floor?dataset_id={dataset_id}"
+        )
+        print(
+            f"  • [Store in Anchor]:  http://{host_ip}:{port}/api/v1/simulate/cabinet?dataset_id={dataset_id}"
+        )
+        print(
+            f"  • [Pick up In Hand]:  http://{host_ip}:{port}/api/v1/simulate/in_hand?dataset_id={dataset_id}"
+        )
+    print(
+        f"  • [Reset Graph]:      curl -X POST http://{host_ip}:{port}/api/v1/reset?dataset_id={dataset_id}"
+    )
     print("=" * 68)
-    print("Starting uvicorn on 0.0.0.0:8000 with CORS enabled for mobile client...\n")
+    print(f"Starting uvicorn on 0.0.0.0:{port} for dataset {dataset_id}...\n")
 
     uvicorn.run(
         "aegis.remote.api:app",

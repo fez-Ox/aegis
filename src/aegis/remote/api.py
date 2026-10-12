@@ -33,7 +33,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import os
+
 DEFAULT_DATASET_ID = "demo01"
+ACTIVE_DATASET_ID = os.getenv("AEGIS_DATASET_ID", DEFAULT_DATASET_ID)
+
+
+def get_active_dataset(dataset_id: str | None = None) -> str:
+    """Return the requested dataset ID, or the globally active dataset ID."""
+    if dataset_id and dataset_id.strip():
+        return dataset_id.strip()
+    return ACTIVE_DATASET_ID
+
+
+def set_active_dataset(dataset_id: str) -> None:
+    """Set the globally active dataset ID."""
+    global ACTIVE_DATASET_ID
+    ACTIVE_DATASET_ID = dataset_id.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -94,14 +110,14 @@ class SimulateTransitionRequest(BaseModel):
     instance_id: int = 1
     new_relation: str = Field(
         ...,
-        description="'inside', 'on_floor', or 'carried_by_user'",
+        description="'inside', 'on_surface', 'on_floor', or 'carried_by_user'",
     )
-    anchor_id: int = 1
-    anchor_label: str = "Storage Cabinet #1"
-    relative_distance_m: float = 0.45
+    anchor_id: int | None = None
+    anchor_label: str | None = None
+    relative_distance_m: float = 0.20
     is_in_hand: bool = False
     is_active_view: bool = False
-    dataset_id: str = DEFAULT_DATASET_ID
+    dataset_id: str | None = None
 
 
 class SimulateTransitionResponse(BaseModel):
@@ -124,26 +140,27 @@ _GRAPH_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def get_search_paths(dataset_id: str) -> list[Path]:
-    """Return priority paths to locate r4d_scene_graph.json."""
+    """Return priority paths to locate r4d_scene_graph.json strictly for the given dataset."""
     return [
         Path(
             f"/data/{dataset_id}/objects/r4d_scene_graph.json"
         ),  # Modal persistent volume
         Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),  # Local output
-        Path("outputs/demo01/objects/r4d_scene_graph.json"),
         Path(f"data/{dataset_id}/objects/r4d_scene_graph.json"),
     ]
 
 
-def load_scene_graph_data(dataset_id: str = DEFAULT_DATASET_ID) -> dict[str, Any]:
+def load_scene_graph_data(dataset_id: str | None = None) -> dict[str, Any]:
     """Load the scene graph JSON with in-memory caching and graceful fallback."""
     import copy
 
-    if dataset_id in _GRAPH_CACHE:
-        return _GRAPH_CACHE[dataset_id]
+    ds = get_active_dataset(dataset_id)
+
+    if ds in _GRAPH_CACHE:
+        return _GRAPH_CACHE[ds]
 
     loaded_data: dict[str, Any] | None = None
-    for path in get_search_paths(dataset_id):
+    for path in get_search_paths(ds):
         if path.is_file():
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -153,8 +170,8 @@ def load_scene_graph_data(dataset_id: str = DEFAULT_DATASET_ID) -> dict[str, Any
                 logger.warning(f"Failed to parse {path}: {e}")
 
     if loaded_data is not None:
-        _GRAPH_CACHE[dataset_id] = copy.deepcopy(loaded_data)
-        return _GRAPH_CACHE[dataset_id]
+        _GRAPH_CACHE[ds] = copy.deepcopy(loaded_data)
+        return _GRAPH_CACHE[ds]
 
     # Fallback fixture if running before any pipeline execution
     fallback_data = {
@@ -227,9 +244,10 @@ def find_latest_objects_state(data: dict[str, Any]) -> dict[int, dict[str, Any]]
 
 
 @app.get("/api/v1/health", response_model=HealthResponse)
-def health(dataset_id: str = DEFAULT_DATASET_ID) -> HealthResponse:
+def health(dataset_id: str | None = None) -> HealthResponse:
     """Return system health and loaded scene graph summary."""
-    data = load_scene_graph_data(dataset_id)
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
     anchors = data.get("anchors", [])
     events = data.get("events", [])
     timeline = data.get("timeline", {})
@@ -237,17 +255,50 @@ def health(dataset_id: str = DEFAULT_DATASET_ID) -> HealthResponse:
     return HealthResponse(
         status="ok",
         version="0.1.0",
-        dataset_loaded=dataset_id,
+        dataset_loaded=ds,
         num_anchors=len(anchors),
         num_events=len(events),
         total_timeline_frames=len(timeline),
     )
 
 
-@app.get("/api/v1/anchors", response_model=list[AnchorModel])
-def get_anchors(dataset_id: str = DEFAULT_DATASET_ID) -> list[AnchorModel]:
-    """Return all 3D spatial anchors with their currently contained objects."""
+@app.get("/api/v1/scene_graph")
+def get_full_scene_graph(dataset_id: str | None = None) -> dict[str, Any]:
+    """Return the complete scene graph payload for the active/requested dataset."""
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
+    latest_states = find_latest_objects_state(data)
+    return {
+        "dataset_id": ds,
+        "anchors": data.get("anchors", []),
+        "events": data.get("events", []),
+        "latest_objects": list(latest_states.values()),
+        "total_timeline_frames": len(data.get("timeline", {})),
+    }
+
+
+@app.post("/api/v1/dataset/select")
+def select_dataset(
+    dataset_id: str = Query(
+        ..., description="Target dataset ID (e.g. 'Demo06-Self', 'demo01')"
+    ),
+) -> dict[str, Any]:
+    """Switch the server's globally active dataset."""
+    set_active_dataset(dataset_id)
     data = load_scene_graph_data(dataset_id)
+    return {
+        "status": "ok",
+        "active_dataset": ACTIVE_DATASET_ID,
+        "num_anchors": len(data.get("anchors", [])),
+        "num_events": len(data.get("events", [])),
+    }
+
+
+@app.get("/api/v1/anchors", response_model=list[AnchorModel])
+def get_anchors(dataset_id: str | None = None) -> list[AnchorModel]:
+    """Return all 3D spatial anchors with their currently contained/resting objects."""
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
     raw_anchors = data.get("anchors", [])
     latest_states = find_latest_objects_state(data)
 
@@ -259,7 +310,8 @@ def get_anchors(dataset_id: str = DEFAULT_DATASET_ID) -> list[AnchorModel]:
         contained = [
             obj.get("label", f"Instance #{oid}")
             for oid, obj in latest_states.items()
-            if obj.get("anchor_id") == anc_id and obj.get("relation") == "inside"
+            if obj.get("anchor_id") == anc_id
+            and obj.get("relation") in {"inside", "on_surface", "on_top"}
         ]
 
         results.append(
@@ -278,16 +330,13 @@ def get_anchors(dataset_id: str = DEFAULT_DATASET_ID) -> list[AnchorModel]:
 @app.get("/api/v1/query", response_model=MemoryQueryResponse)
 def query_memory(
     item: str = Query(
-        ..., description="Query item name, e.g. 'shoes', 'keys', 'glasses'"
+        ..., description="Query item name, e.g. 'water bottle', 'shoes', 'keys'"
     ),
-    dataset_id: str = DEFAULT_DATASET_ID,
+    dataset_id: str | None = None,
 ) -> MemoryQueryResponse:
-    """Query the memory graph for the current location of an item.
-
-    Dementia-Accessible: returns plain-language location summary and
-    spatio-temporal confidence.
-    """
-    data = load_scene_graph_data(dataset_id)
+    """Query the memory graph for the current location of an item in the active dataset."""
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
     latest_states = find_latest_objects_state(data)
 
     from aegis.memory.reasoning import QueryReasoningEngine
@@ -295,21 +344,47 @@ def query_memory(
     events = data.get("events", [])
     canonical_item = QueryReasoningEngine.extract_target_item(item)
 
-    # Find matching instances
+    # Find matching instances strictly within this dataset
     matches: list[dict[str, Any]] = []
     for state in latest_states.values():
         label = state.get("label", "").lower()
         if canonical_item in label or (canonical_item == "shoes" and "shoe" in label):
             matches.append(state)
 
+    # Cross-dataset fallback only if dataset was unspecified and no match found in primary
+    if not matches and dataset_id is None:
+        alt_dataset = "Demo06-Self" if ds == "demo01" else "demo01"
+        alt_data = load_scene_graph_data(alt_dataset)
+        alt_states = find_latest_objects_state(alt_data)
+        alt_matches = [
+            s
+            for s in alt_states.values()
+            if canonical_item in s.get("label", "").lower()
+            or (canonical_item == "shoes" and "shoe" in s.get("label", "").lower())
+        ]
+        if alt_matches:
+            ds = alt_dataset
+            data = alt_data
+            latest_states = alt_states
+            matches = alt_matches
+            events = data.get("events", [])
+
     if not matches:
+        available_labels = list(
+            {s.get("label", "") for s in latest_states.values() if s.get("label")}
+        )
+        hint = (
+            f" Available items in {ds}: {', '.join(available_labels)}."
+            if available_labels
+            else ""
+        )
         return MemoryQueryResponse(
             query=item,
             found=False,
-            location_summary=f"I couldn't locate any '{item}' in your tracked rooms.",
+            location_summary=f"I couldn't locate any '{item}' in {ds}.{hint}",
         )
 
-    # Sort matches: active pair first, then by recency
+    # Sort matches: active instance first, then by recency
     def sort_key(obj: dict[str, Any]) -> tuple[int, float]:
         is_active = 1 if "active" in obj.get("label", "").lower() else 0
         timestamp = float(obj.get("last_seen_timestamp", 0.0))
@@ -352,40 +427,53 @@ def query_memory(
         last_seen_timestamp_s=primary.get("last_seen_timestamp"),
         last_seen_time_ago="Recorded today",
         is_persistent_memory=is_persistent,
-        crop_url=f"/api/v1/crops/{primary.get('instance_id', 1)}",
+        crop_url=f"/api/v1/crops/{primary.get('instance_id', 1)}?dataset_id={ds}",
         confidence=0.96,
         other_instances=other_instances,
     )
 
 
 @app.get("/api/v1/timeline", response_model=list[TimelineEventModel])
-def get_timeline(dataset_id: str = DEFAULT_DATASET_ID) -> list[TimelineEventModel]:
+def get_timeline(dataset_id: str | None = None) -> list[TimelineEventModel]:
     """Return chronological event stream for the caregiver dashboard."""
-    data = load_scene_graph_data(dataset_id)
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
     raw_events = data.get("events", [])
+    raw_anchors = data.get("anchors", [])
+    default_anchor_name = (
+        raw_anchors[0].get("label", "Room Anchor") if raw_anchors else "Room Anchor"
+    )
 
     results: list[TimelineEventModel] = []
     for ev in raw_events:
         obj_name = ev.get("object", "Object")
         src_rel = ev.get("source_relation", "")
         dst_rel = ev.get("destination_relation", "")
-        dest_anc = ev.get("destination_anchor", "Storage Cabinet")
+        src_anc = ev.get("source_anchor")
+        dest_anc = ev.get("destination_anchor") or default_anchor_name
+        ev_type = ev.get("event_type", "state_change")
 
-        if dst_rel == "inside":
+        if ev_type == "anchor_change" or (src_anc and dest_anc and src_anc != dest_anc):
+            summary = f"{obj_name} was moved from {src_anc} to {dest_anc}."
+        elif dst_rel == "inside":
             summary = f"{obj_name} was placed inside {dest_anc}."
+        elif dst_rel == "on_surface":
+            summary = f"{obj_name} is resting on {dest_anc}."
         elif dst_rel == "on_floor":
-            summary = f"{obj_name} was left on the floor."
+            summary = f"{obj_name} was left on the floor near {dest_anc}."
+        elif dst_rel == "carried_by_user":
+            summary = f"{obj_name} is being carried by user."
         else:
             summary = f"{obj_name} transition from {src_rel} to {dst_rel}."
 
         results.append(
             TimelineEventModel(
                 event_id=ev.get("event_id", "ev_0"),
-                event_type=ev.get("event_type", "state_change"),
+                event_type=ev_type,
                 object=obj_name,
                 source_relation=src_rel,
                 destination_relation=dst_rel,
-                source_anchor=ev.get("source_anchor"),
+                source_anchor=src_anc,
                 destination_anchor=dest_anc,
                 start_time=float(ev.get("start_time", 0.0)),
                 end_time=float(ev.get("end_time", 0.0)),
@@ -397,18 +485,24 @@ def get_timeline(dataset_id: str = DEFAULT_DATASET_ID) -> list[TimelineEventMode
 
 
 @app.get("/api/v1/crops/{instance_id}")
-def get_crop(instance_id: int) -> Response:
-    """Serve a high-contrast visual crop of the requested instance.
+def get_crop(
+    instance_id: int,
+    dataset_id: str | None = None,
+) -> Response:
+    """Serve a high-contrast visual crop of the requested instance from the active scene graph."""
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
+    latest_states = find_latest_objects_state(data)
+    state = latest_states.get(instance_id)
 
-    Returns an accessible SVG visual badge with the object label.
-    """
-    labels = {
-        1: ("Shoes #1", "Active Pair (Inside Cabinet)"),
-        2: ("Shoes #2", "Left Shelf"),
-        3: ("Shoes #3", "Middle Shelf"),
-        4: ("Shoes #4", "Right Shelf"),
-    }
-    title, sub = labels.get(instance_id, (f"Item #{instance_id}", "Tracked Object"))
+    if state:
+        title = state.get("label", f"Item #{instance_id}")
+        rel = state.get("relation", "tracked").replace("_", " ").title()
+        anc = state.get("anchor_label", "Anchor")
+        sub = f"{rel} @ {anc}"
+    else:
+        title = f"Item #{instance_id}"
+        sub = f"Tracked Object in {ds}"
 
     svg = f"""<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
   <rect width="240" height="240" rx="24" fill="#0F172A"/>
@@ -416,10 +510,25 @@ def get_crop(instance_id: int) -> Response:
   <path d="M100 95 C 100 85, 110 80, 120 80 C 130 80, 140 85, 140 95 C 140 105, 135 110, 120 110 C 105 110, 100 105, 100 95 Z" fill="#14B8A6"/>
   <text x="120" y="165" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="bold" fill="#F8FAFC" text-anchor="middle">{title}</text>
   <text x="120" y="190" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#94A3B8" text-anchor="middle">{sub}</text>
-  <rect x="60" y="205" width="120" height="20" rx="10" fill="#0D9488" fill-opacity="0.2"/>
-  <text x="120" y="219" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#2DD4BF" text-anchor="middle">&#10003; 3D Grounded</text>
+  <rect x="40" y="205" width="160" height="20" rx="10" fill="#0D9488" fill-opacity="0.2"/>
+  <text x="120" y="219" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#2DD4BF" text-anchor="middle">&#10003; {ds} Grounded</text>
 </svg>"""
     return Response(content=svg, media_type="image/svg+xml")
+
+
+@app.get("/api/v1/video/{dataset_id}")
+def get_video(dataset_id: str) -> Response:
+    """Serve dataset video stream for interactive visualization."""
+    from fastapi.responses import FileResponse
+
+    for candidate in [
+        Path("data") / dataset_id / f"{dataset_id}.mp4",
+        Path("data") / dataset_id / "video.mp4",
+        Path("data") / dataset_id / f"{dataset_id.lower()}.mp4",
+    ]:
+        if candidate.exists():
+            return FileResponse(candidate, media_type="video/mp4")
+    return Response(content="Video not found", status_code=404)
 
 
 # ---------------------------------------------------------------------------
@@ -431,32 +540,48 @@ def get_crop(instance_id: int) -> Response:
 def simulate_transition(
     req: SimulateTransitionRequest,
 ) -> SimulateTransitionResponse:
-    """Simulate a dynamic spatial state transition in real-time.
-
-    Updates the in-memory R4DSG memory graph and chronological event log,
-    enabling live demonstration of Aegis spatial reasoning and instant Flutter
-    client reactivity.
-    """
-    data = load_scene_graph_data(req.dataset_id)
+    """Simulate a dynamic spatial state transition in real-time."""
+    ds = get_active_dataset(req.dataset_id)
+    data = load_scene_graph_data(ds)
+    anchors = data.get("anchors", [])
     latest_states = find_latest_objects_state(data)
 
     current_state = latest_states.get(req.instance_id)
+
+    # Dynamic anchor resolution
+    anchor_label = req.anchor_label
+    anchor_id = req.anchor_id
+    if not anchor_label and anchors:
+        if anchor_id is not None:
+            match = next(
+                (a for a in anchors if a.get("anchor_id") == anchor_id), anchors[0]
+            )
+        else:
+            match = anchors[0]
+        anchor_id = match.get("anchor_id", 1)
+        anchor_label = match.get("label", f"Anchor #{anchor_id}")
+    elif not anchor_label:
+        anchor_id = 1
+        anchor_label = "Room Anchor #1"
+
     old_relation = (
         current_state.get("relation", "inside") if current_state else "inside"
     )
     old_anchor = (
-        current_state.get("anchor_label", req.anchor_label)
+        current_state.get("anchor_label", anchor_label)
         if current_state
-        else req.anchor_label
+        else anchor_label
     )
     current_label = (
-        current_state.get("label", f"Object #{req.instance_id}")
+        current_state.get(
+            "label",
+            "Bottle #1" if ds == "Demo06-Self" else f"Object #{req.instance_id}",
+        )
         if current_state
-        else f"Object #{req.instance_id}"
+        else ("Bottle #1" if ds == "Demo06-Self" else f"Object #{req.instance_id}")
     )
 
     timeline = data.setdefault("timeline", {})
-    # Determine next frame key and timestamp
     existing_frame_keys = [int(k) for k in timeline if str(k).isdigit()]
     max_frame = max(existing_frame_keys) if existing_frame_keys else 642
     new_frame = max_frame + 1
@@ -467,8 +592,8 @@ def simulate_transition(
     )
 
     new_obj_state = {
-        "anchor_id": req.anchor_id,
-        "anchor_label": req.anchor_label,
+        "anchor_id": anchor_id,
+        "anchor_label": anchor_label,
         "instance_id": req.instance_id,
         "label": current_label,
         "relation": req.new_relation,
@@ -491,7 +616,7 @@ def simulate_transition(
         "source_relation": old_relation,
         "destination_relation": req.new_relation,
         "source_anchor": old_anchor,
-        "destination_anchor": req.anchor_label,
+        "destination_anchor": anchor_label,
         "start_time": new_timestamp - 2.0,
         "end_time": new_timestamp,
     }
@@ -499,7 +624,7 @@ def simulate_transition(
 
     msg = (
         f"Simulated {current_label} transition from {old_relation} "
-        f"to {req.new_relation} at {req.anchor_label}."
+        f"to {req.new_relation} at {anchor_label}."
     )
     return SimulateTransitionResponse(
         status="ok",
@@ -508,70 +633,140 @@ def simulate_transition(
         instance_id=req.instance_id,
         object_label=current_label,
         new_relation=req.new_relation,
-        anchor_label=req.anchor_label,
+        anchor_label=anchor_label,
         relative_distance_m=req.relative_distance_m,
         is_persistent_memory=not req.is_active_view,
     )
 
 
 @app.post("/api/v1/reset")
-def reset_memory(dataset_id: str = DEFAULT_DATASET_ID) -> dict[str, str]:
+def reset_memory(dataset_id: str | None = None) -> dict[str, str]:
     """Reset the in-memory scene graph back to the original baseline file."""
-    _GRAPH_CACHE.pop(dataset_id, None)
-    load_scene_graph_data(dataset_id)
+    ds = get_active_dataset(dataset_id)
+    _GRAPH_CACHE.pop(ds, None)
+    load_scene_graph_data(ds)
     return {
         "status": "ok",
-        "message": f"Memory cache for {dataset_id} reset to baseline.",
+        "message": f"Memory cache for {ds} reset to baseline.",
     }
 
 
 @app.get("/api/v1/simulate/floor", response_model=SimulateTransitionResponse)
 def quick_simulate_floor(
-    dataset_id: str = DEFAULT_DATASET_ID,
+    dataset_id: str | None = None,
 ) -> SimulateTransitionResponse:
-    """Quick preset: Move Shoes #1 onto the entrance floor (hazard warning)."""
+    """Quick preset: Move active object onto the floor (hazard warning)."""
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
+    anchors = data.get("anchors", [])
+    first_anc = anchors[0] if anchors else {}
     return simulate_transition(
         SimulateTransitionRequest(
             instance_id=1,
             new_relation="on_floor",
+            anchor_id=first_anc.get("anchor_id", 1),
+            anchor_label=first_anc.get("label", "Floor"),
             relative_distance_m=0.42,
             is_active_view=True,
             is_in_hand=False,
-            dataset_id=dataset_id,
+            dataset_id=ds,
         )
     )
 
 
 @app.get("/api/v1/simulate/cabinet", response_model=SimulateTransitionResponse)
 def quick_simulate_cabinet(
-    dataset_id: str = DEFAULT_DATASET_ID,
+    dataset_id: str | None = None,
 ) -> SimulateTransitionResponse:
-    """Quick preset: Store Shoes #1 inside cabinet (occlusion persistence)."""
+    """Quick preset: Store active object inside room anchor (occlusion persistence)."""
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
+    anchors = data.get("anchors", [])
+    first_anc = anchors[0] if anchors else {}
     return simulate_transition(
         SimulateTransitionRequest(
             instance_id=1,
             new_relation="inside",
+            anchor_id=first_anc.get("anchor_id", 1),
+            anchor_label=first_anc.get("label", "Storage Cabinet #1"),
             relative_distance_m=0.09,
             is_active_view=False,
             is_in_hand=False,
-            dataset_id=dataset_id,
+            dataset_id=ds,
         )
     )
 
 
 @app.get("/api/v1/simulate/in_hand", response_model=SimulateTransitionResponse)
 def quick_simulate_in_hand(
-    dataset_id: str = DEFAULT_DATASET_ID,
+    dataset_id: str | None = None,
 ) -> SimulateTransitionResponse:
-    """Quick preset: Pick up Shoes #1 in hands (in-hand kinematic tracking)."""
+    """Quick preset: Pick up active object in hands (kinematic tracking)."""
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
+    anchors = data.get("anchors", [])
+    first_anc = anchors[0] if anchors else {}
     return simulate_transition(
         SimulateTransitionRequest(
             instance_id=1,
             new_relation="carried_by_user",
+            anchor_id=first_anc.get("anchor_id", 1),
+            anchor_label=first_anc.get("label", "User Hands"),
             relative_distance_m=0.25,
             is_active_view=False,
             is_in_hand=True,
-            dataset_id=dataset_id,
+            dataset_id=ds,
+        )
+    )
+
+
+@app.get("/api/v1/simulate/bottle_table1", response_model=SimulateTransitionResponse)
+def quick_simulate_bottle_table1() -> SimulateTransitionResponse:
+    """Quick preset: Bottle #1 resting actively on Desk #1 (Source table)."""
+    return simulate_transition(
+        SimulateTransitionRequest(
+            instance_id=1,
+            new_relation="on_surface",
+            anchor_id=1,
+            anchor_label="Desk #1",
+            relative_distance_m=0.09,
+            is_active_view=True,
+            is_in_hand=False,
+            dataset_id="Demo06-Self",
+        )
+    )
+
+
+@app.get("/api/v1/simulate/bottle_occluded", response_model=SimulateTransitionResponse)
+def quick_simulate_bottle_occluded() -> SimulateTransitionResponse:
+    """Quick preset: Bottle #1 occluded on Desk #1 (object permanence active in memory)."""
+    return simulate_transition(
+        SimulateTransitionRequest(
+            instance_id=1,
+            new_relation="on_surface",
+            anchor_id=1,
+            anchor_label="Desk #1",
+            relative_distance_m=0.09,
+            is_active_view=False,
+            is_in_hand=False,
+            dataset_id="Demo06-Self",
+        )
+    )
+
+
+@app.get("/api/v1/simulate/bottle_table2", response_model=SimulateTransitionResponse)
+def quick_simulate_bottle_table2() -> SimulateTransitionResponse:
+    """Quick preset: Bottle #1 placed on Desk #2 (relocation transition complete)."""
+    return simulate_transition(
+        SimulateTransitionRequest(
+            instance_id=1,
+            new_relation="on_surface",
+            anchor_id=2,
+            anchor_label="Desk #2",
+            relative_distance_m=0.05,
+            is_active_view=True,
+            is_in_hand=False,
+            dataset_id="Demo06-Self",
         )
     )
 

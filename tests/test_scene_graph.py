@@ -291,3 +291,109 @@ def test_hybrid_release_gate_and_events() -> None:
     event_types = [e["event_type"] for e in graph.events]
     assert "pickup" in event_types
     assert "placement" in event_types
+
+
+def test_bottle_occlusion_and_relocation_r4dsg() -> None:
+    """Test AC: Occlusion of bottle from table is handled by the spatio-temporal memory engine."""
+    # Desk 1 (Source)
+    desk1 = BoundingBox3D(
+        frame_id=10,
+        timestamp=1.0,
+        track_id=1,
+        label="desk",
+        confidence=0.9,
+        center=(-0.2, 0.2, 0.3),
+        size=(0.3, 0.1, 0.1),
+        bbox_2d=(10.0, 10.0, 100.0, 100.0),
+    )
+    # Desk 2 (Destination)
+    desk2 = BoundingBox3D(
+        frame_id=30,
+        timestamp=3.0,
+        track_id=2,
+        label="desk",
+        confidence=0.9,
+        center=(-0.8, -0.1, 0.8),
+        size=(0.3, 0.1, 0.1),
+        bbox_2d=(10.0, 10.0, 100.0, 100.0),
+    )
+    # Bottle on Desk 1 in frame 10 (observation 1)
+    bottle_frame10 = BoundingBox3D(
+        frame_id=10,
+        timestamp=1.0,
+        track_id=3,
+        label="bottle",
+        confidence=0.88,
+        center=(-0.14, 0.15, 0.26),
+        size=(0.05, 0.05, 0.1),
+        bbox_2d=(20.0, 20.0, 40.0, 60.0),
+        spatial_state="on_surface",
+    )
+    # Bottle on Desk 1 in frame 12 (observation 2)
+    bottle_frame12 = BoundingBox3D(
+        frame_id=12,
+        timestamp=1.2,
+        track_id=3,
+        label="bottle",
+        confidence=0.90,
+        center=(-0.14, 0.15, 0.26),
+        size=(0.05, 0.05, 0.1),
+        bbox_2d=(20.0, 20.0, 40.0, 60.0),
+        spatial_state="on_surface",
+    )
+    # Bottle on Desk 2 in frame 30
+    bottle_frame30 = BoundingBox3D(
+        frame_id=30,
+        timestamp=3.0,
+        track_id=4,
+        label="water bottle",
+        confidence=0.92,
+        center=(-0.75, -0.1, 0.82),
+        size=(0.05, 0.05, 0.1),
+        bbox_2d=(20.0, 20.0, 40.0, 60.0),
+        spatial_state="on_surface",
+    )
+
+    all_frames = [10, 12, 20, 30]
+    all_ts = [1.0, 1.2, 2.0, 3.0]
+
+    graph = build_relative_4d_scene_graph(
+        [desk1, desk2, bottle_frame10, bottle_frame12, bottle_frame30],
+        all_frames,
+        all_ts,
+    )
+
+    # 1. Verify two spatially separated anchors
+    assert len(graph.anchors) == 2
+    anchor_labels = [a.label for a in graph.anchors]
+    assert "Desk #1" in anchor_labels
+    assert "Desk #2" in anchor_labels
+
+    # 2. Frame 10: Bottle #1 is active on Desk #1
+    f10 = graph.memory_timeline[10]
+    b10 = next(e for e in f10 if "bottle" in e.label.lower())
+    assert b10.is_active_view is True
+    assert b10.anchor_label == "Desk #1"
+    assert b10.relation == "on_surface"
+
+    # 3. Frame 20: OCCLUSION HANDLING: Bottle is occluded, but preserved in 3D memory!
+    f20 = graph.memory_timeline[20]
+    b20 = next(e for e in f20 if "bottle" in e.label.lower())
+    assert b20.is_active_view is False  # Flagged as persistent memory during occlusion
+    assert b20.anchor_label == "Desk #1"
+    assert b20.relation == "on_surface"
+    assert b20.instance_id == 1
+
+    # 4. Frame 30: Bottle #1 relocated to Desk #2
+    f30 = graph.memory_timeline[30]
+    b30 = next(e for e in f30 if "bottle" in e.label.lower())
+    assert b30.is_active_view is True
+    assert b30.anchor_label == "Desk #2"
+    assert b30.relation == "on_surface"
+    assert b30.instance_id == 1
+
+    # 5. Transition event between anchors
+    assert len(graph.events) >= 1
+    ev = next(e for e in graph.events if "bottle" in e["object"].lower())
+    assert "Desk #1" in ev["source_anchor"]
+    assert "Desk #2" in ev["destination_anchor"]

@@ -87,7 +87,23 @@ class ApiService {
   /// Offline fallback simulating verified R4DSG memory
   QueryResult _mockQueryFallback(String item) {
     final lower = item.toLowerCase();
-    if (lower.contains('shoe')) {
+    if (lower.contains('bottle') || lower.contains('water') || lower.contains('drink')) {
+      return const QueryResult(
+        query: 'water bottle',
+        found: true,
+        item: 'water bottle',
+        instanceLabel: 'Bottle #1',
+        instanceId: 1,
+        anchorLabel: 'Desk #2',
+        relation: 'on_surface',
+        relativeDistanceM: 0.07,
+        locationSummary: 'Your bottle is currently resting on Desk #2.',
+        lastSeenTimeAgo: 'Recorded today',
+        isPersistentMemory: false,
+        cropUrl: '/api/v1/crops/1?dataset_id=Demo06-Self',
+        confidence: 0.96,
+      );
+    } else if (lower.contains('shoe')) {
       return const QueryResult(
         query: 'shoes',
         found: true,
