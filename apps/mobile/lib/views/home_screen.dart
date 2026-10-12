@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'caregiver/caregiver_view.dart';
@@ -19,54 +20,75 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.darkCanvas,
       appBar: AppBar(
         backgroundColor: AppTheme.darkCanvas,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        centerTitle: false,
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: AppTheme.primaryTeal.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
+                color: AppTheme.primaryTeal.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.shield_rounded, color: AppTheme.tealAccent, size: 24),
+              child: const Icon(Icons.shield_rounded, color: AppTheme.primaryTeal, size: 22),
             ),
-            const SizedBox(width: 12),
-            const Text(
-              "AEGIS",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.5,
-                color: AppTheme.textHighContrast,
-              ),
+            const SizedBox(width: 10),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "AEGIS",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                    color: AppTheme.textHighContrast,
+                  ),
+                ),
+                Text(
+                  "Spatial Memory Care",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textMuted,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.science_outlined, color: AppTheme.tealAccent),
+          _buildIosBarAction(
+            icon: Icons.science_outlined,
             tooltip: "Simulate Spatial Transition",
+            color: AppTheme.primaryTeal,
             onPressed: _showSimulationSheet,
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: AppTheme.textMuted),
+          const SizedBox(width: 6),
+          _buildIosBarAction(
+            icon: Icons.settings_outlined,
             tooltip: "Server Settings",
+            color: AppTheme.textMuted,
             onPressed: _showSettingsDialog,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 16),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
+          preferredSize: const Size.fromHeight(56),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Container(
-              height: 48,
+              height: 44,
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: AppTheme.darkSurface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155), width: 1.5),
+                color: AppTheme.segmentedTrack,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
@@ -75,7 +97,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: "Patient Recall",
                       icon: Icons.person_rounded,
                       isSelected: _selectedModeIndex == 0,
-                      onTap: () => setState(() => _selectedModeIndex = 0),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selectedModeIndex = 0);
+                      },
                     ),
                   ),
                   Expanded(
@@ -83,7 +108,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: "Caregiver Audit",
                       icon: Icons.monitor_heart_rounded,
                       isSelected: _selectedModeIndex == 1,
-                      onTap: () => setState(() => _selectedModeIndex = 1),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selectedModeIndex = 1);
+                      },
                     ),
                   ),
                 ],
@@ -102,6 +130,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildIosBarAction({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        icon: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        tooltip: tooltip,
+        onPressed: onPressed,
+      ),
+    );
+  }
+
   Widget _buildModeTab({
     required String title,
     required IconData icon,
@@ -110,23 +165,39 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.all(4),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryTeal : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          color: isSelected ? AppTheme.segmentedThumb : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: isSelected
+              ? const [
+                  BoxShadow(
+                    color: Color(0x18000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 1.5),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: isSelected ? Colors.white : AppTheme.textMuted),
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? AppTheme.primaryTeal : AppTheme.textMuted,
+            ),
             const SizedBox(width: 6),
             Text(
               title,
               style: TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : AppTheme.textMuted,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? AppTheme.textHighContrast : AppTheme.textMuted,
+                letterSpacing: -0.2,
               ),
             ),
           ],
@@ -141,20 +212,33 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.darkSurface,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF334155)),
+          side: const BorderSide(color: AppTheme.cardBorder, width: 0.8),
         ),
-        title: const Row(
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        title: Row(
           children: [
-            Icon(Icons.wifi_rounded, color: AppTheme.tealAccent),
-            SizedBox(width: 10),
-            Text(
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppTheme.systemBlue.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.wifi_rounded, color: AppTheme.systemBlue, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text(
               "Backend Connection",
               style: TextStyle(
                 color: AppTheme.textHighContrast,
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
               ),
             ),
           ],
@@ -165,39 +249,75 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const Text(
               "Enter the IP address of your host machine running run_server.py:",
-              style: TextStyle(color: AppTheme.textMuted, fontSize: 14),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.4),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             TextField(
               controller: controller,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(
+                color: AppTheme.textHighContrast,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: const Color(0xFF0F172A),
+                fillColor: AppTheme.darkCanvas,
                 hintText: "http://192.168.1.XX:8000",
-                hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                hintStyle: const TextStyle(color: AppTheme.tertiaryLabel, fontSize: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderSide: const BorderSide(color: AppTheme.cardBorder, width: 0.8),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppTheme.cardBorder, width: 0.8),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppTheme.primaryTeal, width: 1.5),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              "Default LAN: 0.0.0.0:8000 | Emulator: 10.0.2.2:8000",
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.darkCanvas,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 14, color: AppTheme.textMuted),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Default LAN: 0.0.0.0:8000 | Emulator: 10.0.2.2:8000",
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel", style: TextStyle(color: AppTheme.textMuted)),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
+            child: const Text(
+              "Cancel",
+              style: TextStyle(color: AppTheme.textMuted, fontWeight: FontWeight.w600),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryTeal,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () async {
@@ -207,6 +327,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     backgroundColor: ok ? const Color(0xFF065F46) : const Color(0xFF991B1B),
                     content: Text(
                       ok
@@ -220,7 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
             },
             child: const Text(
               "Save & Connect",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -232,75 +354,108 @@ class _HomeScreenState extends State<HomeScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.darkSurface,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.science_outlined, color: AppTheme.tealAccent, size: 24),
-                SizedBox(width: 10),
-                Text(
-                  "Spatial Transition Simulator",
-                  style: TextStyle(
-                    color: AppTheme.textHighContrast,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // iOS Grabber Handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBorder,
+                    borderRadius: BorderRadius.circular(2.5),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Inject live spatial state shifts into R4DSG memory to demonstrate real-time reasoning and caregiver alerts.",
-              style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
-            ),
-            const SizedBox(height: 18),
-            _buildSimTile(
-              title: "Move Shoes to Floor",
-              subtitle: "Triggers Caregiver Displaced Item Alert",
-              icon: Icons.warning_amber_rounded,
-              color: AppTheme.alertAmber,
-              onTap: () => _triggerSim(ctx, "floor", "Shoes #1 moved to floor"),
-            ),
-            _buildSimTile(
-              title: "Pick up Shoes in Hand",
-              subtitle: "Triggers In-Hand Kinematic Tracking",
-              icon: Icons.pan_tool_rounded,
-              color: AppTheme.royalAmethyst,
-              onTap: () => _triggerSim(ctx, "in_hand", "Shoes #1 picked up by user"),
-            ),
-            _buildSimTile(
-              title: "Store Shoes in Cabinet",
-              subtitle: "Triggers Occlusion & Spatial Permanence",
-              icon: Icons.inventory_2_rounded,
-              color: AppTheme.tealAccent,
-              onTap: () => _triggerSim(ctx, "cabinet", "Shoes #1 safely placed in cabinet"),
-            ),
-            const Divider(color: Color(0xFF334155), height: 24),
-            TextButton.icon(
-              icon: const Icon(Icons.refresh_rounded, color: AppTheme.textMuted, size: 18),
-              label: const Text(
-                "Reset Memory Graph to Baseline",
-                style: TextStyle(color: AppTheme.textMuted),
               ),
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await widget.apiService.resetMemory();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Memory graph reset to baseline.")),
-                  );
-                  setState(() {});
-                }
-              },
-            ),
-          ],
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryTeal.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.science_outlined, color: AppTheme.primaryTeal, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    "Spatial Transition Simulator",
+                    style: TextStyle(
+                      color: AppTheme.textHighContrast,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Inject live spatial state shifts into R4DSG memory to demonstrate real-time reasoning and caregiver alerts.",
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 18),
+              _buildSimTile(
+                title: "Move Shoes to Floor",
+                subtitle: "Triggers Caregiver Displaced Item Alert",
+                icon: Icons.warning_amber_rounded,
+                color: AppTheme.alertAmber,
+                onTap: () => _triggerSim(ctx, "floor", "Shoes #1 moved to floor"),
+              ),
+              _buildSimTile(
+                title: "Pick up Shoes in Hand",
+                subtitle: "Triggers In-Hand Kinematic Tracking",
+                icon: Icons.pan_tool_rounded,
+                color: AppTheme.systemIndigo,
+                onTap: () => _triggerSim(ctx, "in_hand", "Shoes #1 picked up by user"),
+              ),
+              _buildSimTile(
+                title: "Store Shoes in Cabinet",
+                subtitle: "Triggers Occlusion & Spatial Permanence",
+                icon: Icons.inventory_2_rounded,
+                color: AppTheme.systemGreen,
+                onTap: () => _triggerSim(ctx, "cabinet", "Shoes #1 safely placed in cabinet"),
+              ),
+              const Divider(color: AppTheme.cardBorder, height: 20),
+              TextButton.icon(
+                icon: const Icon(Icons.refresh_rounded, color: AppTheme.textMuted, size: 18),
+                label: const Text(
+                  "Reset Memory Graph to Baseline",
+                  style: TextStyle(color: AppTheme.textMuted, fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await widget.apiService.resetMemory();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        content: const Text("Memory graph reset to baseline."),
+                      ),
+                    );
+                    setState(() {});
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -314,20 +469,31 @@ class _HomeScreenState extends State<HomeScreen> {
     required VoidCallback onTap,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.08),
+            color: color.withOpacity(0.06),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withOpacity(0.3)),
+            border: Border.all(color: color.withOpacity(0.25), width: 0.8),
           ),
           child: Row(
             children: [
-              Icon(icon, color: color, size: 22),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -337,10 +503,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       title,
                       style: TextStyle(
                         color: color,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                         fontSize: 14,
+                        letterSpacing: -0.2,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
@@ -348,7 +516,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: color, size: 20),
+              Icon(Icons.chevron_right_rounded, color: color.withOpacity(0.6), size: 20),
             ],
           ),
         ),

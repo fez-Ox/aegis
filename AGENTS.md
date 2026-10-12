@@ -56,6 +56,13 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 4. **Testing & Code Quality**:
    - 16 unit tests passing cleanly in `poc/tests/`; `ruff` lint checks 100% compliant.
 
+5. **Apple HIG Design Architecture & Patient Search Audit (`apps/mobile/`)**:
+   - Modernized client aesthetics strictly adhering to Apple Human Interface Guidelines (`.claude/SKILL.md`).
+   - Inset grouped cards (`AppTheme.iosCardDecoration`), SF typography hierarchy, and minimum 44×44 pt touch targets.
+   - iOS-style sliding segmented control with tactile haptics (`HapticFeedback.selectionClick()`).
+   - Dedicated "Patient Recent Search History" in Caregiver Audit tab showing the top-3 recent recall queries with recency, status, and persistent memory badges.
+   - Apple modal sheets featuring grabber handles and Cupertino-styled alerts.
+
 ## Architectural Principles & Invariants
 
 1. **R4DSG (Relative 4D Scene Graph) Memory**:
