@@ -147,7 +147,30 @@ def get_search_paths(dataset_id: str) -> list[Path]:
         ),  # Modal persistent volume
         Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),  # Local output
         Path(f"data/{dataset_id}/objects/r4d_scene_graph.json"),
+        Path(f"outputs/{dataset_id}/r4d_scene_graph.json"),
+        Path(f"data/{dataset_id}/r4d_scene_graph.json"),
     ]
+
+
+def list_available_datasets() -> list[str]:
+    """Discover all datasets with valid scene graphs or videos across outputs/, data/, and /data."""
+    discovered: set[str] = set()
+    for root_dir in [Path("outputs"), Path("data"), Path("/data")]:
+        if root_dir.is_dir():
+            for item in root_dir.iterdir():
+                if item.is_dir():
+                    for search_p in [
+                        item / "objects" / "r4d_scene_graph.json",
+                        item / "r4d_scene_graph.json",
+                    ]:
+                        if search_p.is_file():
+                            discovered.add(item.name)
+                            break
+    # Always include known benchmark datasets if present
+    for default_ds in ["Demo06-Self", "demo01", "demo03"]:
+        if any(p.is_file() for p in get_search_paths(default_ds)):
+            discovered.add(default_ds)
+    return sorted(discovered) if discovered else ["demo01", "Demo06-Self"]
 
 
 def load_scene_graph_data(dataset_id: str | None = None) -> dict[str, Any]:
@@ -213,8 +236,8 @@ def load_scene_graph_data(dataset_id: str | None = None) -> dict[str, Any]:
             ]
         },
     }
-    _GRAPH_CACHE[dataset_id] = copy.deepcopy(fallback_data)
-    return _GRAPH_CACHE[dataset_id]
+    _GRAPH_CACHE[ds] = copy.deepcopy(fallback_data)
+    return _GRAPH_CACHE[ds]
 
 
 def find_latest_objects_state(data: dict[str, Any]) -> dict[int, dict[str, Any]]:
@@ -274,6 +297,33 @@ def get_full_scene_graph(dataset_id: str | None = None) -> dict[str, Any]:
         "events": data.get("events", []),
         "latest_objects": list(latest_states.values()),
         "total_timeline_frames": len(data.get("timeline", {})),
+    }
+
+
+@app.get("/api/v1/datasets")
+def get_datasets() -> dict[str, Any]:
+    """Return all available datasets, active dataset, and summary of their anchors and tracked objects."""
+    available = list_available_datasets()
+    summaries = []
+    for d in available:
+        sg = load_scene_graph_data(d)
+        anchors = [a.get("label", "") for a in sg.get("anchors", [])]
+        latest = find_latest_objects_state(sg)
+        objects = sorted(
+            {obj.get("label", "") for obj in latest.values() if obj.get("label")}
+        )
+        summaries.append(
+            {
+                "dataset_id": d,
+                "anchors": anchors,
+                "tracked_objects": objects,
+                "is_active": d == ACTIVE_DATASET_ID,
+            }
+        )
+    return {
+        "active_dataset": ACTIVE_DATASET_ID,
+        "total_datasets": len(summaries),
+        "available_datasets": summaries,
     }
 
 
@@ -353,21 +403,24 @@ def query_memory(
 
     # Cross-dataset fallback only if dataset was unspecified and no match found in primary
     if not matches and dataset_id is None:
-        alt_dataset = "Demo06-Self" if ds == "demo01" else "demo01"
-        alt_data = load_scene_graph_data(alt_dataset)
-        alt_states = find_latest_objects_state(alt_data)
-        alt_matches = [
-            s
-            for s in alt_states.values()
-            if canonical_item in s.get("label", "").lower()
-            or (canonical_item == "shoes" and "shoe" in s.get("label", "").lower())
-        ]
-        if alt_matches:
-            ds = alt_dataset
-            data = alt_data
-            latest_states = alt_states
-            matches = alt_matches
-            events = data.get("events", [])
+        for candidate_ds in list_available_datasets():
+            if candidate_ds == ds:
+                continue
+            cand_data = load_scene_graph_data(candidate_ds)
+            cand_states = find_latest_objects_state(cand_data)
+            cand_matches = [
+                s
+                for s in cand_states.values()
+                if canonical_item in s.get("label", "").lower()
+                or (canonical_item == "shoes" and "shoe" in s.get("label", "").lower())
+            ]
+            if cand_matches:
+                ds = candidate_ds
+                data = cand_data
+                latest_states = cand_states
+                matches = cand_matches
+                events = data.get("events", [])
+                break
 
     if not matches:
         available_labels = list(

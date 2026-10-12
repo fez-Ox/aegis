@@ -167,3 +167,26 @@ def test_scene_graph_full_endpoint() -> None:
     assert len(data["anchors"]) == 2
     assert len(data["latest_objects"]) >= 1
     assert data["latest_objects"][0]["label"] == "Bottle #1"
+
+
+def test_datasets_discovery_endpoint() -> None:
+    """Verify /api/v1/datasets discovers all datasets and returns summaries."""
+    res = client.get("/api/v1/datasets")
+    assert res.status_code == 200
+    data = res.json()
+    assert "active_dataset" in data
+    assert "available_datasets" in data
+    assert data["total_datasets"] >= 2
+    dataset_ids = [d["dataset_id"] for d in data["available_datasets"]]
+    assert "demo01" in dataset_ids
+    assert "Demo06-Self" in dataset_ids
+
+
+def test_query_generic_demo03_dataset() -> None:
+    """Verify querying demo03 dataset returns kitchen objects and anchors accurately."""
+    res = client.get("/api/v1/query?item=cooking pot&dataset_id=demo03")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["found"] is True
+    assert "Cooking Pot" in data["instance_label"]
+    assert "Sink" in data["anchor_label"] or "Refrigerator" in data["anchor_label"]
