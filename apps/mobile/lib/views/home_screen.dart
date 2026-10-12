@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'caregiver/caregiver_view.dart';
@@ -19,54 +20,75 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.darkCanvas,
       appBar: AppBar(
         backgroundColor: AppTheme.darkCanvas,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        centerTitle: false,
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: AppTheme.primaryTeal.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
+                color: AppTheme.primaryTeal.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.shield_rounded, color: AppTheme.tealAccent, size: 24),
+              child: const Icon(Icons.shield_rounded, color: AppTheme.primaryTeal, size: 22),
             ),
-            const SizedBox(width: 12),
-            const Text(
-              "AEGIS",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.5,
-                color: AppTheme.textHighContrast,
-              ),
+            const SizedBox(width: 10),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "AEGIS",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                    color: AppTheme.textHighContrast,
+                  ),
+                ),
+                Text(
+                  "Spatial Memory Care",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textMuted,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.science_outlined, color: AppTheme.tealAccent),
+          _buildIosBarAction(
+            icon: Icons.science_outlined,
             tooltip: "Simulate Spatial Transition",
+            color: AppTheme.primaryTeal,
             onPressed: _showSimulationSheet,
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: AppTheme.textMuted),
+          const SizedBox(width: 6),
+          _buildIosBarAction(
+            icon: Icons.settings_outlined,
             tooltip: "Server Settings",
+            color: AppTheme.textMuted,
             onPressed: _showSettingsDialog,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 16),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
+          preferredSize: const Size.fromHeight(56),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Container(
-              height: 48,
+              height: 44,
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: AppTheme.darkSurface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.cardBorder, width: 1.5),
+                color: AppTheme.segmentedTrack,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
@@ -75,7 +97,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: "Patient Recall",
                       icon: Icons.person_rounded,
                       isSelected: _selectedModeIndex == 0,
-                      onTap: () => setState(() => _selectedModeIndex = 0),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selectedModeIndex = 0);
+                      },
                     ),
                   ),
                   Expanded(
@@ -83,7 +108,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: "Caregiver Audit",
                       icon: Icons.monitor_heart_rounded,
                       isSelected: _selectedModeIndex == 1,
-                      onTap: () => setState(() => _selectedModeIndex = 1),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _selectedModeIndex = 1);
+                      },
                     ),
                   ),
                 ],
@@ -102,6 +130,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildIosBarAction({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        icon: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        tooltip: tooltip,
+        onPressed: onPressed,
+      ),
+    );
+  }
+
   Widget _buildModeTab({
     required String title,
     required IconData icon,
@@ -110,23 +165,39 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.all(4),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryTeal : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          color: isSelected ? AppTheme.segmentedThumb : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: isSelected
+              ? const [
+                  BoxShadow(
+                    color: Color(0x18000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 1.5),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: isSelected ? Colors.white : AppTheme.textMuted),
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? AppTheme.primaryTeal : AppTheme.textMuted,
+            ),
             const SizedBox(width: 6),
             Text(
               title,
               style: TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : AppTheme.textMuted,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? AppTheme.textHighContrast : AppTheme.textMuted,
+                letterSpacing: -0.2,
               ),
             ),
           ],
