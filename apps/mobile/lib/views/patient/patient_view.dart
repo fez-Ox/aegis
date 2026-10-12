@@ -212,13 +212,17 @@ class _PatientViewState extends State<PatientView> {
 
   Widget _buildResultCard(QueryResult result) {
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppTheme.darkSurface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.tealAccent, width: 2.0),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 6)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.primaryTeal.withOpacity(0.35), width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C000000),
+            blurRadius: 16,
+            offset: Offset(0, 5),
+          ),
         ],
       ),
       child: Column(
@@ -227,19 +231,24 @@ class _PatientViewState extends State<PatientView> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryTeal.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppTheme.primaryTeal.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.check_circle_rounded, color: AppTheme.primaryTeal, size: 18),
+                    const Icon(Icons.check_circle_rounded, color: AppTheme.primaryTeal, size: 16),
                     const SizedBox(width: 6),
                     Text(
                       result.found ? "LOCATED" : "NOT FOUND",
-                      style: const TextStyle(color: AppTheme.primaryTeal, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(
+                        color: AppTheme.primaryTeal,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ],
                 ),
@@ -247,38 +256,70 @@ class _PatientViewState extends State<PatientView> {
               const Spacer(),
               if (result.isPersistentMemory)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppTheme.royalAmethyst.withOpacity(0.15),
+                    color: AppTheme.royalAmethyst.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Text(
                     "✦ PERSISTENT MEMORY",
-                    style: TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.w700, fontSize: 11),
+                    style: TextStyle(
+                      color: Color(0xFF92400E),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      letterSpacing: 0.1,
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Main location text
           Text(
             result.locationSummary,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.textHighContrast, height: 1.3),
+            style: const TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+              color: AppTheme.textHighContrast,
+              height: 1.3,
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Context & Recency
-          Row(
-            children: [
-              const Icon(Icons.access_time_rounded, color: AppTheme.textMuted, size: 18),
-              const SizedBox(width: 6),
-              Text(result.lastSeenTimeAgo, style: const TextStyle(color: AppTheme.textMuted, fontSize: 15)),
-              const SizedBox(width: 16),
-              const Icon(Icons.room_rounded, color: AppTheme.royalAmethyst, size: 18),
-              const SizedBox(width: 6),
-              Text(result.anchorLabel ?? "Room Anchor", style: const TextStyle(color: Color(0xFF92400E), fontSize: 15, fontWeight: FontWeight.w600)),
-            ],
+          // Context & Recency Inset Info
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.darkCanvas,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.access_time_rounded, color: AppTheme.textMuted, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  result.lastSeenTimeAgo,
+                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(width: 14),
+                const Icon(Icons.room_rounded, color: AppTheme.primaryTeal, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    result.anchorLabel ?? "Room Anchor",
+                    style: const TextStyle(
+                      color: Color(0xFF92400E),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
