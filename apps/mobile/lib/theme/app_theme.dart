@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Medical & Dementia-Accessible Palette
-  static const Color darkCanvas = Color(0xFF0F172A);      // Slate Charcoal
-  static const Color darkSurface = Color(0xFF1E293B);     // Slate Surface
-  static const Color lightCanvas = Color(0xFFF8FAFC);     // Medical Porcelain
-  static const Color lightSurface = Color(0xFFFFFFFF);    // Pure White Card
+  // Warmer Tones Palette (Yellow & Off-White) - Dementia-Accessible
+  static const Color darkCanvas = Color(0xFFFAF7F0);      // Warm Off-White Canvas / Linen
+  static const Color darkSurface = Color(0xFFFFFFFF);     // Warm Off-White Card Surface
+  static const Color lightCanvas = Color(0xFFFAF7F0);     // Warm Off-White Canvas
+  static const Color lightSurface = Color(0xFFFFFFFF);    // Pure Warm White Card
 
-  static const Color primaryTeal = Color(0xFF0D9488);     // Therapeutic Teal
-  static const Color tealAccent = Color(0xFF14B8A6);      // Bright Teal
-  static const Color royalAmethyst = Color(0xFF6366F1);   // Anchor Purple
+  static const Color primaryTeal = Color(0xFFD97706);     // Warm Amber / Golden Honey
+  static const Color tealAccent = Color(0xFFEAB308);      // Bright Warm Yellow
+  static const Color royalAmethyst = Color(0xFFCA8A04);   // Warm Golden Ochre
   static const Color alertAmber = Color(0xFFF59E0B);      // Calm Amber Attention
-  static const Color textHighContrast = Color(0xFFF8FAFC); // WCAG AAA
-  static const Color textMuted = Color(0xFF94A3B8);
+  static const Color textHighContrast = Color(0xFF1C1917); // Deep Warm Charcoal (WCAG AAA)
+  static const Color textMuted = Color(0xFF78716C);       // Warm Muted Stone
+  static const Color cardBorder = Color(0xFFE7E0D3);      // Warm Subtle Border
 
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       scaffoldBackgroundColor: darkCanvas,
-      colorScheme: const ColorScheme.dark(
+      colorScheme: const ColorScheme.light(
         primary: primaryTeal,
         secondary: royalAmethyst,
         surface: darkSurface,
@@ -31,7 +32,7 @@ class AppTheme {
         elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF334155), width: 1.5),
+          side: const BorderSide(color: cardBorder, width: 1.5),
         ),
       ),
       textTheme: const TextTheme(

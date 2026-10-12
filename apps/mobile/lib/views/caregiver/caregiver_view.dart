@@ -47,7 +47,7 @@ class _CaregiverViewState extends State<CaregiverView> {
               decoration: BoxDecoration(
                 color: AppTheme.darkSurface,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF334155), width: 1.5),
+                border: Border.all(color: AppTheme.cardBorder, width: 1.5),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,7 +166,7 @@ class _CaregiverViewState extends State<CaregiverView> {
                     decoration: BoxDecoration(
                       color: AppTheme.darkSurface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF334155), width: 1),
+                      border: Border.all(color: AppTheme.cardBorder, width: 1),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,10 +174,10 @@ class _CaregiverViewState extends State<CaregiverView> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppTheme.royalAmethyst.withOpacity(0.2),
+                            color: AppTheme.royalAmethyst.withOpacity(0.15),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.arrow_forward_rounded, color: Color(0xFFA5B4FC), size: 16),
+                          child: const Icon(Icons.arrow_forward_rounded, color: Color(0xFF92400E), size: 16),
                         ),
                         const SizedBox(width: 12),
                         Expanded(

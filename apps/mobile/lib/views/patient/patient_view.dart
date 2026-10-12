@@ -21,7 +21,7 @@ class _PatientViewState extends State<PatientView> {
     {'label': 'Shoes', 'query': 'shoes', 'icon': Icons.snowshoeing_rounded, 'color': AppTheme.tealAccent},
     {'label': 'Keys', 'query': 'keys', 'icon': Icons.key_rounded, 'color': AppTheme.royalAmethyst},
     {'label': 'Glasses', 'query': 'glasses', 'icon': Icons.visibility_rounded, 'color': AppTheme.alertAmber},
-    {'label': 'Medicine', 'query': 'medicine', 'icon': Icons.medication_rounded, 'color': const Color(0xFFEC4899)},
+    {'label': 'Medicine', 'query': 'medicine', 'icon': Icons.medication_rounded, 'color': const Color(0xFFD97706)},
   ];
 
   Future<void> _executeQuery(String item) async {
@@ -51,7 +51,7 @@ class _PatientViewState extends State<PatientView> {
             decoration: BoxDecoration(
               color: AppTheme.darkSurface,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF334155), width: 1.5),
+              border: Border.all(color: AppTheme.cardBorder, width: 1.5),
             ),
             child: Row(
               children: [
@@ -97,7 +97,7 @@ class _PatientViewState extends State<PatientView> {
                     color: isSelected ? AppTheme.primaryTeal.withOpacity(0.3) : AppTheme.darkSurface,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: isSelected ? AppTheme.tealAccent : const Color(0xFF334155),
+                      color: isSelected ? AppTheme.tealAccent : AppTheme.cardBorder,
                       width: isSelected ? 3.0 : 1.5,
                     ),
                   ),
@@ -126,7 +126,7 @@ class _PatientViewState extends State<PatientView> {
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [AppTheme.primaryTeal, Color(0xFF0F766E)],
+                  colors: [AppTheme.primaryTeal, Color(0xFFB45309)],
                 ),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
@@ -171,7 +171,7 @@ class _PatientViewState extends State<PatientView> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppTheme.tealAccent, width: 2.0),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6)),
+          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 6)),
         ],
       ),
       child: Column(
@@ -182,17 +182,17 @@ class _PatientViewState extends State<PatientView> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryTeal.withOpacity(0.2),
+                  color: AppTheme.primaryTeal.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.check_circle_rounded, color: AppTheme.tealAccent, size: 18),
+                    const Icon(Icons.check_circle_rounded, color: AppTheme.primaryTeal, size: 18),
                     const SizedBox(width: 6),
                     Text(
                       result.found ? "LOCATED" : "NOT FOUND",
-                      style: const TextStyle(color: AppTheme.tealAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(color: AppTheme.primaryTeal, fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ],
                 ),
@@ -202,12 +202,12 @@ class _PatientViewState extends State<PatientView> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppTheme.royalAmethyst.withOpacity(0.25),
+                    color: AppTheme.royalAmethyst.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Text(
                     "✦ PERSISTENT MEMORY",
-                    style: TextStyle(color: Color(0xFFA5B4FC), fontWeight: FontWeight.w700, fontSize: 11),
+                    style: TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.w700, fontSize: 11),
                   ),
                 ),
             ],
@@ -230,7 +230,7 @@ class _PatientViewState extends State<PatientView> {
               const SizedBox(width: 16),
               const Icon(Icons.room_rounded, color: AppTheme.royalAmethyst, size: 18),
               const SizedBox(width: 6),
-              Text(result.anchorLabel ?? "Room Anchor", style: const TextStyle(color: Color(0xFFA5B4FC), fontSize: 15, fontWeight: FontWeight.w600)),
+              Text(result.anchorLabel ?? "Room Anchor", style: const TextStyle(color: Color(0xFF92400E), fontSize: 15, fontWeight: FontWeight.w600)),
             ],
           ),
         ],

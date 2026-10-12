@@ -66,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 color: AppTheme.darkSurface,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155), width: 1.5),
+                border: Border.all(color: AppTheme.cardBorder, width: 1.5),
               ),
               child: Row(
                 children: [
@@ -143,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: AppTheme.darkSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFF334155)),
+          side: const BorderSide(color: AppTheme.cardBorder),
         ),
         title: const Row(
           children: [
@@ -170,15 +170,15 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: controller,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: AppTheme.textHighContrast),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: const Color(0xFF0F172A),
+                fillColor: AppTheme.darkCanvas,
                 hintText: "http://192.168.1.XX:8000",
-                hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                hintStyle: const TextStyle(color: AppTheme.textMuted),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderSide: const BorderSide(color: AppTheme.cardBorder),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
@@ -186,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             const Text(
               "Default LAN: 0.0.0.0:8000 | Emulator: 10.0.2.2:8000",
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
             ),
           ],
         ),
@@ -282,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: AppTheme.tealAccent,
               onTap: () => _triggerSim(ctx, "cabinet", "Shoes #1 safely placed in cabinet"),
             ),
-            const Divider(color: Color(0xFF334155), height: 24),
+            const Divider(color: AppTheme.cardBorder, height: 24),
             TextButton.icon(
               icon: const Icon(Icons.refresh_rounded, color: AppTheme.textMuted, size: 18),
               label: const Text(
