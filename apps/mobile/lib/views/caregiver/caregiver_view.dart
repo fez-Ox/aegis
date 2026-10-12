@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/patient_search_record.dart';
 import '../../models/timeline_event.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
@@ -35,9 +36,9 @@ class _CaregiverViewState extends State<CaregiverView> {
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: _loadTimeline,
-      color: AppTheme.tealAccent,
+      color: AppTheme.primaryTeal,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -78,7 +79,7 @@ class _CaregiverViewState extends State<CaregiverView> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // Dynamic Displaced Item Warning / Status Card
             Builder(
@@ -123,7 +124,11 @@ class _CaregiverViewState extends State<CaregiverView> {
                 );
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Patient Recent Search History Option
+            _buildPatientSearchHistorySection(),
+            const SizedBox(height: 20),
 
             // Timeline Header with Refresh Action
             Row(
@@ -212,19 +217,199 @@ class _CaregiverViewState extends State<CaregiverView> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withOpacity(0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.4), width: 1),
+          border: Border.all(color: color.withOpacity(0.25), width: 0.8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+            Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: -0.1)),
             const SizedBox(height: 4),
-            Text(value, style: const TextStyle(color: AppTheme.textHighContrast, fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(value, style: const TextStyle(color: AppTheme.textHighContrast, fontSize: 13, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildPatientSearchHistorySection() {
+    final searches = widget.apiService.getRecentSearches(limit: 3);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: AppTheme.iosCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppTheme.systemBlue.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.history_rounded, color: AppTheme.systemBlue, size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Patient Recent Search History",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                        color: AppTheme.textHighContrast,
+                      ),
+                    ),
+                    Text(
+                      "Recent 3 queries recalled by patient",
+                      style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryTeal.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  "${searches.length} Recent",
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primaryTeal,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: AppTheme.cardBorder, height: 1),
+          const SizedBox(height: 8),
+          if (searches.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: Text(
+                  "No patient searches recorded yet.",
+                  style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: searches.length,
+              separatorBuilder: (_, __) => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Divider(color: AppTheme.cardBorder, height: 1),
+              ),
+              itemBuilder: (context, index) {
+                final item = searches[index];
+                final queryDisplay = item.query.isNotEmpty
+                    ? item.query[0].toUpperCase() + item.query.substring(1)
+                    : item.query;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryTeal.withOpacity(0.08),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _getIconForQuery(item.query),
+                          size: 18,
+                          color: AppTheme.primaryTeal,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  queryDisplay,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textHighContrast,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                if (item.isPersistentMemory)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.royalAmethyst.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      "✦ Memory",
+                                      style: TextStyle(
+                                        color: Color(0xFF92400E),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.locationSummary,
+                              style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        item.timeAgo,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getIconForQuery(String q) {
+    switch (q.toLowerCase()) {
+      case 'shoes':
+        return Icons.snowshoeing_rounded;
+      case 'keys':
+        return Icons.key_rounded;
+      case 'glasses':
+        return Icons.visibility_rounded;
+      case 'medicine':
+        return Icons.medication_rounded;
+      default:
+        return Icons.search_rounded;
+    }
   }
 }
