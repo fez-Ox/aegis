@@ -42,44 +42,53 @@ class _CaregiverViewState extends State<CaregiverView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Caregiver Overview Header Card
+            // Caregiver Overview Header Card (Apple Inset Card)
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.darkSurface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.cardBorder, width: 1.5),
-              ),
+              padding: const EdgeInsets.all(18),
+              decoration: AppTheme.iosCardDecoration(radius: 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.shield_outlined, color: AppTheme.tealAccent, size: 24),
-                      SizedBox(width: 10),
-                      Text(
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryTeal.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.shield_outlined, color: AppTheme.primaryTeal, size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
                         "Caregiver Spatial Audit",
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textHighContrast),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                          color: AppTheme.textHighContrast,
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   const Text(
                     "Real-time spatio-temporal tracking across monitored home anchors.",
-                    style: TextStyle(fontSize: 15, color: AppTheme.textMuted),
+                    style: TextStyle(fontSize: 14, color: AppTheme.textMuted, height: 1.35),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
-                      _buildMetricTile("1 Active Anchor", "Storage Cabinet #1", AppTheme.royalAmethyst),
-                      const SizedBox(width: 12),
-                      _buildMetricTile("4 Instances", "Shoes #1, #2, #3, #4", AppTheme.tealAccent),
+                      _buildMetricTile("1 Active Anchor", "Storage Cabinet #1", AppTheme.systemIndigo),
+                      const SizedBox(width: 10),
+                      _buildMetricTile("4 Instances", "Shoes #1, #2, #3, #4", AppTheme.primaryTeal),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             // Dynamic Displaced Item Warning / Status Card
             Builder(
@@ -88,7 +97,7 @@ class _CaregiverViewState extends State<CaregiverView> {
                 final isOnFloor = lastEvent != null && lastEvent.destinationRelation == 'on_floor';
                 final isCarried = lastEvent != null && lastEvent.destinationRelation == 'carried_by_user';
 
-                Color cardColor = const Color(0xFF10B981); // Emerald
+                Color cardColor = AppTheme.systemGreen;
                 IconData cardIcon = Icons.check_circle_outline_rounded;
                 String cardText = "All tracked items are safely stored in their designated room anchors.";
 
@@ -97,26 +106,40 @@ class _CaregiverViewState extends State<CaregiverView> {
                   cardIcon = Icons.warning_amber_rounded;
                   cardText = "Displaced Item Alert: ${lastEvent.object} left on the entrance floor (Fall Hazard)!";
                 } else if (isCarried) {
-                  cardColor = AppTheme.royalAmethyst;
+                  cardColor = AppTheme.systemIndigo;
                   cardIcon = Icons.pan_tool_rounded;
                   cardText = "In-Transit Activity: ${lastEvent.object} is currently held and being moved.";
                 }
 
                 return Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: cardColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: cardColor, width: 1.5),
+                    color: cardColor.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: cardColor.withOpacity(0.3), width: 0.8),
                   ),
                   child: Row(
                     children: [
-                      Icon(cardIcon, color: cardColor, size: 24),
-                      const SizedBox(width: 12),
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: cardColor.withOpacity(0.14),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(cardIcon, color: cardColor, size: 20),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           cardText,
-                          style: TextStyle(color: cardColor, fontSize: 14, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: cardColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.1,
+                            height: 1.3,
+                          ),
                         ),
                       ),
                     ],
@@ -124,65 +147,94 @@ class _CaregiverViewState extends State<CaregiverView> {
                 );
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             // Patient Recent Search History Option
             _buildPatientSearchHistorySection(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
 
             // Timeline Header with Refresh Action
             Row(
               children: [
-                const Icon(Icons.timeline_rounded, color: AppTheme.tealAccent, size: 20),
-                const SizedBox(width: 8),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryTeal.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.timeline_rounded, color: AppTheme.primaryTeal, size: 18),
+                ),
+                const SizedBox(width: 10),
                 const Text(
                   "Activity History Log",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textHighContrast),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                    color: AppTheme.textHighContrast,
+                  ),
                 ),
                 const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.refresh_rounded, color: AppTheme.tealAccent, size: 20),
-                  tooltip: "Refresh Timeline",
-                  onPressed: _loadTimeline,
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    icon: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryTeal.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.refresh_rounded, color: AppTheme.primaryTeal, size: 16),
+                    ),
+                    tooltip: "Refresh Timeline",
+                    onPressed: _loadTimeline,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
             if (_isLoading)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(color: AppTheme.tealAccent),
+                  child: CircularProgressIndicator(color: AppTheme.primaryTeal),
                 ),
               )
             else if (_events.isEmpty)
-              const Center(child: Text("No events recorded today.", style: TextStyle(color: AppTheme.textMuted)))
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text("No events recorded today.", style: TextStyle(color: AppTheme.textMuted, fontSize: 14)),
+                ),
+              )
             else
               ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _events.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final ev = _events[index];
                   return Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.darkSurface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.cardBorder, width: 1),
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: AppTheme.iosCardDecoration(radius: 14),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          width: 32,
+                          height: 32,
                           decoration: BoxDecoration(
-                            color: AppTheme.royalAmethyst.withOpacity(0.15),
+                            color: AppTheme.systemIndigo.withOpacity(0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.arrow_forward_rounded, color: Color(0xFF92400E), size: 16),
+                          child: const Icon(Icons.arrow_forward_rounded, color: AppTheme.systemIndigo, size: 16),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -191,12 +243,17 @@ class _CaregiverViewState extends State<CaregiverView> {
                             children: [
                               Text(
                                 ev.summary,
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textHighContrast),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.2,
+                                  color: AppTheme.textHighContrast,
+                                ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Text(
                                 "Window: ${ev.startTime.toStringAsFixed(1)}s - ${ev.endTime.toStringAsFixed(1)}s",
-                                style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
                               ),
                             ],
                           ),
