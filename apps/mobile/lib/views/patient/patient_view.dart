@@ -6,8 +6,13 @@ import '../../theme/app_theme.dart';
 
 class PatientView extends StatefulWidget {
   final ApiService apiService;
+  final VoidCallback? onSwitchDataset;
 
-  const PatientView({super.key, required this.apiService});
+  const PatientView({
+    super.key,
+    required this.apiService,
+    this.onSwitchDataset,
+  });
 
   @override
   State<PatientView> createState() => _PatientViewState();
@@ -20,6 +25,20 @@ class _PatientViewState extends State<PatientView> {
   final TextEditingController _searchController = TextEditingController();
 
   List<Map<String, dynamic>> _quickItems = [];
+
+  String _getDatasetHumanTitle(String id) {
+    final lower = id.toLowerCase();
+    if (lower.contains('demo_pots') || lower.contains('pots')) {
+      return 'Arrange Pots & Pans in Kitchen';
+    } else if (lower.contains('demo03') || lower.contains('fridge')) {
+      return 'Put Leftover Food Into Fridge Compartment';
+    } else if (lower.contains('demo01') || lower.contains('shoes')) {
+      return 'Put Shoes Into Storage Cabinet';
+    } else if (lower.contains('demo06') || lower.contains('desk')) {
+      return 'Bottle Relocation Between Desks';
+    }
+    return 'Egocentric Scene: $id';
+  }
 
   @override
   void initState() {
@@ -43,12 +62,12 @@ class _PatientViewState extends State<PatientView> {
 
   void _configureQuickItems() {
     final ds = (widget.apiService.activeDatasetId ?? 'demo01').toLowerCase();
-    if (ds.contains('demo03') || ds.contains('kitchen') || ds.contains('food') || ds.contains('fridge')) {
+    if (ds.contains('demo03') || ds.contains('demo_pots') || ds.contains('pot') || ds.contains('kitchen') || ds.contains('food') || ds.contains('fridge')) {
       _quickItems = [
         {'label': 'Cooking Pot', 'query': 'cooking pot', 'icon': Icons.soup_kitchen_rounded, 'color': AppTheme.tealAccent},
         {'label': 'Bowl', 'query': 'bowl', 'icon': Icons.rice_bowl_rounded, 'color': AppTheme.royalAmethyst},
+        {'label': 'Frying Pan', 'query': 'frying pan', 'icon': Icons.restaurant_rounded, 'color': const Color(0xFF0EA5E9)},
         {'label': 'Food / Leftovers', 'query': 'food', 'icon': Icons.lunch_dining_rounded, 'color': AppTheme.alertAmber},
-        {'label': 'Fridge Items', 'query': 'pot in fridge', 'icon': Icons.kitchen_rounded, 'color': const Color(0xFF0EA5E9)},
       ];
     } else if (ds.contains('demo06') || ds.contains('self') || ds.contains('desk') || ds.contains('office')) {
       _quickItems = [
@@ -102,6 +121,106 @@ class _PatientViewState extends State<PatientView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // High-Visibility Active Video Scene Switcher Card
+          if (widget.onSwitchDataset != null)
+            GestureDetector(
+              onTap: widget.onSwitchDataset,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                  color: AppTheme.royalAmethyst.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.royalAmethyst.withOpacity(0.35), width: 1.2),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppTheme.royalAmethyst.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.video_library_rounded, size: 20, color: AppTheme.royalAmethyst),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                "ACTIVE VIDEO SCENE",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.royalAmethyst,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.royalAmethyst.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  activeId.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textHighContrast,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _getDatasetHumanTitle(activeId),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textHighContrast,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.darkCanvas,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.cardBorder, width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "Switch",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.royalAmethyst,
+                            ),
+                          ),
+                          SizedBox(width: 2),
+                          Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: AppTheme.royalAmethyst),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Dementia-friendly large instruction banner (Apple Inset Card)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

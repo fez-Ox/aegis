@@ -88,8 +88,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0-mid1
-          name: Aegis v0.1.0-mid1 (FYP-1 Mid Supervisory Release)
+          tag_name: v0.2.0-mid2
+          name: Aegis v0.2.0-mid2 (FYP-1 Mid Supervisory Release)
           files: apps/mobile/build/app/outputs/flutter-apk/*.apk
           generate_release_notes: true
+          overwrite_files: true
         continue-on-error: true

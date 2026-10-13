@@ -135,10 +135,12 @@ class _HomeScreenState extends State<HomeScreen> {
           PatientView(
             key: ValueKey('patient_${widget.apiService.activeDatasetId}'),
             apiService: widget.apiService,
+            onSwitchDataset: _showDatasetSelectorSheet,
           ),
           CaregiverView(
             key: ValueKey('caregiver_${widget.apiService.activeDatasetId}'),
             apiService: widget.apiService,
+            onSwitchDataset: _showDatasetSelectorSheet,
           ),
         ],
       ),

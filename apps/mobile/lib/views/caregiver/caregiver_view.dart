@@ -6,8 +6,13 @@ import '../../theme/app_theme.dart';
 
 class CaregiverView extends StatefulWidget {
   final ApiService apiService;
+  final VoidCallback? onSwitchDataset;
 
-  const CaregiverView({super.key, required this.apiService});
+  const CaregiverView({
+    super.key,
+    required this.apiService,
+    this.onSwitchDataset,
+  });
 
   @override
   State<CaregiverView> createState() => _CaregiverViewState();
@@ -72,18 +77,32 @@ class _CaregiverViewState extends State<CaregiverView> {
                           ),
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.royalAmethyst.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          widget.apiService.activeDatasetId ?? 'demo01',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFFC084FC),
+                      GestureDetector(
+                        onTap: widget.onSwitchDataset,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.royalAmethyst.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.royalAmethyst.withOpacity(0.3), width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                widget.apiService.activeDatasetId ?? 'demo01',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFC084FC),
+                                ),
+                              ),
+                              if (widget.onSwitchDataset != null) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.swap_horiz_rounded, size: 14, color: Color(0xFFC084FC)),
+                              ],
+                            ],
                           ),
                         ),
                       ),
