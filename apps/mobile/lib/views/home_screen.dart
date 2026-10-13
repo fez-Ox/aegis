@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/dataset_info.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'caregiver/caregiver_view.dart';
@@ -65,6 +66,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           _buildIosBarAction(
+            icon: Icons.video_library_rounded,
+            tooltip: "Switch Video / Dataset",
+            color: AppTheme.royalAmethyst,
+            onPressed: _showDatasetSelectorSheet,
+          ),
+          const SizedBox(width: 6),
+          _buildIosBarAction(
             icon: Icons.science_outlined,
             tooltip: "Simulate Spatial Transition",
             color: AppTheme.primaryTeal,
@@ -121,14 +129,22 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: IndexedStack(
+        key: ValueKey('${widget.apiService.activeDatasetId}_$_selectedModeIndex'),
         index: _selectedModeIndex,
         children: [
-          PatientView(apiService: widget.apiService),
-          CaregiverView(apiService: widget.apiService),
+          PatientView(
+            key: ValueKey('patient_${widget.apiService.activeDatasetId}'),
+            apiService: widget.apiService,
+          ),
+          CaregiverView(
+            key: ValueKey('caregiver_${widget.apiService.activeDatasetId}'),
+            apiService: widget.apiService,
+          ),
         ],
       ),
     );
   }
+
 
   Widget _buildIosBarAction({
     required IconData icon,
@@ -350,7 +366,179 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showDatasetSelectorSheet() async {
+    final datasets = await widget.apiService.fetchDatasets();
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.darkSurface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // iOS Grabber Handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBorder,
+                    borderRadius: BorderRadius.circular(2.5),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppTheme.royalAmethyst.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.video_library_rounded, color: AppTheme.royalAmethyst, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    "Switch Video Scene Graph",
+                    style: TextStyle(
+                      color: AppTheme.textHighContrast,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Select any evaluated video in the repository to load its 3D Scene Graph, Caregiver Audit, and Patient Recall artifacts.",
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              ...datasets.map((d) {
+                final isCurrent = d.datasetId == (widget.apiService.activeDatasetId ?? 'demo01');
+                return _buildDatasetTile(
+                  dataset: d,
+                  isSelected: isCurrent,
+                  onTap: () async {
+                    HapticFeedback.selectionClick();
+                    Navigator.pop(ctx);
+                    await widget.apiService.selectDataset(d.datasetId);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          backgroundColor: const Color(0xFF0F766E),
+                          content: Text("✓ Active video switched to ${d.datasetId} (${d.title})"),
+                        ),
+                      );
+                      setState(() {});
+                    }
+                  },
+                );
+              }),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatasetTile({
+    required DatasetInfo dataset,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: isSelected ? AppTheme.royalAmethyst.withOpacity(0.08) : AppTheme.darkCanvas,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? AppTheme.royalAmethyst : AppTheme.cardBorder,
+          width: isSelected ? 1.8 : 0.8,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (isSelected ? AppTheme.royalAmethyst : AppTheme.primaryTeal).withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      dataset.datasetId,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected ? AppTheme.royalAmethyst : AppTheme.primaryTeal,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      dataset.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textHighContrast,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (isSelected)
+                    const Icon(Icons.check_circle_rounded, color: AppTheme.royalAmethyst, size: 20),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (dataset.anchors.isNotEmpty)
+                Text(
+                  "Anchors: ${dataset.anchors.join(', ')}",
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                ),
+              if (dataset.trackedObjects.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    "Tracked: ${dataset.trackedObjects.take(3).join(', ')}${dataset.trackedObjects.length > 3 ? ' +${dataset.trackedObjects.length - 3} more' : ''}",
+                    style: const TextStyle(fontSize: 11, color: AppTheme.tealAccent),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showSimulationSheet() {
+    final activeId = (widget.apiService.activeDatasetId ?? 'demo01').toLowerCase();
+    final isKitchen = activeId.contains('demo03') || activeId.contains('kitchen') || activeId.contains('fridge');
+    final isOffice = activeId.contains('demo06') || activeId.contains('self') || activeId.contains('desk');
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.darkSurface,
@@ -402,32 +590,78 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              const Text(
-                "Inject live spatial state shifts into R4DSG memory to demonstrate real-time reasoning and caregiver alerts.",
-                style: TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.4),
+              Text(
+                "Inject live spatial state shifts into R4DSG memory for [$activeId] to demonstrate real-time reasoning and caregiver alerts.",
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: 18),
-              _buildSimTile(
-                title: "Move Shoes to Floor",
-                subtitle: "Triggers Caregiver Displaced Item Alert",
-                icon: Icons.warning_amber_rounded,
-                color: AppTheme.alertAmber,
-                onTap: () => _triggerSim(ctx, "floor", "Shoes #1 moved to floor"),
-              ),
-              _buildSimTile(
-                title: "Pick up Shoes in Hand",
-                subtitle: "Triggers In-Hand Kinematic Tracking",
-                icon: Icons.pan_tool_rounded,
-                color: AppTheme.systemIndigo,
-                onTap: () => _triggerSim(ctx, "in_hand", "Shoes #1 picked up by user"),
-              ),
-              _buildSimTile(
-                title: "Store Shoes in Cabinet",
-                subtitle: "Triggers Occlusion & Spatial Permanence",
-                icon: Icons.inventory_2_rounded,
-                color: AppTheme.systemGreen,
-                onTap: () => _triggerSim(ctx, "cabinet", "Shoes #1 safely placed in cabinet"),
-              ),
+              if (isOffice) ...[
+                _buildSimTile(
+                  title: "Bottle on Desk 1",
+                  subtitle: "Resting actively on primary desk",
+                  icon: Icons.table_restaurant_rounded,
+                  color: AppTheme.tealAccent,
+                  onTap: () => _triggerSim(ctx, "bottle_table1", "Bottle placed on Desk 1"),
+                ),
+                _buildSimTile(
+                  title: "Bottle Occluded",
+                  subtitle: "Triggers Occlusion & Spatial Permanence",
+                  icon: Icons.visibility_off_rounded,
+                  color: AppTheme.royalAmethyst,
+                  onTap: () => _triggerSim(ctx, "bottle_occluded", "Bottle occluded behind monitor"),
+                ),
+                _buildSimTile(
+                  title: "Bottle on Desk 2",
+                  subtitle: "Triggers Relocation Memory Transition",
+                  icon: Icons.desk_rounded,
+                  color: AppTheme.alertAmber,
+                  onTap: () => _triggerSim(ctx, "bottle_table2", "Bottle relocated to Desk 2"),
+                ),
+              ] else if (isKitchen) ...[
+                _buildSimTile(
+                  title: "Cooking Pot on Sink",
+                  subtitle: "Resting on Sink counter surface",
+                  icon: Icons.soup_kitchen_rounded,
+                  color: AppTheme.tealAccent,
+                  onTap: () => _triggerSim(ctx, "floor", "Cooking Pot placed near Sink"),
+                ),
+                _buildSimTile(
+                  title: "Hold Pot in Hands",
+                  subtitle: "Triggers In-Hand Kinematic Tracking",
+                  icon: Icons.pan_tool_rounded,
+                  color: AppTheme.systemIndigo,
+                  onTap: () => _triggerSim(ctx, "in_hand", "Cooking Pot picked up by user"),
+                ),
+                _buildSimTile(
+                  title: "Store Pot in Refrigerator",
+                  subtitle: "Triggers Occlusion & Enclosure Persistence",
+                  icon: Icons.kitchen_rounded,
+                  color: AppTheme.systemGreen,
+                  onTap: () => _triggerSim(ctx, "cabinet", "Cooking Pot placed in Refrigerator"),
+                ),
+              ] else ...[
+                _buildSimTile(
+                  title: "Move Object to Floor",
+                  subtitle: "Triggers Caregiver Displaced Item Alert",
+                  icon: Icons.warning_amber_rounded,
+                  color: AppTheme.alertAmber,
+                  onTap: () => _triggerSim(ctx, "floor", "Object moved to floor"),
+                ),
+                _buildSimTile(
+                  title: "Pick up Object in Hand",
+                  subtitle: "Triggers In-Hand Kinematic Tracking",
+                  icon: Icons.pan_tool_rounded,
+                  color: AppTheme.systemIndigo,
+                  onTap: () => _triggerSim(ctx, "in_hand", "Object picked up by user"),
+                ),
+                _buildSimTile(
+                  title: "Store in Room Anchor",
+                  subtitle: "Triggers Occlusion & Spatial Permanence",
+                  icon: Icons.inventory_2_rounded,
+                  color: AppTheme.systemGreen,
+                  onTap: () => _triggerSim(ctx, "cabinet", "Object safely stored in anchor"),
+                ),
+              ],
               const Divider(color: AppTheme.cardBorder, height: 20),
               TextButton.icon(
                 icon: const Icon(Icons.refresh_rounded, color: AppTheme.textMuted, size: 18),
@@ -460,6 +694,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
 
   Widget _buildSimTile({
     required String title,

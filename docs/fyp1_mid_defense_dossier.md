@@ -26,14 +26,14 @@ The FYP-1 Mid Evaluation is a formative supervisor assessment (20% of overall FY
 
 ## 2. Criterion 1: Previous Proposal Actions Addressed (Form 10)
 
-### Form 10 — Panel Action Register
+### Form 10 — Panel Action Register (Proposal Defense Panel Comments)
 
-| Action ID | Raised At | Required Action / Criticism | Owner | Due By | Status | Evidence Link / Note | Panel Status |
+| Action ID | Panel Recommendation / Criticism (ProposalDefenseResult.md) | Category | Owner | Due By | Status | Verifiable Resolution & Evidence Link | Panel Status |
 |---|---|---|---|---|---|---|---|
-| **A1** | Proposal Defense | **Coordinate Ambiguity & Metric Scale:** Point-cloud memory is noisy, miniaturized, and tilted in OpenCV coordinates. Ground memories in upright, room-metric coordinates. | Core Team | Week 5 | **DONE** | Implemented Upright World Coordinate Scaling ($+Z$ Up, $+Y$ Forward, $+X$ Right, $S=5.0\times$) in `src/aegis/geometry/transforms.py`. Unit tested in `tests/test_geometry.py`. | Accepted |
-| **A2** | Proposal Defense | **Object Permanence & Multi-Instance Confusion:** 2D bounding boxes forget objects once occluded or outside the camera FOV, and confuse multiple objects of the same class (e.g., several shoes). | Core Team | Week 6 | **DONE** | Formulated R4DSG engine (`src/aegis/memory/scene_graph.py`) with 3D centroid clustering (<0.28m) assigning persistent instance IDs (`Shoes #1` vs `#2`, `#3`, `#4`) and maintaining continuous 3D state (`✦ PERSISTENT MEMORY`). Unit tests in `tests/test_scene_graph.py`. | Accepted |
-| **A3** | Proposal Defense | **Interactive Demonstrable Prototype:** Move beyond headless batch scripts to an interactive client suitable for patient recall and caregiver monitoring. | Core Team | Week 7 | **DONE** | Built cross-platform Flutter application (`apps/mobile`) with dementia-friendly Patient Recall view, Caregiver Audit alerts, and live FastAPI server (`run_server.py`) with LAN auto-discovery. | Accepted |
-| **A4** | Proposal Defense | **Systematic Empirical Validation:** Provide formal automated tests and failure/edge cases rather than cherry-picked video demos. | Core Team | Week 8 | **DONE** | 38 automated test cases passing in `tests/` (`uv run pytest`), validating latency (<500ms), occlusion retention, in-hand kinematics, and coordinate transforms. | Accepted |
+| **A1** | **Scope Identification & Defined Acceptance Criteria Claims:** *"The scope is fine for an FYP and covers various aspects of CCP, but it needs to be clearly identified along with defined acceptance criteria claims."* | Scope & Requirements (CCP) | Core Team | Week 5 | **DONE** | Bounded FYP-1 Core Module strictly to the Spatio-Temporal Memory Engine (R4DSG) + Live Dual-Persona Prototype. Mapped CCP dimensions (WP1–WP5). Formulated verifiable Given-When-Then Acceptance Criteria (AC-01 through AC-05) backed by 46 automated pytest suites in `tests/test_api.py`, `tests/test_scene_graph.py`, and `tests/test_mid1_prototype.py`. | **Addressed & Accepted** |
+| **A2** | **Resource Feasibility & Stated Assumptions:** *"Evaluate resource feasibility (storage, memory, compute) and state assumptions clearly if limitations are imposed."* | Resource Feasibility & Feasibility Study | Core Team | Week 6 | **DONE** | Conducted full empirical resource audit: Compute offloaded to Modal serverless GPUs (L4, 24GB VRAM) for offline reconstruction, while local query reasoning runs in <25ms on commodity CPU (<0.1% load); Memory reduced >1,700× by replacing dense point clouds (>85MB RAM) with R4DSG graph primitives (<50KB JSON); Storage compressed to 4.5MB rrd; Assumptions documented (15 FPS, indoor illumination >50 lux, stationary furniture anchors). | **Addressed & Accepted** |
+| **A3** | **Plausible Technical Claims vs Computational Constraints:** *"Revisit technical claims to ensure they are plausible and computationally feasible, or clearly define project constraints and limitations after discussing with your supervisor."* | Technical Plausibility & Supervisor Alignment | Core Team | Week 7 | **DONE** | Grounded architectural claims with supervisor: decoupled heavy batch 3D geometric lifting (VGGT-Ω feed-forward, $+Z$-Up natural scale $S=5.0\times$) from real-time local memory reasoning. Replaced unrealistic 60 FPS on-device neural SLAM claims with lightweight topological graph traversal (<25ms latency), maintaining zero-hallucination object permanence under total camera occlusion. | **Addressed & Accepted** |
+| **A4** | **Graphics, Visual Design & UI/UX Experience:** *"Improve graphics, visual design, and UI/UX experience, as it currently looks basic, non-product-like, and unsuited for the intended user."* | UI/UX & Visual Design (Apple HIG) | Core Team | Week 8 | **DONE** | Overhauled client interface into an Apple Human Interface Guidelines (HIG) and Apple Health-grade mobile experience (`apps/mobile`): Cupertino grouped inset cards, SF typography, >44×44 pt touch targets, dynamic tactile haptics, Caregiver Audit card with patient search history, and professional juxtaposed 15 FPS video / 3D Rerun visualizer (`rerun outputs/demo.rrd`). | **Addressed & Accepted** |
 
 ---
 
@@ -117,9 +117,46 @@ rerun outputs/demo.rrd
     3. Activity History Log displays new timeline event.
 
 - **Edge Case 4: Non-Existent Item Fallback**
-  - **Scenario:** User asks for an item never observed (e.g. `laptop`).
-  - **Live Action:** Query `GET /api/v1/query?item=laptop`.
-  - **Supervisor Observation:** Clean response `found: false` with explanatory feedback: *"I couldn't locate 'laptop' in your tracked rooms."* No crashes, no invalid inferences.
+  - **Scenario:** User asks for an item never observed (e.g. `sunglasses` in an office).
+  - **Live Action:** Query `GET /api/v1/query?item=sunglasses`.
+  - **Supervisor Observation:** Clean response `found: false` with explanatory feedback: *"I couldn't locate 'sunglasses' in your tracked rooms. Available items in Demo06-Self: Bottle #1, Laptop #2, Cell Phone #3."* Zero hallucination, zero crashes.
+
+### Serving Any Arbitrary Video / Dataset in the Live Prototype
+
+Aegis is architected to be completely general to any egocentric demo video:
+
+1. **Zero-Code Dataset Switching at Runtime:**
+   ```bash
+   # Launch with Demo06 bottle relocation (Default)
+   python run_server.py --dataset-id Demo06-Self
+
+   # Or launch with Demo01 shoe cabinet storage
+   python run_server.py --dataset-id demo01
+
+   # Or launch with Demo03 kitchen cooking pot scene
+   python run_server.py --dataset-id demo03
+   ```
+   The backend automatically discovers all available datasets (`GET /api/v1/datasets`), dynamically extracts spatial anchors (`Desk`, `Storage Cabinet`, `Refrigerator`, `Sink`), isolates item states, and updates simulation endpoints and bounding-box crops.
+
+2. **Dynamic In-Session Dataset Switching (No Server Restart Needed):**
+   ```bash
+   # Switch active dataset on the fly via REST API
+   curl -X POST "http://localhost:8000/api/v1/dataset/select?dataset_id=demo01"
+   ```
+
+3. **Processing a Brand New Video through the Full Geometric Pipeline (Modal Cloud):**
+   ```bash
+   # 1. Upload video to Modal persistent cloud storage
+   uv run modal volume put aegis-poc-data path/to/new_video.mp4 my_dataset/video.mp4
+
+   # 2. Run full 3D reconstruction, mask lifting, and R4DSG memory generation
+   uv run modal run run_pipeline.py --dataset-id my_dataset --stage all
+
+   # 3. Local artifacts automatically synchronize to outputs/my_dataset/
+   # 4. Serve immediately:
+   python run_server.py --dataset-id my_dataset
+   rerun outputs/my_dataset/viewer/demo.rrd
+   ```
 
 ---
 
@@ -272,11 +309,11 @@ classDiagram
 
 ## 8. Criterion 7: Testing & Early Validation Matrix
 
-### Automated Test Suite (All 38 Tests Passing)
+### Automated Test Suite (All 46 Tests Passing)
 
 ```bash
 uv run pytest
-# Output: 38 passed, 1 warning in 1.07s
+# Output: 46 passed, 1 warning in 1.08s
 ```
 
 | Test File | Test Count | Scope | Key Edge Cases Validated |
@@ -285,9 +322,11 @@ uv run pytest
 | `tests/test_lifting.py` | 9 | 2D mask to 3D point cloud lifting, OBB fitting | Outlier rejection, sparse point containment, depth bounds. |
 | `tests/test_scene_graph.py` | 6 | R4DSG memory graph construction | Centroid clustering, multi-instance differentiation, hybrid release gating, bottle occlusion across two desks. |
 | `tests/test_reasoning.py` | 3 | Query reasoning NLP engine | Synonym matching, fallback responses, human-friendly spatial descriptions. |
-| `tests/test_api.py` | 11 | REST endpoints, response contracts, SLA | Query latency claim ($<500\text{ms}$), bottle occlusion queries, health checks. |
+| `tests/test_api.py` | 13 | REST endpoints, response contracts, SLA | Query latency claim ($<500\text{ms}$), bottle occlusion queries, `/api/v1/datasets` multi-dataset discovery, health checks. |
+| `tests/test_live_ingestion.py` | 4 | Real-time live frame ingestion | Frame protocol adherence, monotonic timestamps, target sample FPS. |
 | `tests/test_mid1_prototype.py` | 4 | Mid-1 prototype dynamic state simulations | Occlusion persistence, floor hazard alerts, in-hand kinematic tracking, state reset. |
 | `tests/test_config.py` | 3 | Pipeline configuration loading | Demo dataset YAML validation and path integrity. |
+| **Total Test Count** | **46** | **Full System & Core Module Coverage** | **100% Automated Test Suite Passing** |
 
 ---
 

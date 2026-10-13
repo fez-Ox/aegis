@@ -85,6 +85,7 @@ class MemoryQueryResponse(BaseModel):
     relation: str | None = None
     relative_distance_m: float | None = None
     location_summary: str
+    explanation: str | None = None
     last_seen_timestamp_s: float | None = None
     last_seen_time_ago: str = "Just now"
     is_persistent_memory: bool = False
@@ -300,6 +301,36 @@ def get_full_scene_graph(dataset_id: str | None = None) -> dict[str, Any]:
     }
 
 
+def _matches_query(state: dict[str, Any], canonical_item: str, raw_query: str) -> bool:
+    """Robust cognitive matching supporting multi-word phrases, synonyms, and plurals."""
+    from aegis.memory.reasoning import QueryReasoningEngine
+
+    label = state.get("label", "").lower()
+    raw = raw_query.lower().strip()
+    canon = canonical_item.lower().strip()
+
+    if canon in label or raw in label:
+        return True
+
+    base_label = label.split("#")[0].split("[")[0].strip()
+    if base_label and (base_label in canon or base_label in raw):
+        return True
+
+    syns = QueryReasoningEngine.ITEM_SYNONYMS.get(canon, [])
+    if any(syn in label for syn in syns):
+        return True
+
+    for c_key, c_syns in QueryReasoningEngine.ITEM_SYNONYMS.items():
+        if (c_key in base_label or any(s in base_label for s in c_syns)) and (
+            c_key in canon or any(s in canon for s in c_syns)
+        ):
+            return True
+
+    if canon.endswith("s") and len(canon) > 3 and canon[:-1] in label:
+        return True
+    return (canon + "s") in label
+
+
 @app.get("/api/v1/datasets")
 def get_datasets() -> dict[str, Any]:
     """Return all available datasets, active dataset, and summary of their anchors and tracked objects."""
@@ -312,11 +343,38 @@ def get_datasets() -> dict[str, Any]:
         objects = sorted(
             {obj.get("label", "") for obj in latest.values() if obj.get("label")}
         )
+        events = sg.get("events", [])
+        timeline = sg.get("timeline", {})
+
+        meta_task = ""
+        for meta_p in [
+            Path("data") / d / "source_metadata.json",
+            Path("outputs") / d / "source_metadata.json",
+        ]:
+            if meta_p.is_file():
+                try:
+                    with open(meta_p, "r", encoding="utf-8") as mf:
+                        meta_task = json.load(mf).get("task", "")
+                except (OSError, json.JSONDecodeError) as exc:
+                    logger.debug("Failed to read metadata %s: %s", meta_p, exc)
+        if not meta_task:
+            if d == "demo01":
+                meta_task = "Put Shoes Into Storage Cabinet"
+            elif d == "demo03":
+                meta_task = "Put Food Into Fridge & Sink Pots"
+            elif d == "Demo06-Self":
+                meta_task = "Bottle Relocation Between Desks"
+            else:
+                meta_task = f"Egocentric Scene: {d}"
+
         summaries.append(
             {
                 "dataset_id": d,
+                "title": meta_task,
                 "anchors": anchors,
                 "tracked_objects": objects,
+                "num_events": len(events),
+                "num_timeline_frames": len(timeline),
                 "is_active": d == ACTIVE_DATASET_ID,
             }
         )
@@ -324,6 +382,7 @@ def get_datasets() -> dict[str, Any]:
         "active_dataset": ACTIVE_DATASET_ID,
         "total_datasets": len(summaries),
         "available_datasets": summaries,
+        "datasets": summaries,
     }
 
 
@@ -395,11 +454,11 @@ def query_memory(
     canonical_item = QueryReasoningEngine.extract_target_item(item)
 
     # Find matching instances strictly within this dataset
-    matches: list[dict[str, Any]] = []
-    for state in latest_states.values():
-        label = state.get("label", "").lower()
-        if canonical_item in label or (canonical_item == "shoes" and "shoe" in label):
-            matches.append(state)
+    matches: list[dict[str, Any]] = [
+        state
+        for state in latest_states.values()
+        if _matches_query(state, canonical_item, item)
+    ]
 
     # Cross-dataset fallback only if dataset was unspecified and no match found in primary
     if not matches and dataset_id is None:
@@ -411,8 +470,7 @@ def query_memory(
             cand_matches = [
                 s
                 for s in cand_states.values()
-                if canonical_item in s.get("label", "").lower()
-                or (canonical_item == "shoes" and "shoe" in s.get("label", "").lower())
+                if _matches_query(s, canonical_item, item)
             ]
             if cand_matches:
                 ds = candidate_ds
@@ -435,6 +493,7 @@ def query_memory(
             query=item,
             found=False,
             location_summary=f"I couldn't locate any '{item}' in {ds}.{hint}",
+            explanation=f"I couldn't locate any '{item}' in {ds}.{hint}",
         )
 
     # Sort matches: active instance first, then by recency
@@ -477,6 +536,7 @@ def query_memory(
         relation=relation,
         relative_distance_m=round(dist_val, 2),
         location_summary=summary,
+        explanation=summary,
         last_seen_timestamp_s=primary.get("last_seen_timestamp"),
         last_seen_time_ago="Recorded today",
         is_persistent_memory=is_persistent,

@@ -17,31 +17,86 @@ class _PatientViewState extends State<PatientView> {
   QueryResult? _activeResult;
   bool _isLoading = false;
   String? _selectedCategory;
+  final TextEditingController _searchController = TextEditingController();
 
-  final List<Map<String, dynamic>> _quickItems = [
-    {'label': 'Bottle', 'query': 'water bottle', 'icon': Icons.local_drink_rounded, 'color': AppTheme.tealAccent},
-    {'label': 'Shoes', 'query': 'shoes', 'icon': Icons.snowshoeing_rounded, 'color': AppTheme.royalAmethyst},
-    {'label': 'Keys', 'query': 'keys', 'icon': Icons.key_rounded, 'color': AppTheme.alertAmber},
-    {'label': 'Glasses', 'query': 'glasses', 'icon': Icons.visibility_rounded, 'color': const Color(0xFFEC4899)},
-  ];
+  List<Map<String, dynamic>> _quickItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _configureQuickItems();
+  }
+
+  @override
+  void didUpdateWidget(covariant PatientView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.apiService.activeDatasetId != widget.apiService.activeDatasetId) {
+      _configureQuickItems();
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _configureQuickItems() {
+    final ds = (widget.apiService.activeDatasetId ?? 'demo01').toLowerCase();
+    if (ds.contains('demo03') || ds.contains('kitchen') || ds.contains('food') || ds.contains('fridge')) {
+      _quickItems = [
+        {'label': 'Cooking Pot', 'query': 'cooking pot', 'icon': Icons.soup_kitchen_rounded, 'color': AppTheme.tealAccent},
+        {'label': 'Bowl', 'query': 'bowl', 'icon': Icons.rice_bowl_rounded, 'color': AppTheme.royalAmethyst},
+        {'label': 'Food / Leftovers', 'query': 'food', 'icon': Icons.lunch_dining_rounded, 'color': AppTheme.alertAmber},
+        {'label': 'Fridge Items', 'query': 'pot in fridge', 'icon': Icons.kitchen_rounded, 'color': const Color(0xFF0EA5E9)},
+      ];
+    } else if (ds.contains('demo06') || ds.contains('self') || ds.contains('desk') || ds.contains('office')) {
+      _quickItems = [
+        {'label': 'Water Bottle', 'query': 'water bottle', 'icon': Icons.local_drink_rounded, 'color': AppTheme.tealAccent},
+        {'label': 'Desk #1', 'query': 'bottle on desk 1', 'icon': Icons.table_restaurant_rounded, 'color': AppTheme.royalAmethyst},
+        {'label': 'Desk #2', 'query': 'bottle on desk 2', 'icon': Icons.desk_rounded, 'color': AppTheme.alertAmber},
+        {'label': 'Keys', 'query': 'keys', 'icon': Icons.key_rounded, 'color': const Color(0xFFEC4899)},
+      ];
+    } else if (ds.contains('demo05') || ds.contains('cloth') || ds.contains('laundry')) {
+      _quickItems = [
+        {'label': 'Clothes', 'query': 'clothes', 'icon': Icons.checkroom_rounded, 'color': AppTheme.tealAccent},
+        {'label': 'Towel', 'query': 'towel', 'icon': Icons.dry_cleaning_rounded, 'color': AppTheme.royalAmethyst},
+        {'label': 'Laundry Hamper', 'query': 'laundry', 'icon': Icons.inventory_2_rounded, 'color': AppTheme.alertAmber},
+        {'label': 'Basket', 'query': 'basket', 'icon': Icons.shopping_basket_rounded, 'color': const Color(0xFFEC4899)},
+      ];
+    } else {
+      _quickItems = [
+        {'label': 'Active Shoes', 'query': 'shoes', 'icon': Icons.snowshoeing_rounded, 'color': AppTheme.royalAmethyst},
+        {'label': 'Cabinet Shelf', 'query': 'storage cabinet', 'icon': Icons.inventory_2_rounded, 'color': AppTheme.tealAccent},
+        {'label': 'Keys', 'query': 'keys', 'icon': Icons.key_rounded, 'color': AppTheme.alertAmber},
+        {'label': 'Water Bottle', 'query': 'water bottle', 'icon': Icons.local_drink_rounded, 'color': const Color(0xFF0EA5E9)},
+      ];
+    }
+  }
 
   Future<void> _executeQuery(String item) async {
+    final trimmed = item.trim();
+    if (trimmed.isEmpty) return;
+
     setState(() {
       _isLoading = true;
-      _selectedCategory = item;
+      _selectedCategory = trimmed;
     });
 
-    final res = await widget.apiService.queryItem(item);
+    final res = await widget.apiService.queryItem(trimmed);
     widget.apiService.recordSearch(res);
 
-    setState(() {
-      _isLoading = false;
-      _activeResult = res;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _activeResult = res;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final activeId = widget.apiService.activeDatasetId ?? 'demo01';
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
@@ -49,48 +104,121 @@ class _PatientViewState extends State<PatientView> {
         children: [
           // Dementia-friendly large instruction banner (Apple Inset Card)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: AppTheme.iosCardDecoration(
               radius: AppTheme.cardCornerRadius,
             ),
             child: Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     color: AppTheme.primaryTeal.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.touch_app_rounded, color: AppTheme.primaryTeal, size: 24),
+                  child: const Icon(Icons.touch_app_rounded, color: AppTheme.primaryTeal, size: 22),
                 ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Text(
-                    "Tap an item to find where it is right now",
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.3,
-                      color: AppTheme.textHighContrast,
-                      height: 1.3,
-                    ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Ask where any object is right now",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                          color: AppTheme.textHighContrast,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Tracking Scene: $activeId",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.tealAccent,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // 2x2 Big Touch Targets (Apple Grouped Grid)
+          // Universal Object Search Input Bar
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.darkSurface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.cardBorder, width: 0.8),
+            ),
+            child: Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 14, right: 10),
+                  child: Icon(Icons.search_rounded, color: AppTheme.textMuted, size: 22),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: AppTheme.textHighContrast, fontSize: 16),
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (val) {
+                      HapticFeedback.lightImpact();
+                      _executeQuery(val);
+                    },
+                    decoration: InputDecoration(
+                      hintText: "Type any item (e.g. pot, bowl, shoes)...",
+                      hintStyle: const TextStyle(color: AppTheme.tertiaryLabel, fontSize: 14),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, color: AppTheme.textMuted, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                    ),
+                    onChanged: (val) => setState(() {}),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppTheme.primaryTeal.withOpacity(0.16),
+                      foregroundColor: AppTheme.primaryTeal,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      _executeQuery(_searchController.text.isNotEmpty ? _searchController.text : (_quickItems.first['query'] as String));
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 2x2 Big Touch Targets (Apple Grouped Grid for Active Video)
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              crossAxisSpacing: 14,
-              mainAxisSpacing: 14,
-              childAspectRatio: 1.25,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.35,
             ),
             itemCount: _quickItems.length,
             itemBuilder: (context, index) {
@@ -100,6 +228,7 @@ class _PatientViewState extends State<PatientView> {
               return InkWell(
                 onTap: () {
                   HapticFeedback.selectionClick();
+                  _searchController.text = it['label'] as String;
                   _executeQuery(it['query'] as String);
                 },
                 borderRadius: BorderRadius.circular(18),
@@ -125,19 +254,19 @@ class _PatientViewState extends State<PatientView> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 54,
-                        height: 54,
+                        width: 46,
+                        height: 46,
                         decoration: BoxDecoration(
                           color: itemColor.withOpacity(0.12),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(it['icon'] as IconData, size: 30, color: itemColor),
+                        child: Icon(it['icon'] as IconData, size: 26, color: itemColor),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Text(
                         it['label'] as String,
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.3,
                           color: isSelected ? itemColor : AppTheme.textHighContrast,
@@ -149,17 +278,20 @@ class _PatientViewState extends State<PatientView> {
               );
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Voice Query Bar (Apple Prominent Action Button)
           InkWell(
             onTap: () {
               HapticFeedback.lightImpact();
-              _executeQuery(_selectedCategory ?? 'water bottle');
+              final targetQuery = _searchController.text.isNotEmpty
+                  ? _searchController.text
+                  : (_selectedCategory ?? (_quickItems.isNotEmpty ? _quickItems.first['query'] as String : 'object'));
+              _executeQuery(targetQuery);
             },
             borderRadius: BorderRadius.circular(18),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [AppTheme.primaryTeal, Color(0xFFB45309)],
@@ -169,7 +301,7 @@ class _PatientViewState extends State<PatientView> {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.primaryTeal.withOpacity(0.28),
+                    color: AppTheme.primaryTeal.withOpacity(0.25),
                     blurRadius: 14,
                     offset: const Offset(0, 4),
                   ),
@@ -178,12 +310,12 @@ class _PatientViewState extends State<PatientView> {
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.mic_rounded, color: Colors.white, size: 26),
+                  Icon(Icons.mic_rounded, color: Colors.white, size: 24),
                   SizedBox(width: 10),
                   Text(
                     "Tap to Ask by Voice",
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 17,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.3,
                       color: Colors.white,
@@ -193,7 +325,7 @@ class _PatientViewState extends State<PatientView> {
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
           // Active Result Display
           if (_isLoading)
@@ -211,6 +343,7 @@ class _PatientViewState extends State<PatientView> {
   }
 
   Widget _buildResultCard(QueryResult result) {
+    final activeId = widget.apiService.activeDatasetId ?? 'demo01';
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -233,24 +366,40 @@ class _PatientViewState extends State<PatientView> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryTeal.withOpacity(0.12),
+                  color: (result.found ? AppTheme.primaryTeal : AppTheme.alertAmber).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.check_circle_rounded, color: AppTheme.primaryTeal, size: 16),
+                    Icon(
+                      result.found ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                      color: result.found ? AppTheme.primaryTeal : AppTheme.alertAmber,
+                      size: 16,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       result.found ? "LOCATED" : "NOT FOUND",
-                      style: const TextStyle(
-                        color: AppTheme.primaryTeal,
+                      style: TextStyle(
+                        color: result.found ? AppTheme.primaryTeal : AppTheme.alertAmber,
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
                         letterSpacing: 0.2,
                       ),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBorder.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  activeId,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textMuted),
                 ),
               ),
               const Spacer(),
@@ -264,7 +413,7 @@ class _PatientViewState extends State<PatientView> {
                   child: const Text(
                     "✦ PERSISTENT MEMORY",
                     style: TextStyle(
-                      color: Color(0xFF92400E),
+                      color: Color(0xFFC084FC),
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
                       letterSpacing: 0.1,
@@ -279,18 +428,18 @@ class _PatientViewState extends State<PatientView> {
           Text(
             result.locationSummary,
             style: const TextStyle(
-              fontSize: 21,
+              fontSize: 20,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.4,
               color: AppTheme.textHighContrast,
-              height: 1.3,
+              height: 1.35,
             ),
           ),
           const SizedBox(height: 14),
 
           // Context & Recency Inset Info
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: AppTheme.darkCanvas,
               borderRadius: BorderRadius.circular(12),
@@ -308,9 +457,11 @@ class _PatientViewState extends State<PatientView> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    result.anchorLabel ?? "Room Anchor",
+                    result.anchorLabel != null
+                        ? "${result.anchorLabel}${result.relativeDistanceM != null ? ' (~${result.relativeDistanceM}m)' : ''}"
+                        : "Room Anchor",
                     style: const TextStyle(
-                      color: Color(0xFF92400E),
+                      color: AppTheme.tealAccent,
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.1,

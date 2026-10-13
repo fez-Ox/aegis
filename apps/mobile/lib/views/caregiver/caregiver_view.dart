@@ -61,15 +61,33 @@ class _CaregiverViewState extends State<CaregiverView> {
                         child: const Icon(Icons.shield_outlined, color: AppTheme.primaryTeal, size: 20),
                       ),
                       const SizedBox(width: 10),
-                      const Text(
-                        "Caregiver Spatial Audit",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
-                          color: AppTheme.textHighContrast,
+                      const Expanded(
+                        child: Text(
+                          "Caregiver Spatial Audit",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                            color: AppTheme.textHighContrast,
+                          ),
                         ),
                       ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.royalAmethyst.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          widget.apiService.activeDatasetId ?? 'demo01',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFC084FC),
+                          ),
+                        ),
+                      ),
+
                     ],
                   ),
                   const SizedBox(height: 10),

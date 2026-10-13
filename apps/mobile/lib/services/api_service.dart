@@ -1,16 +1,19 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/dataset_info.dart';
 import '../models/patient_search_record.dart';
 import '../models/query_result.dart';
 import '../models/timeline_event.dart';
 
 class ApiService {
   String baseUrl;
+  String? activeDatasetId;
   final http.Client _client;
   final List<PatientSearchRecord> _searchHistory = [];
 
   ApiService({
     this.baseUrl = 'http://127.0.0.1:8000',
+    this.activeDatasetId,
     http.Client? client,
   }) : _client = client ?? http.Client() {
     _seedInitialSearchHistory();
@@ -20,33 +23,33 @@ class ApiService {
     final now = DateTime.now();
     _searchHistory.addAll([
       PatientSearchRecord(
+        query: 'cooking pot',
+        found: true,
+        instanceLabel: 'Cooking Pot #16',
+        anchorLabel: 'Refrigerator #1',
+        locationSummary: 'Safely resting on Refrigerator #1.',
+        timeAgo: '10m ago',
+        timestamp: now.subtract(const Duration(minutes: 10)),
+        isPersistentMemory: false,
+      ),
+      PatientSearchRecord(
         query: 'shoes',
         found: true,
         instanceLabel: 'Shoes #1 [Active Pair]',
         anchorLabel: 'Storage Cabinet #1',
         locationSummary: 'Inside Storage Cabinet #1, bottom shelf near entrance.',
-        timeAgo: '15m ago',
-        timestamp: now.subtract(const Duration(minutes: 15)),
+        timeAgo: '25m ago',
+        timestamp: now.subtract(const Duration(minutes: 25)),
         isPersistentMemory: true,
       ),
       PatientSearchRecord(
-        query: 'keys',
+        query: 'bottle',
         found: true,
-        instanceLabel: 'Keys #1 [Keychain]',
-        anchorLabel: 'Entrance Console Table',
-        locationSummary: 'On the Entrance Console Table beside doorway.',
+        instanceLabel: 'Bottle #1',
+        anchorLabel: 'Desk #2',
+        locationSummary: 'Your bottle is currently resting on Desk #2.',
         timeAgo: '1h ago',
         timestamp: now.subtract(const Duration(hours: 1)),
-        isPersistentMemory: true,
-      ),
-      PatientSearchRecord(
-        query: 'glasses',
-        found: true,
-        instanceLabel: 'Reading Glasses #1',
-        anchorLabel: 'Living Room Coffee Table',
-        locationSummary: 'Resting on the Living Room Coffee Table.',
-        timeAgo: '3h ago',
-        timestamp: now.subtract(const Duration(hours: 3)),
         isPersistentMemory: false,
       ),
     ]);
@@ -95,10 +98,66 @@ class ApiService {
     }
   }
 
-  /// Trigger dynamic spatial state simulation (floor, cabinet, in_hand)
+  /// Fetch all available datasets discovered on the server
+  Future<List<DatasetInfo>> fetchDatasets() async {
+    final uri = Uri.parse('$baseUrl/api/v1/datasets');
+    try {
+      final response = await _client.get(uri).timeout(const Duration(seconds: 3));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        activeDatasetId = data['active_dataset'] as String? ?? activeDatasetId;
+        final list = data['available_datasets'] as List<dynamic>? ?? [];
+        return list.map((item) => DatasetInfo.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (_) {
+      // Offline fallback dataset list
+    }
+    return [
+      const DatasetInfo(
+        datasetId: 'demo03',
+        title: 'Put Leftover Food Into The Fridge Compartment',
+        anchors: ['Refrigerator #1', 'Sink #2'],
+        trackedObjects: ['Cooking Pot #1', 'Cooking Pot #16', 'Bowl #3', 'Bowl #12'],
+        numEvents: 40,
+        numTimelineFrames: 100,
+        isActive: true,
+      ),
+      const DatasetInfo(
+        datasetId: 'demo01',
+        title: 'Put Shoes Into Storage Cabinet',
+        anchors: ['Storage Cabinet #1'],
+        trackedObjects: ['Shoes #1 [Active Pair]', 'Shoes #2', 'Shoes #3', 'Shoes #4'],
+        numEvents: 3,
+        numTimelineFrames: 108,
+      ),
+      const DatasetInfo(
+        datasetId: 'Demo06-Self',
+        title: 'Bottle Relocation Between Desks',
+        anchors: ['Desk #1', 'Desk #2'],
+        trackedObjects: ['Bottle #1', 'Cell Phone #3', 'Laptop #2'],
+        numEvents: 1,
+        numTimelineFrames: 24,
+      ),
+    ];
+  }
+
+  /// Select active dataset on server
+  Future<bool> selectDataset(String datasetId) async {
+    activeDatasetId = datasetId;
+    final uri = Uri.parse('$baseUrl/api/v1/dataset/select?dataset_id=${Uri.encodeComponent(datasetId)}');
+    try {
+      final response = await _client.post(uri).timeout(const Duration(seconds: 3));
+      return response.statusCode == 200;
+    } catch (_) {
+      return true; // Still update client-side active selection
+    }
+  }
+
+  /// Trigger dynamic spatial state simulation
   Future<bool> simulatePreset(String preset) async {
     try {
-      final uri = Uri.parse('$baseUrl/api/v1/simulate/$preset');
+      final queryParam = activeDatasetId != null ? '?dataset_id=$activeDatasetId' : '';
+      final uri = Uri.parse('$baseUrl/api/v1/simulate/$preset$queryParam');
       final response = await _client.get(uri).timeout(const Duration(seconds: 3));
       return response.statusCode == 200;
     } catch (_) {
@@ -109,7 +168,8 @@ class ApiService {
   /// Reset memory cache to baseline
   Future<bool> resetMemory() async {
     try {
-      final uri = Uri.parse('$baseUrl/api/v1/reset');
+      final queryParam = activeDatasetId != null ? '?dataset_id=$activeDatasetId' : '';
+      final uri = Uri.parse('$baseUrl/api/v1/reset$queryParam');
       final response = await _client.post(uri).timeout(const Duration(seconds: 3));
       return response.statusCode == 200;
     } catch (_) {
@@ -119,7 +179,8 @@ class ApiService {
 
   /// Query location of a tracked item
   Future<QueryResult> queryItem(String item) async {
-    final uri = Uri.parse('$baseUrl/api/v1/query?item=${Uri.encodeComponent(item)}');
+    final queryParam = activeDatasetId != null ? '&dataset_id=$activeDatasetId' : '';
+    final uri = Uri.parse('$baseUrl/api/v1/query?item=${Uri.encodeComponent(item)}$queryParam');
     try {
       final response = await _client.get(uri).timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
@@ -134,7 +195,8 @@ class ApiService {
 
   /// Fetch chronological timeline events for caregiver audit
   Future<List<TimelineEvent>> fetchTimeline() async {
-    final uri = Uri.parse('$baseUrl/api/v1/timeline');
+    final queryParam = activeDatasetId != null ? '?dataset_id=$activeDatasetId' : '';
+    final uri = Uri.parse('$baseUrl/api/v1/timeline$queryParam');
     try {
       final response = await _client.get(uri).timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
@@ -147,10 +209,42 @@ class ApiService {
     return _mockTimelineFallback();
   }
 
-  /// Offline fallback simulating verified R4DSG memory
+  /// Offline fallback simulating verified R4DSG memory across different datasets
   QueryResult _mockQueryFallback(String item) {
     final lower = item.toLowerCase();
-    if (lower.contains('bottle') || lower.contains('water') || lower.contains('drink')) {
+    if (lower.contains('pot') || lower.contains('pan') || lower.contains('cookware')) {
+      return const QueryResult(
+        query: 'cooking pot',
+        found: true,
+        item: 'cooking pot',
+        instanceLabel: 'Cooking Pot #16',
+        instanceId: 16,
+        anchorLabel: 'Refrigerator #1',
+        relation: 'on_surface',
+        relativeDistanceM: 0.31,
+        locationSummary: 'Your cooking pot is currently resting on Refrigerator #1.',
+        lastSeenTimeAgo: 'Recorded today',
+        isPersistentMemory: false,
+        cropUrl: '/api/v1/crops/16?dataset_id=demo03',
+        confidence: 0.96,
+      );
+    } else if (lower.contains('bowl') || lower.contains('dish')) {
+      return const QueryResult(
+        query: 'bowl',
+        found: true,
+        item: 'bowl',
+        instanceLabel: 'Bowl #12',
+        instanceId: 12,
+        anchorLabel: 'Refrigerator #1',
+        relation: 'inside',
+        relativeDistanceM: 0.08,
+        locationSummary: 'Your bowl is safely stored inside Refrigerator #1.',
+        lastSeenTimeAgo: 'Recorded today',
+        isPersistentMemory: true,
+        cropUrl: '/api/v1/crops/12?dataset_id=demo03',
+        confidence: 0.95,
+      );
+    } else if (lower.contains('bottle') || lower.contains('water') || lower.contains('drink')) {
       return const QueryResult(
         query: 'water bottle',
         found: true,
@@ -207,6 +301,42 @@ class ApiService {
   }
 
   List<TimelineEvent> _mockTimelineFallback() {
+    if (activeDatasetId == 'demo03') {
+      return const [
+        TimelineEvent(
+          eventId: 'ev_001',
+          eventType: 'state_change',
+          object: 'Cooking Pot #1',
+          sourceRelation: 'on_surface',
+          destinationRelation: 'moving_towards',
+          destinationAnchor: 'Sink #2',
+          startTime: 1.0,
+          endTime: 2.0,
+          summary: 'Cooking Pot #1 transition from on_surface to moving_towards.',
+        ),
+        TimelineEvent(
+          eventId: 'ev_002',
+          eventType: 'placement',
+          object: 'Cooking Pot #16',
+          destinationRelation: 'on_surface',
+          destinationAnchor: 'Refrigerator #1',
+          startTime: 88.0,
+          endTime: 91.0,
+          summary: 'Cooking Pot #16 is resting on Refrigerator #1.',
+        ),
+        TimelineEvent(
+          eventId: 'ev_003',
+          eventType: 'state_change',
+          object: 'Bowl #12',
+          sourceRelation: 'on_surface',
+          destinationRelation: 'inside',
+          destinationAnchor: 'Refrigerator #1',
+          startTime: 75.0,
+          endTime: 80.0,
+          summary: 'Bowl #12 was placed inside Refrigerator #1.',
+        ),
+      ];
+    }
     return const [
       TimelineEvent(
         eventId: 'ev_001',
