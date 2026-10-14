@@ -73,10 +73,21 @@ class ApiService {
     );
   }
 
-  /// Dynamically update the backend host URL
+  /// Dynamically update the backend host URL.
+  ///
+  /// Accepts either a complete URL or a bare LAN host such as
+  /// `192.168.10.11`; the latter is normalized for the default API port.
   void updateBaseUrl(String newUrl) {
     String trimmed = newUrl.trim();
-    if (trimmed.endsWith('/')) {
+    if (trimmed.isEmpty) return;
+    if (!trimmed.contains('://')) {
+      trimmed = 'http://$trimmed';
+    }
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed != null && parsed.host.isNotEmpty && parsed.port == 0) {
+      trimmed = parsed.replace(port: 8000).toString();
+    }
+    while (trimmed.endsWith('/')) {
       trimmed = trimmed.substring(0, trimmed.length - 1);
     }
     baseUrl = trimmed;

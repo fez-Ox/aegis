@@ -69,6 +69,20 @@ jobs:
         working-directory: apps/mobile
         run: flutter create --platforms=android --org com.aegis .
 
+      - name: Allow local HTTP backend access
+        working-directory: apps/mobile
+        run: |
+          python3 - <<'PY'
+            from pathlib import Path
+
+            manifest = Path("android/app/src/main/AndroidManifest.xml")
+            text = manifest.read_text(encoding="utf-8")
+            marker = '<application android:usesCleartextTraffic="true" '
+            if "usesCleartextTraffic" not in text:
+                text = text.replace("<application ", marker, 1)
+                manifest.write_text(text, encoding="utf-8")
+          PY
+
       - name: Install Flutter dependencies
         working-directory: apps/mobile
         run: flutter pub get
