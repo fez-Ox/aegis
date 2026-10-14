@@ -42,12 +42,75 @@ def _compute_iou(
 
 @dataclass
 class _TrackState:
-    """Small 2D track state retained across short detector gaps."""
+    """Track state with a bounded appearance memory for re-identification."""
 
     label: str
     bbox: tuple[float, float, float, float]
     velocity: tuple[float, float] = (0.0, 0.0)
     last_index: int = 0
+    appearance: tuple[float, ...] | None = None
+
+
+def _appearance_descriptor(
+    image_bgr: Any,
+    bbox: tuple[float, float, float, float],
+    mask: Any = None,
+) -> tuple[float, ...] | None:
+    """Return a small colour/texture descriptor for cheap long-term ReID.
+
+    This is intentionally not a new neural model: it is a stable cue for
+    deciding whether a dormant track is worth handing back to the same ID.
+    Motion/geometry remains the primary cue for active tracks.
+    """
+    try:
+        import cv2
+        import numpy as np
+
+        height, width = image_bgr.shape[:2]
+        x1, y1, x2, y2 = (round(value) for value in bbox)
+        x1, x2 = max(0, x1), min(width, x2)
+        y1, y2 = max(0, y1), min(height, y2)
+        if x2 <= x1 or y2 <= y1:
+            return None
+        crop = image_bgr[y1:y2, x1:x2]
+        if crop.size == 0:
+            return None
+        crop = cv2.resize(crop, (32, 32), interpolation=cv2.INTER_AREA)
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        if mask is not None:
+            mask_arr = np.asarray(mask).astype(np.uint8)
+            if mask_arr.shape != (height, width):
+                mask_arr = cv2.resize(
+                    mask_arr, (width, height), interpolation=cv2.INTER_NEAREST
+                )
+            mask_crop = mask_arr[y1:y2, x1:x2]
+            mask_crop = cv2.resize(mask_crop, (32, 32), interpolation=cv2.INTER_NEAREST)
+            if int(mask_crop.sum()) >= 8:
+                pixels = hsv[mask_crop > 0]
+            else:
+                pixels = hsv.reshape(-1, 3)
+        else:
+            pixels = hsv.reshape(-1, 3)
+        hist = np.concatenate(
+            [
+                np.histogram(pixels[:, 0], bins=8, range=(0, 180))[0],
+                np.histogram(pixels[:, 1], bins=4, range=(0, 256))[0],
+                np.histogram(pixels[:, 2], bins=4, range=(0, 256))[0],
+            ]
+        ).astype(np.float32)
+        hist /= max(float(hist.sum()), 1.0)
+        return tuple(float(value) for value in hist)
+    except (ImportError, AttributeError, ValueError, TypeError):
+        return None
+
+
+def _appearance_distance(
+    first: tuple[float, ...] | None,
+    second: tuple[float, ...] | None,
+) -> float | None:
+    if first is None or second is None or len(first) != len(second):
+        return None
+    return float(0.5 * sum(abs(a - b) for a, b in zip(first, second, strict=True)))
 
 
 def _bbox_center(bbox: tuple[float, float, float, float]) -> tuple[float, float]:
@@ -74,6 +137,7 @@ def _track_match_cost(
     label: str,
     bbox: tuple[float, float, float, float],
     gap: int,
+    appearance: tuple[float, ...] | None = None,
 ) -> float | None:
     """Return a geometry-aware association cost, or None when clearly incompatible."""
 
@@ -106,12 +170,39 @@ def _track_match_cost(
     )
 
     # IoU is strongest when available; center and scale keep tracks alive when
-    # egocentric camera motion makes the overlap small.
+    # egocentric camera motion makes the overlap small. Appearance is only a
+    # tie-breaker here; it becomes the main cue for dormant-track recovery.
+    appearance_distance = _appearance_distance(state.appearance, appearance)
+    appearance_cost = appearance_distance if appearance_distance is not None else 0.5
     return (
-        (1.0 - iou) * 0.55
-        + min(normalized_distance, 2.0) * 0.35
+        (1.0 - iou) * 0.45
+        + min(normalized_distance, 2.0) * 0.30
         + min(size_change, 2.0) * 0.10
+        + appearance_cost * 0.15
     )
+
+
+def _dormant_match_cost(
+    state: _TrackState,
+    label: str,
+    bbox: tuple[float, float, float, float],
+    appearance: tuple[float, ...] | None,
+    appearance_threshold: float,
+) -> float | None:
+    """Match a disappeared object without trusting stale screen coordinates."""
+    if state.label != label or appearance is None:
+        return None
+    appearance_distance = _appearance_distance(state.appearance, appearance)
+    if appearance_distance is None or appearance_distance > appearance_threshold:
+        return None
+    old_width = max(state.bbox[2] - state.bbox[0], 1.0)
+    old_height = max(state.bbox[3] - state.bbox[1], 1.0)
+    width = max(bbox[2] - bbox[0], 1.0)
+    height = max(bbox[3] - bbox[1], 1.0)
+    size_change = abs(old_width / width - 1.0) + abs(old_height / height - 1.0)
+    if size_change > 2.0:
+        return None
+    return appearance_distance + min(size_change, 2.0) * 0.10
 
 
 def _update_track(
@@ -119,6 +210,7 @@ def _update_track(
     bbox: tuple[float, float, float, float],
     frame_index: int,
     smoothing: float,
+    appearance: tuple[float, ...] | None = None,
 ) -> None:
     """Update a track with an exponential position/velocity estimate."""
 
@@ -138,6 +230,14 @@ def _update_track(
         smoothing * old + (1.0 - smoothing) * new
         for old, new in zip(state.bbox, bbox, strict=True)
     )
+    if appearance is not None:
+        if state.appearance is None:
+            state.appearance = appearance
+        else:
+            state.appearance = tuple(
+                0.7 * old + 0.3 * new
+                for old, new in zip(state.appearance, appearance, strict=True)
+            )
     state.last_index = frame_index
 
 
@@ -181,21 +281,26 @@ def detect_and_track_objects(
     import os
     import shutil
 
-    from ultralytics import YOLOWorld
+    import cv2
+    from ultralytics import YOLO, YOLOWorld
 
+    # YOLOE-seg is promptable and emits masks directly.  This avoids relying on
+    # a weak detector box before SAM2 is asked to segment the object.  The
+    # legacy YOLO-World path remains available for compatibility.
+    model_class = YOLO if config.detector_backend == "yoloe" else YOLOWorld
     if weights_dir is not None:
         weights_dir.mkdir(parents=True, exist_ok=True)
         os.environ["YOLO_CONFIG_DIR"] = str(weights_dir)
         model_path = weights_dir / config.detector_model
         if model_path.exists():
-            model = YOLOWorld(str(model_path))
+            model = model_class(str(model_path))
         else:
-            model = YOLOWorld(config.detector_model)
+            model = model_class(config.detector_model)
             local_download = Path(config.detector_model)
             if local_download.exists() and not model_path.exists():
                 shutil.copy2(local_download, model_path)
     else:
-        model = YOLOWorld(config.detector_model)
+        model = model_class(config.detector_model)
 
     model.set_classes(list(config.target_classes))
 
@@ -227,6 +332,7 @@ def detect_and_track_objects(
         if not image_path.exists():
             continue
 
+        frame_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
         results = model.predict(
             str(image_path),
             conf=config.confidence_threshold,
@@ -237,21 +343,39 @@ def detect_and_track_objects(
         current_frame_boxes: list[
             tuple[str, float, tuple[float, float, float, float]]
         ] = []
+        direct_masks_by_bbox: dict[tuple[float, float, float, float], Any] = {}
         if len(results) > 0 and results[0].boxes is not None:
-            boxes = results[0].boxes
+            result = results[0]
+            boxes = result.boxes
+            names = result.names
             for idx in range(len(boxes)):
                 cls_id = int(boxes.cls[idx].item())
-                raw_label = (
-                    config.target_classes[cls_id]
-                    if cls_id < len(config.target_classes)
-                    else f"object_{cls_id}"
-                )
+                # set_classes() makes the prompt order the class order.  Use
+                # it as the source of truth because some ultralytics versions
+                # expose the model's original names on Result.names instead.
+                if cls_id < len(config.target_classes):
+                    raw_label = config.target_classes[cls_id]
+                elif isinstance(names, dict):
+                    raw_label = str(names.get(cls_id, f"object_{cls_id}"))
+                else:
+                    raw_label = (
+                        str(names[cls_id])
+                        if cls_id < len(names)
+                        else f"object_{cls_id}"
+                    )
                 label = _canonical_label(raw_label)
                 conf = float(boxes.conf[idx].item())
                 xyxy = tuple(float(v) for v in boxes.xyxy[idx].tolist())
                 current_frame_boxes.append(
                     (label, conf, (xyxy[0], xyxy[1], xyxy[2], xyxy[3]))
                 )
+                if getattr(result, "masks", None) is not None:
+                    try:
+                        direct_masks_by_bbox[
+                            tuple(float(v) for v in boxes.xyxy[idx].tolist())
+                        ] = result.masks.data[idx].detach().cpu().numpy().astype(bool)
+                    except (AttributeError, IndexError, RuntimeError):
+                        pass
 
         # Class-aware NMS to eliminate duplicate detections per category
         # without suppressing hands that overlap objects during interaction/grasping.
@@ -280,40 +404,60 @@ def detect_and_track_objects(
             current_frame_boxes = suppressed_boxes
 
         # Generate SAM 2 masks for current frame detections if predictor is active
-        masks_by_idx: dict[int, Any] = {}
-        if sam2_predictor is not None and current_frame_boxes:
-            import cv2
+        masks_by_idx: dict[int, Any] = {
+            b_idx: direct_masks_by_bbox.get(bbox)
+            for b_idx, (_label, _conf, bbox) in enumerate(current_frame_boxes)
+            if bbox in direct_masks_by_bbox
+        }
+        if sam2_predictor is not None and current_frame_boxes and frame_bgr is not None:
             import numpy as np
 
-            frame_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-            if frame_bgr is not None:
-                frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-                sam2_predictor.set_image(frame_rgb)
-                for b_idx, (_, _, bbox_coord) in enumerate(current_frame_boxes):
-                    try:
-                        box_arr = np.array(bbox_coord, dtype=np.float32)
-                        p_masks, p_scores, _ = sam2_predictor.predict(
-                            box=box_arr[None, :],
-                            multimask_output=sam2_config.multimask_output,
-                        )
-                        best_i = int(np.argmax(p_scores)) if len(p_scores) > 1 else 0
-                        masks_by_idx[b_idx] = p_masks[best_i].astype(bool)
-                    except (RuntimeError, ValueError):
-                        masks_by_idx[b_idx] = None
+            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            sam2_predictor.set_image(frame_rgb)
+            for b_idx, (_, _, bbox_coord) in enumerate(current_frame_boxes):
+                try:
+                    box_arr = np.array(bbox_coord, dtype=np.float32)
+                    p_masks, p_scores, _ = sam2_predictor.predict(
+                        box=box_arr[None, :],
+                        multimask_output=sam2_config.multimask_output,
+                    )
+                    best_i = int(np.argmax(p_scores)) if len(p_scores) > 1 else 0
+                    candidate = p_masks[best_i].astype(bool)
+                    if candidate.any():
+                        masks_by_idx[b_idx] = candidate
+                except (RuntimeError, ValueError, IndexError, TypeError):
+                    # Keep a direct YOLOE mask, if one was produced.
+                    masks_by_idx.setdefault(b_idx, None)
 
-        # Associate current frame detections with active tracks. Tracks are
-        # retained across short misses and matched globally by predicted box,
-        # IoU, centre motion, and size continuity.
-        active_tracks = {
-            track_id: state
-            for track_id, state in active_tracks.items()
-            if frame_index - state.last_index <= config.track_max_gap
+        appearance_by_idx: dict[int, tuple[float, ...] | None] = {
+            b_idx: (
+                _appearance_descriptor(frame_bgr, bbox, masks_by_idx.get(b_idx))
+                if frame_bgr is not None
+                else None
+            )
+            for b_idx, (_label, _conf, bbox) in enumerate(current_frame_boxes)
         }
+
+        # Keep an archive of tracks for the whole video. Active tracks use
+        # motion/IoU; dormant tracks use appearance and scale only, because
+        # stale screen coordinates are unreliable after camera motion.
         candidate_matches: list[tuple[float, int, int]] = []
         for b_idx, (label, _conf, bbox) in enumerate(current_frame_boxes):
+            appearance = appearance_by_idx[b_idx]
             for track_id, state in active_tracks.items():
                 gap = max(frame_index - state.last_index, 1)
-                cost = _track_match_cost(state, label, bbox, gap)
+                if gap <= config.track_max_gap:
+                    cost = _track_match_cost(state, label, bbox, gap, appearance)
+                elif gap <= config.reid_max_gap:
+                    cost = _dormant_match_cost(
+                        state,
+                        label,
+                        bbox,
+                        appearance,
+                        config.reid_appearance_threshold,
+                    )
+                else:
+                    cost = None
                 if cost is not None:
                     candidate_matches.append((cost, b_idx, track_id))
 
@@ -354,6 +498,7 @@ def detect_and_track_objects(
                     label=label,
                     bbox=bbox,
                     last_index=frame_index,
+                    appearance=appearance_by_idx[b_idx],
                 )
             else:
                 _update_track(
@@ -361,6 +506,7 @@ def detect_and_track_objects(
                     bbox,
                     frame_index,
                     config.track_smoothing,
+                    appearance_by_idx[b_idx],
                 )
 
             mask_val = masks_by_idx.get(b_idx)
@@ -377,6 +523,7 @@ def detect_and_track_objects(
                     mask=mask_val,
                     is_hand=is_hand,
                     contact_target_track_id=target_obj_track_id,
+                    appearance=appearance_by_idx[b_idx],
                 )
             )
 

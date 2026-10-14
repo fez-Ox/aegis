@@ -30,7 +30,7 @@ The FYP-1 Mid Evaluation is a formative supervisor assessment (20% of overall FY
 
 | Action ID | Panel Recommendation / Criticism (ProposalDefenseResult.md) | Category | Owner | Due By | Status | Verifiable Resolution & Evidence Link | Panel Status |
 |---|---|---|---|---|---|---|---|
-| **A1** | **Scope Identification & Defined Acceptance Criteria Claims:** *"The scope is fine for an FYP and covers various aspects of CCP, but it needs to be clearly identified along with defined acceptance criteria claims."* | Scope & Requirements (CCP) | Core Team | Week 5 | **DONE** | Bounded FYP-1 Core Module strictly to the Spatio-Temporal Memory Engine (R4DSG) + Live Dual-Persona Prototype. Mapped CCP dimensions (WP1–WP5). Formulated verifiable Given-When-Then Acceptance Criteria (AC-01 through AC-05) backed by 46 automated pytest suites in `tests/test_api.py`, `tests/test_scene_graph.py`, and `tests/test_mid1_prototype.py`. | **Addressed & Accepted** |
+| **A1** | **Scope Identification & Defined Acceptance Criteria Claims:** *"The scope is fine for an FYP and covers various aspects of CCP, but it needs to be clearly identified along with defined acceptance criteria claims."* | Scope & Requirements (CCP) | Core Team | Week 5 | **DONE** | Bounded FYP-1 Core Module strictly to the Spatio-Temporal Memory Engine (R4DSG) + Live Dual-Persona Prototype. Mapped CCP dimensions (WP1–WP5). Formulated verifiable Given-When-Then Acceptance Criteria (AC-01 through AC-05) backed by 55 automated pytest tests in `tests/test_api.py`, `tests/test_scene_graph.py`, and `tests/test_mid1_prototype.py`. | **Addressed & Accepted** |
 | **A2** | **Resource Feasibility & Stated Assumptions:** *"Evaluate resource feasibility (storage, memory, compute) and state assumptions clearly if limitations are imposed."* | Resource Feasibility & Feasibility Study | Core Team | Week 6 | **DONE** | Conducted full empirical resource audit: Compute offloaded to Modal serverless GPUs (L4, 24GB VRAM) for offline reconstruction, while local query reasoning runs in <25ms on commodity CPU (<0.1% load); Memory reduced >1,700× by replacing dense point clouds (>85MB RAM) with R4DSG graph primitives (<50KB JSON); Storage compressed to 4.5MB rrd; Assumptions documented (15 FPS, indoor illumination >50 lux, stationary furniture anchors). | **Addressed & Accepted** |
 | **A3** | **Plausible Technical Claims vs Computational Constraints:** *"Revisit technical claims to ensure they are plausible and computationally feasible, or clearly define project constraints and limitations after discussing with your supervisor."* | Technical Plausibility & Supervisor Alignment | Core Team | Week 7 | **DONE** | Grounded architectural claims with supervisor: decoupled heavy batch 3D geometric lifting (VGGT-Ω feed-forward, $+Z$-Up natural scale $S=5.0\times$) from real-time local memory reasoning. Replaced unrealistic 60 FPS on-device neural SLAM claims with lightweight topological graph traversal (<25ms latency), maintaining zero-hallucination object permanence under total camera occlusion. | **Addressed & Accepted** |
 | **A4** | **Graphics, Visual Design & UI/UX Experience:** *"Improve graphics, visual design, and UI/UX experience, as it currently looks basic, non-product-like, and unsuited for the intended user."* | UI/UX & Visual Design (Apple HIG) | Core Team | Week 8 | **DONE** | Overhauled client interface into an Apple Human Interface Guidelines (HIG) and Apple Health-grade mobile experience (`apps/mobile`): Cupertino grouped inset cards, SF typography, >44×44 pt touch targets, dynamic tactile haptics, Caregiver Audit card with patient search history, and professional juxtaposed 15 FPS video / 3D Rerun visualizer (`rerun outputs/demo.rrd`). | **Addressed & Accepted** |
@@ -48,10 +48,10 @@ gantt
     section Phase 1: Completed (Proposal to Mid)
     Pipeline & Video Ingestion (15 FPS)          :done, s1, 2026-08-25, 2026-09-08
     VGGT-Ω 3D Reconstruction & Camera Alignment  :done, s2, 2026-09-08, 2026-09-22
-    YOLO-World + SAM 2 2D-to-3D Mask Lifting     :done, s3, 2026-09-22, 2026-09-29
+    YOLOE + SAM 2 2D-to-3D Mask Lifting         :done, s3, 2026-09-22, 2026-09-29
     R4DSG Spatio-Temporal Memory & Permanence     :done, s4, 2026-09-29, 2026-10-06
     FastAPI LAN Service & Flutter Mobile App     :done, s5, 2026-10-04, 2026-10-11
-    38 Automated Unit/Integration Tests & Mid Tag:done, s6, 2026-10-04, 2026-10-11
+    55 Automated Unit/Integration Tests & Mid Tag:done, s6, 2026-10-04, 2026-10-11
     section Phase 2: Planned (Mid to Final)
     Multi-Room Topological Anchor Scaling        :active, s7, 2026-10-18, 2026-11-01
     On-Device Whisper Voice Query Integration    :s8, 2026-11-01, 2026-11-15
@@ -213,7 +213,7 @@ flowchart TD
 
     subgraph L2["Layer 2: 3D Geometry & Perception"]
         F --> G[VGGT-Ω Feed-Forward 3D Reconstruction]
-        F --> P[YOLO-World + SAM 2 Instance Segmentation]
+        F --> P[YOLOE + SAM 2 Instance Segmentation]
         G --> PCL[3D Point Cloud & Extrinsics]
         P --> M[2D Segment Masks]
         PCL & M --> LIFT[2D-to-3D Mask Grounded Lifting]
@@ -289,7 +289,7 @@ classDiagram
 |---|---|---|---|
 | **Spatial Representation** | Naive dense point cloud | Structured Relative 4D Scene Graph with Semantic Anchors | Dense point clouds are noisy, unindexed, scale poorly, and cannot answer "where is my item relative to the room". Anchors provide fixed, drift-free coordinate bases. |
 | **Coordinate System** | Raw OpenCV Camera Coordinates (Tilted, Miniature, $-Y$ Up) | Upright World Coordinates ($+Z$ Up, $+Y$ Forward, $+X$ Right, $S=5.0\times$) | Camera coordinates rotate as user moves head; world coordinates stay gravitationally aligned and match human physical height (~1.08m shelf height). |
-| **Object Permanence** | Frame-by-frame 2D bounding boxes | Centroid-clustered 3D instances with Persistent Occlusion State Machine | Eliminates object forgetting during occlusion and distinguishes identical visual classes by physical 3D location. |
+| **Object Permanence** | Frame-by-frame 2D bounding boxes | Bounded motion/appearance ReID, 3D instance association, and Persistent Occlusion State Machine | Reconnects detector tracks after occlusion while using 3D location and appearance to distinguish identical objects. |
 | **Interaction Channel** | Terminal command line | RESTful FastAPI + Flutter Cross-Platform Client | Dementia patients require large tactile affordances; caregivers require real-time reactive fall hazard alerts. |
 
 ---
@@ -309,24 +309,31 @@ classDiagram
 
 ## 8. Criterion 7: Testing & Early Validation Matrix
 
-### Automated Test Suite (All 46 Tests Passing)
+### Automated Test Suite (All 55 Tests Passing)
 
 ```bash
 uv run pytest
-# Output: 46 passed, 1 warning in 1.08s
+# Output: 55 passed, 1 warning in 1.22s
 ```
+
+The reproducible metric protocol for the held-out Demo04 run is documented in
+[`docs/evaluation_plan.md`](evaluation_plan.md). It covers perception precision/
+recall and mask IoU, IDF1/HOTA, 3D centre error, relation/event F1, occlusion
+persistence, dataset-isolation leakage, query latency, and resource usage.
 
 | Test File | Test Count | Scope | Key Edge Cases Validated |
 |---|---|---|---|
 | `tests/test_geometry.py` | 4 | 3D back-projection, coordinate transforms | Invariant $+Z$-Up world coordinate scaling and camera pose inversions. |
 | `tests/test_lifting.py` | 9 | 2D mask to 3D point cloud lifting, OBB fitting | Outlier rejection, sparse point containment, depth bounds. |
-| `tests/test_scene_graph.py` | 6 | R4DSG memory graph construction | Centroid clustering, multi-instance differentiation, hybrid release gating, bottle occlusion across two desks. |
+| `tests/test_scene_graph.py` | 7 | R4DSG memory graph construction | Centroid clustering, long-term ReID instance reuse, multi-instance differentiation, hybrid release gating, bottle occlusion across two desks. |
 | `tests/test_reasoning.py` | 3 | Query reasoning NLP engine | Synonym matching, fallback responses, human-friendly spatial descriptions. |
-| `tests/test_api.py` | 13 | REST endpoints, response contracts, SLA | Query latency claim ($<500\text{ms}$), bottle occlusion queries, `/api/v1/datasets` multi-dataset discovery, health checks. |
+| `tests/test_api.py` | 14 | REST endpoints, response contracts, SLA | Query latency claim ($<500\text{ms}$), bottle occlusion queries, Demo04 isolation, `/api/v1/datasets` discovery, health checks. |
 | `tests/test_live_ingestion.py` | 4 | Real-time live frame ingestion | Frame protocol adherence, monotonic timestamps, target sample FPS. |
 | `tests/test_mid1_prototype.py` | 4 | Mid-1 prototype dynamic state simulations | Occlusion persistence, floor hazard alerts, in-hand kinematic tracking, state reset. |
 | `tests/test_config.py` | 3 | Pipeline configuration loading | Demo dataset YAML validation and path integrity. |
-| **Total Test Count** | **46** | **Full System & Core Module Coverage** | **100% Automated Test Suite Passing** |
+| `tests/test_video_ingestion.py` | 5 | Dataset discovery and isolated video/API ingestion | Metadata discovery, dataset selection, and dataset-scoped queries. |
+| `tests/test_rerun_visualization.py` | 2 | Persistent-ID visualization association | R4DSG instance-label mapping, alias matching, duplicate suppression. |
+| **Total Test Count** | **55** | **Full System & Core Module Coverage** | **100% Automated Test Suite Passing** |
 
 ---
 
@@ -343,7 +350,7 @@ uv run pytest
   - Rerun 3D Memory + 15 FPS video playback.
   - Mobile App live query (<25ms).
   - Dynamic simulation of Edge Cases (Occlusion permanence + Floor hazard alert).
-- **Slide 7 (1 min) — Testing & Empirical Validation:** 38 automated test cases, ruff lint compliance, latency SLA benchmarks.
+- **Slide 7 (1 min) — Testing & Empirical Validation:** 55 automated tests, the held-out Demo04 metric plan, ruff lint compliance, latency SLA, and resource benchmarks.
 - **Slide 8 (1 min) — Tool & GenAI Disclosure (Form 13):** Transparent declaration of tools vs student contributions.
 - **Slide 9 (1 min) — FYP-1 Final Roadmap:** Next sprint objectives (multi-room anchors, Whisper voice input).
 - **Slide 10 — Q&A & Code Inspection:** Ready for line-by-line inspection.
@@ -355,7 +362,7 @@ uv run pytest
 | Tool / API / Model | Used In Which Part? | Support / Core Category | Student Contribution Beyond Tool | Validation / Risk Control |
 |---|---|---|---|---|
 | **VGGT-Ω** | Initial feed-forward camera pose and point cloud estimation | Support | Configured containerized inference; transformed raw miniature camera coordinates to upright world coordinates ($+Z$ Up, $S=5.0\times$). | Evaluated reconstruction accuracy against physical tape-measure ground truth. |
-| **YOLO-World + SAM 2** | Open-vocabulary 2D object detection & segmentation | Support | Engineered class-aware NMS, 2D mask lifting into 3D, and point cloud outlier filtering. | Automated containment and OBB fitting unit tests in `test_lifting.py`. |
+| **YOLOE-11l-seg + SAM 2** | Task-scoped open-vocabulary 2D detection, masks, and refinement | Support | Engineered class-aware NMS, direct-mask/SAM2 refinement, 2D mask lifting into 3D, and point-cloud outlier filtering. | Automated containment and OBB fitting tests plus the A/B evaluation plan in `docs/evaluation_plan.md`. |
 | **R4DSG Memory Engine** | Core spatio-temporal memory representation | **Core (Original Student Design)** | **100% Student Authored:** Formulated relative scene graph, 3D centroid clustering (<0.28m), persistent occlusion state machine, and event extraction. | Validated via 6 scene graph tests and 4 mid-1 prototype simulation tests. |
 | **FastAPI & Uvicorn** | Backend service and LAN discovery | Support | Implemented in-memory state caching, simulation endpoints, and sub-500ms query reasoning. | Validated via TestClient integration tests in `test_api.py`. |
 | **Flutter Mobile Client** | Patient recall & caregiver audit UI | Support | Designed high-contrast dementia recall UI, responsive caregiver hazard cards, and dynamic simulator bottom-sheet. | Validated via live mobile app integration and manual touch testing. |
@@ -373,7 +380,7 @@ uv run pytest
    - *Answer:* "If we remove spatial anchors, all object coordinates remain camera-relative. As soon as the user turns their head or moves across the room, the coordinates shift, destroying object permanence. Spatial anchors provide fixed world reference points ($O \rightarrow A$) that remain invariant to camera motion."
 
 3. **"What new core business logic was added since the Proposal defense?"**
-   - *Answer:* "At proposal, we only had raw video frames and open-loop point clouds. Since proposal defense, we designed and implemented the entire R4DSG memory engine: 3D spatial instance clustering (<0.28m), continuous occlusion persistence (`is_persistent_memory`), metric displacement vectors, event state transition extraction (`state_change`, `pickup`, `placement`), the FastAPI memory service, and the dual-persona Flutter mobile application."
+   - *Answer:* "At proposal, we only had raw video frames and open-loop point clouds. Since proposal defense, we designed and implemented the entire R4DSG memory engine: 3D spatial instance clustering, bounded appearance re-identification, continuous occlusion persistence (`is_persistent_memory`), metric displacement vectors, event state transition extraction (`state_change`, `pickup`, `placement`), the FastAPI memory service, and the dual-persona Flutter mobile application."
 
 4. **"Why is your memory representation better than raw point clouds?"**
    - *Answer:* "Raw point clouds contain millions of unindexed, noisy 3D points that drift and require massive compute to query. Our R4DSG memory engine condenses this into structured semantic anchors and bounding instances with relative spatial vectors. This enables sub-25ms natural language queries, instant relational checks (`inside`, `on_floor`), and persistent memory across occlusions."

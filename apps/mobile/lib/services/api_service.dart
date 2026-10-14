@@ -13,26 +13,21 @@ class ApiService {
 
   ApiService({
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.activeDatasetId,
+    this.activeDatasetId = 'demo01',
     http.Client? client,
   }) : _client = client ?? http.Client() {
     _seedInitialSearchHistory();
   }
 
   void _seedInitialSearchHistory() {
+    // Seed only memories belonging to the initial dataset.  These records are
+    // filtered again at read time, so switching to another video cannot show
+    // objects from this demonstration.
     final now = DateTime.now();
+    const datasetId = 'demo01';
     _searchHistory.addAll([
       PatientSearchRecord(
-        query: 'cooking pot',
-        found: true,
-        instanceLabel: 'Cooking Pot #16',
-        anchorLabel: 'Refrigerator #1',
-        locationSummary: 'Safely resting on Refrigerator #1.',
-        timeAgo: '10m ago',
-        timestamp: now.subtract(const Duration(minutes: 10)),
-        isPersistentMemory: false,
-      ),
-      PatientSearchRecord(
+        datasetId: datasetId,
         query: 'shoes',
         found: true,
         instanceLabel: 'Shoes #1 [Active Pair]',
@@ -42,30 +37,30 @@ class ApiService {
         timestamp: now.subtract(const Duration(minutes: 25)),
         isPersistentMemory: true,
       ),
-      PatientSearchRecord(
-        query: 'bottle',
-        found: true,
-        instanceLabel: 'Bottle #1',
-        anchorLabel: 'Desk #2',
-        locationSummary: 'Your bottle is currently resting on Desk #2.',
-        timeAgo: '1h ago',
-        timestamp: now.subtract(const Duration(hours: 1)),
-        isPersistentMemory: false,
-      ),
     ]);
   }
 
-  /// Retrieve the most recent patient searches (default up to 3)
+  String get _selectedDatasetId => activeDatasetId ?? 'demo01';
+
+  /// Retrieve recent searches for the selected video only.
   List<PatientSearchRecord> getRecentSearches({int limit = 3}) {
-    return _searchHistory.take(limit).toList();
+    return _searchHistory
+        .where((item) => item.datasetId == _selectedDatasetId)
+        .take(limit)
+        .toList();
   }
 
-  /// Append a new search record to the front of history
+  /// Append a new search record to the selected video's history.
   void recordSearch(QueryResult result) {
-    _searchHistory.removeWhere((item) => item.query.toLowerCase() == result.query.toLowerCase());
+    final datasetId = _selectedDatasetId;
+    _searchHistory.removeWhere(
+      (item) => item.datasetId == datasetId &&
+          item.query.toLowerCase() == result.query.toLowerCase(),
+    );
     _searchHistory.insert(
       0,
       PatientSearchRecord(
+        datasetId: datasetId,
         query: result.query,
         found: result.found,
         instanceLabel: result.instanceLabel,
@@ -92,7 +87,12 @@ class ApiService {
     try {
       final uri = Uri.parse('$baseUrl/api/v1/health');
       final response = await _client.get(uri).timeout(const Duration(seconds: 2));
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        activeDatasetId = data['dataset_loaded'] as String? ?? activeDatasetId;
+        return true;
+      }
+      return false;
     } catch (_) {
       return false;
     }
@@ -113,6 +113,26 @@ class ApiService {
       // Offline fallback dataset list
     }
     return [
+      const DatasetInfo(
+        datasetId: 'demo04',
+        title: 'Empty The Trash',
+        anchors: ['Storage Cabinet #1'],
+        trackedObjects: [
+          'Garbage Bag #1',
+          'Garbage Bag #3',
+          'Garbage Bag #5',
+          'Garbage Bag #6',
+          'Garbage Bag #8',
+          'Garbage Bag #9',
+          'Garbage Bag #10',
+          'Plastic Bottle #4',
+          'Rubbish #7',
+          'Food Container #2',
+        ],
+        numEvents: 4,
+        numTimelineFrames: 117,
+        isActive: false,
+      ),
       const DatasetInfo(
         datasetId: 'demo03',
         title: 'Put Leftover Food Into The Fridge Compartment',
@@ -212,6 +232,17 @@ class ApiService {
   /// Offline fallback simulating verified R4DSG memory across different datasets
   QueryResult _mockQueryFallback(String item) {
     final lower = item.toLowerCase();
+    final datasetId = _selectedDatasetId;
+    // Offline data is still dataset-scoped.  Unknown/unprocessed videos must
+    // not receive a plausible result from another demonstration.
+    if (datasetId == 'demo04' ||
+        (datasetId != 'demo01' && datasetId != 'demo03' && datasetId != 'Demo06-Self')) {
+      return QueryResult(
+        query: item,
+        found: false,
+        locationSummary: 'The scene graph for $datasetId is not available yet.',
+      );
+    }
     if (lower.contains('pot') || lower.contains('pan') || lower.contains('cookware')) {
       return const QueryResult(
         query: 'cooking pot',
@@ -301,6 +332,7 @@ class ApiService {
   }
 
   List<TimelineEvent> _mockTimelineFallback() {
+    if (_selectedDatasetId == 'demo04') return const [];
     if (activeDatasetId == 'demo03') {
       return const [
         TimelineEvent(

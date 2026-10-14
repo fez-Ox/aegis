@@ -36,6 +36,8 @@ class _PatientViewState extends State<PatientView> {
       return 'Put Shoes Into Storage Cabinet';
     } else if (lower.contains('demo06') || lower.contains('desk')) {
       return 'Bottle Relocation Between Desks';
+    } else if (lower.contains('demo04') || lower.contains('trash')) {
+      return 'Empty The Trash';
     }
     return 'Egocentric Scene: $id';
   }
@@ -62,7 +64,14 @@ class _PatientViewState extends State<PatientView> {
 
   void _configureQuickItems() {
     final ds = (widget.apiService.activeDatasetId ?? 'demo01').toLowerCase();
-    if (ds.contains('demo03') || ds.contains('demo_pots') || ds.contains('pot') || ds.contains('kitchen') || ds.contains('food') || ds.contains('fridge')) {
+    if (ds.contains('demo04') || ds.contains('trash') || ds.contains('rubbish')) {
+      _quickItems = [
+        {'label': 'Garbage Bag', 'query': 'garbage bag', 'icon': Icons.shopping_bag_outlined, 'color': AppTheme.tealAccent},
+        {'label': 'Rubbish', 'query': 'rubbish', 'icon': Icons.delete_outline_rounded, 'color': AppTheme.royalAmethyst},
+        {'label': 'Plastic Bottle', 'query': 'plastic bottle', 'icon': Icons.local_drink_outlined, 'color': const Color(0xFF0EA5E9)},
+        {'label': 'Food Container', 'query': 'food container', 'icon': Icons.inventory_2_outlined, 'color': AppTheme.alertAmber},
+      ];
+    } else if (ds.contains('demo03') || ds.contains('demo_pots') || ds.contains('pot') || ds.contains('kitchen') || ds.contains('food') || ds.contains('fridge')) {
       _quickItems = [
         {'label': 'Cooking Pot', 'query': 'cooking pot', 'icon': Icons.soup_kitchen_rounded, 'color': AppTheme.tealAccent},
         {'label': 'Bowl', 'query': 'bowl', 'icon': Icons.rice_bowl_rounded, 'color': AppTheme.royalAmethyst},

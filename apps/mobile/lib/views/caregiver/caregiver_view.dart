@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../models/patient_search_record.dart';
 import '../../models/timeline_event.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';

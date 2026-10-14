@@ -205,8 +205,10 @@ def main(
             print(
                 f"Custom perception target classes configured: {', '.join(parsed_classes)}"
             )
-    elif dataset_id != "demo01":
-        # For non-demo01 videos, default to comprehensive indoor daily living classes
+    elif dataset_id != "demo01" and Path(config_path).name == "demo.yaml":
+        # The generic demo config opts into broad indoor discovery.  Keep
+        # dataset-specific configs (for example demo04) task-scoped; merging
+        # 60+ unrelated prompts creates false positives in their scene graphs.
         existing_targets = list(
             serialized_config["perception"].get("target_classes", [])
         )

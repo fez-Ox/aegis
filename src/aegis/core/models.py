@@ -111,6 +111,8 @@ class Detection2D:
     mask: Any = None  # Optional binary np.ndarray mask (H, W)
     is_hand: bool = False
     contact_target_track_id: int | None = None
+    # Compact crop descriptor used only for bounded long-term re-identification.
+    appearance: tuple[float, ...] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable 2D detection record."""
@@ -125,6 +127,8 @@ class Detection2D:
         }
         if self.contact_target_track_id is not None:
             data["contact_target_track_id"] = self.contact_target_track_id
+        if self.appearance is not None:
+            data["appearance"] = list(self.appearance)
         return data
 
 
@@ -148,6 +152,7 @@ class BoundingBox3D:
     is_in_hand: bool = False
     carrier: str | None = None
     held_by_hand_track_id: int | None = None
+    appearance: tuple[float, ...] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable 3D bounding box record."""
@@ -169,6 +174,8 @@ class BoundingBox3D:
             data["carrier"] = self.carrier
         if self.held_by_hand_track_id is not None:
             data["held_by_hand_track_id"] = self.held_by_hand_track_id
+        if self.appearance is not None:
+            data["appearance"] = list(self.appearance)
         if self.rotation is not None:
             data["rotation"] = list(self.rotation)
         if self.yaw is not None:

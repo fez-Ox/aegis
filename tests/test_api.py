@@ -96,8 +96,8 @@ def test_query_latency_performance_claim() -> None:
 
 
 def test_query_bottle_occlusion_endpoint() -> None:
-    """Test memory query for bottle returns Demo06 3D location and occlusion status."""
-    response = client.get("/api/v1/query?item=water bottle")
+    """Test a dataset-scoped bottle query returns Demo06 3D location."""
+    response = client.get("/api/v1/query?item=water bottle&dataset_id=Demo06-Self")
     assert response.status_code == 200
     res = response.json()
     assert res["found"] is True
@@ -121,6 +121,13 @@ def test_simulate_bottle_occlusion() -> None:
     assert q_res["found"] is True
     assert q_res["is_persistent_memory"] is True
     assert "remembers" in q_res["location_summary"].lower()
+
+
+def test_unprocessed_demo04_has_no_foreign_memories() -> None:
+    """An input-only video must not inherit the demo01 fixture or another graph."""
+    res = client.get("/api/v1/query?item=shoes&dataset_id=demo04").json()
+    assert res["found"] is False
+    assert "demo04" in res["location_summary"]
 
 
 def test_demo06_scene_graph_isolation() -> None:

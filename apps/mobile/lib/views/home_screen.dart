@@ -342,7 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
               widget.apiService.updateBaseUrl(controller.text);
               final ok = await widget.apiService.checkHealth();
               if (mounted) {
-                Navigator.pop(ctx);
+                Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     behavior: SnackBarBehavior.floating,

@@ -96,6 +96,43 @@ def test_multi_instance_object_persistence() -> None:
         assert e.is_active_view is False
 
 
+def test_long_term_reidentification_reuses_instance_id() -> None:
+    """A detector track restart must not create a new semantic object ID."""
+    signature = (0.8, 0.1, 0.1)
+    first = BoundingBox3D(
+        frame_id=1,
+        timestamp=0.2,
+        track_id=4,
+        label="garbage bag",
+        confidence=0.9,
+        center=(0.0, 0.0, 0.4),
+        size=(0.2, 0.2, 0.3),
+        bbox_2d=(10.0, 10.0, 40.0, 50.0),
+        appearance=signature,
+    )
+    reappeared = BoundingBox3D(
+        frame_id=10,
+        timestamp=2.0,
+        track_id=99,
+        label="garbage bag",
+        confidence=0.9,
+        center=(0.8, 0.2, 0.4),
+        size=(0.2, 0.2, 0.3),
+        bbox_2d=(100.0, 10.0, 130.0, 50.0),
+        appearance=signature,
+    )
+
+    graph = build_relative_4d_scene_graph([first, reappeared], [1, 10], [0.2, 2.0])
+    active_entries = [
+        entry
+        for entries in graph.memory_timeline.values()
+        for entry in entries
+        if entry.is_active_view
+    ]
+    assert [entry.instance_id for entry in active_entries] == [1, 1]
+    assert graph.events == []
+
+
 def test_kitchen_objects_r4dsg() -> None:
     counter = BoundingBox3D(
         frame_id=1,

@@ -241,11 +241,25 @@ def _anchor_for_box(
     )
 
 
+def _appearance_distance(
+    first: tuple[float, ...] | None,
+    second: tuple[float, ...] | None,
+) -> float | None:
+    if first is None or second is None or len(first) != len(second):
+        return None
+    return float(0.5 * sum(abs(a - b) for a, b in zip(first, second, strict=True)))
+
+
 def classify_unique_instance(
     box: BoundingBox3D,
     existing_instances: dict[int, dict[str, Any]] | None = None,
 ) -> tuple[int, str]:
-    """Assign a persistent unique instance ID and semantic name based on 3D spatial cluster."""
+    """Assign a persistent ID using track, appearance, and 3D evidence.
+
+    Short-term 2D track IDs are not authoritative: they can restart after an
+    occlusion. The instance memory therefore checks the track ID first, then
+    compares appearance and 3D location before creating a new instance.
+    """
     c = np.asarray(box.center, dtype=np.float64)
     fid = box.frame_id
     lbl = _normalise_label(box.label)
@@ -260,31 +274,61 @@ def classify_unique_instance(
         else:
             return 1, "Shoes #1 [Active Pair]"
 
-    # For non-shoe objects: cluster into 3D spatial instances with relocation association
+    # For non-shoe objects: use long-term track/appearance/3D association.
     if existing_instances:
         same_label_matches = [
             (iid, info)
             for iid, info in existing_instances.items()
             if info["label_key"] == lbl
         ]
-        # 1. Proximity match (< 0.28m)
+
+        # 1. A dormant track that has been re-identified is the strongest cue.
+        for iid, info in same_label_matches:
+            if info.get("track_id") == box.track_id:
+                info["count"] = info.get("count", 1) + 1
+                info["center"] = box.center
+                info["last_assigned_frame"] = fid
+                info["appearance"] = box.appearance or info.get("appearance")
+                return iid, info["display_name"]
+
+        candidates: list[tuple[float, int, dict[str, Any]]] = []
         for iid, info in same_label_matches:
             dist = float(
                 np.linalg.norm(c - np.asarray(info["center"], dtype=np.float64))
             )
-            if dist < 0.28:
-                info["count"] = info.get("count", 1) + 1
-                info["center"] = box.center
-                info["last_assigned_frame"] = fid
-                return iid, info["display_name"]
+            appearance_distance = _appearance_distance(
+                info.get("appearance"), box.appearance
+            )
+            # 3D location handles ordinary frame-to-frame motion; appearance
+            # breaks ties when several identical objects are nearby.
+            if dist <= 0.45 or (
+                appearance_distance is not None and appearance_distance <= 0.35
+            ):
+                score = min(dist / 0.45, 2.0)
+                if appearance_distance is not None:
+                    score += appearance_distance
+                candidates.append((score, iid, info))
 
-        # 2. Relocation re-identification across occlusion/transit
+        if candidates:
+            _score, iid, info = min(candidates, key=lambda item: item[0])
+            info["count"] = info.get("count", 1) + 1
+            info["center"] = box.center
+            info["track_id"] = box.track_id
+            info["last_assigned_frame"] = fid
+            info["appearance"] = box.appearance or info.get("appearance")
+            return iid, info["display_name"]
+
+        # If there is only one known object of this class, allow a relocation
+        # after occlusion. This is safer than creating a new ID for every move;
+        # multiple known objects must pass the evidence gates above.
         if len(same_label_matches) == 1:
             iid, info = same_label_matches[0]
             if info.get("last_assigned_frame") != fid:
                 info["count"] = info.get("count", 1) + 1
                 info["center"] = box.center
+                info["track_id"] = box.track_id
                 info["last_assigned_frame"] = fid
+                info["appearance"] = box.appearance or info.get("appearance")
                 return iid, info["display_name"]
 
     next_id = (max(existing_instances.keys()) + 1) if existing_instances else 1
@@ -296,6 +340,8 @@ def classify_unique_instance(
             "display_name": display_name,
             "count": 1,
             "last_assigned_frame": fid,
+            "track_id": box.track_id,
+            "appearance": box.appearance,
         }
     return next_id, display_name
 

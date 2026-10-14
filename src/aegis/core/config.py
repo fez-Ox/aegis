@@ -168,9 +168,14 @@ class Sam2Config:
 
 @dataclass(frozen=True, slots=True)
 class PerceptionConfig:
-    """2D/3D object perception and tracking settings."""
+    """2D/3D object perception and tracking settings.
 
-    detector_model: str = "yolov8m-worldv2.pt"
+    YOLOE is the default because it produces open-vocabulary masks directly;
+    YOLO-World remains available as a detector-only fallback.
+    """
+
+    detector_backend: str = "yoloe"
+    detector_model: str = "yoloe-11l-seg.pt"
     target_classes: tuple[str, ...] = (
         "shoes",
         "shoe",
@@ -190,6 +195,10 @@ class PerceptionConfig:
     iou_threshold: float = 0.45
     min_points_in_box: int = 15
     track_max_gap: int = 3
+    # Keep a lightweight appearance memory after a short-term track expires.
+    # This is deliberately bounded; it is not a global identity database.
+    reid_max_gap: int = 30
+    reid_appearance_threshold: float = 0.35
     track_smoothing: float = 0.65
     hand_contact_iou_threshold: float = 0.10
     hand_contact_max_distance: float = 0.35
@@ -412,6 +421,11 @@ class RuntimeConfig:
             target_classes = perception_defaults.target_classes
 
         perception = PerceptionConfig(
+            detector_backend=str(
+                perception_raw.get(
+                    "detector_backend", perception_defaults.detector_backend
+                )
+            ).lower(),
             detector_model=str(
                 perception_raw.get("detector_model", perception_defaults.detector_model)
             ),
@@ -432,6 +446,15 @@ class RuntimeConfig:
             track_max_gap=int(
                 perception_raw.get("track_max_gap", perception_defaults.track_max_gap)
             ),
+            reid_max_gap=int(
+                perception_raw.get("reid_max_gap", perception_defaults.reid_max_gap)
+            ),
+            reid_appearance_threshold=float(
+                perception_raw.get(
+                    "reid_appearance_threshold",
+                    perception_defaults.reid_appearance_threshold,
+                )
+            ),
             track_smoothing=float(
                 perception_raw.get(
                     "track_smoothing", perception_defaults.track_smoothing
@@ -451,6 +474,11 @@ class RuntimeConfig:
             ),
         )
 
+        if perception.detector_backend not in {"yoloe", "yolo_world"}:
+            raise ValueError(
+                "perception.detector_backend must be 'yoloe' or 'yolo_world'"
+            )
+
         if (
             perception.confidence_threshold <= 0
             or perception.confidence_threshold > 1.0
@@ -458,6 +486,9 @@ class RuntimeConfig:
             or perception.iou_threshold > 1.0
             or perception.min_points_in_box <= 0
             or perception.track_max_gap < 0
+            or perception.reid_max_gap < perception.track_max_gap
+            or perception.reid_appearance_threshold <= 0.0
+            or perception.reid_appearance_threshold > 1.0
             or perception.track_smoothing < 0.0
             or perception.track_smoothing >= 1.0
         ):

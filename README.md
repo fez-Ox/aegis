@@ -22,7 +22,7 @@ src/aegis/            # Core aegis Python package
   geometry/           # VGGT-Ω 3D reconstruction, point lifting, and OBB fitting
   ingestion/          # Video normalization and frame extraction
   memory/             # R4DSG Relative 4D Scene Graph memory engine
-  perception/         # YOLO-World + SAM 2 instance detection & segmentation
+  perception/         # YOLOE open-vocabulary masks + SAM 2 refinement
   remote/             # Modal worker functions and remote container images
   visualization/      # Rerun visualization utilities
 tests/                # Automated test suite
@@ -43,8 +43,11 @@ uvx ruff check src tests run_pipeline.py
 Execute the end-to-end pipeline remotely on Modal:
 
 ```bash
-# Full pipeline (ingest, reconstruct with VGGT-Ω, detect with YOLO-World + SAM 2, lift & build R4DSG)
+# Full pipeline (ingest, reconstruct with VGGT-Ω, detect with YOLOE + SAM 2, lift & build R4DSG)
 uv run modal run run_pipeline.py --dataset-id demo01 --stage all
+
+# Build the Demo04 scene graph before selecting it in the APK
+uv run modal run run_pipeline.py --config-path config/demo04.yaml --dataset-id demo04 --stage all
 
 # Visualize results in Rerun
 rerun outputs/demo.rrd

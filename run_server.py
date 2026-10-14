@@ -39,7 +39,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset-id",
         type=str,
-        default=os.getenv("AEGIS_DATASET_ID", "Demo06-Self"),
+        default=os.getenv("AEGIS_DATASET_ID", "demo01"),
         help="Dataset identifier to load as primary scene graph (e.g. Demo06-Self, demo01, demo03)",
     )
     parser.add_argument("--port", type=int, default=8000, help="Port to bind server")

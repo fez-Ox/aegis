@@ -234,6 +234,7 @@ def lift_detection_to_3d(
         rotation=rot_quat,
         yaw=yaw,
         is_hand=detection.is_hand,
+        appearance=detection.appearance,
         held_by_hand_track_id=detection.contact_target_track_id,
     )
 
@@ -319,6 +320,7 @@ def _smooth_track_boxes(
                 is_in_hand=box.is_in_hand,
                 carrier=box.carrier,
                 held_by_hand_track_id=box.held_by_hand_track_id,
+                appearance=box.appearance,
             )
 
     return [box for box in smoothed if box is not None]
@@ -445,6 +447,7 @@ def evaluate_spatial_containment_and_states(
                     is_in_hand=is_in_hand,
                     carrier=carrier,
                     held_by_hand_track_id=held_by_hand_id,
+                    appearance=box.appearance,
                 )
             )
 

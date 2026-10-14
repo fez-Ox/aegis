@@ -396,7 +396,12 @@ def run_detect_and_lift(
     )
 
     r4d_path = paths.objects_json.parent / "r4d_scene_graph.json"
-    _write_json(r4d_path, scene_graph.as_dict())
+    scene_graph_data = scene_graph.as_dict()
+    # Store ownership in the artifact so the API can reject a stale graph
+    # copied from another video instead of serving cross-scene memories.
+    scene_graph_data["dataset_id"] = dataset_id
+    scene_graph_data["schema_version"] = 1
+    _write_json(r4d_path, scene_graph_data)
 
     _write_json(
         paths.events_json,
@@ -481,6 +486,65 @@ TRACK_PALETTE = [
 
 def _track_color(track_id: int) -> list[int]:
     return TRACK_PALETTE[(track_id - 1) % len(TRACK_PALETTE)]
+
+
+def _memory_label_key(label: str) -> str:
+    """Normalize raw detection and persistent-memory labels for visualization."""
+    key = " ".join(str(label).lower().strip().split())
+    if "#" in key:
+        key = key.split("#", 1)[0].strip()
+    aliases = {
+        "shoe": "shoes",
+        "water bottle": "bottle",
+        "rubbish": "garbage bag",
+        "trash bag": "garbage bag",
+    }
+    return aliases.get(key, key)
+
+
+def _associate_boxes_with_memory(
+    boxes: Sequence[Mapping[str, Any]],
+    memory_entries: Sequence[Mapping[str, Any]],
+) -> dict[int, Mapping[str, Any]]:
+    """Associate current detections with active R4DSG instances.
+
+    Rerun must show semantic instance IDs rather than transient detector track
+    IDs. The scene graph keeps only the best observation for each instance, so
+    unmatched duplicate detections are intentionally omitted from the clean
+    supervisor-facing overlay.
+    """
+    candidates: list[tuple[float, int, int]] = []
+    active_entries = [
+        entry for entry in memory_entries if bool(entry.get("is_active_view", False))
+    ]
+    for box_index, box in enumerate(boxes):
+        if bool(box.get("is_hand", False)):
+            continue
+        box_center = np.asarray(box.get("center", ()), dtype=np.float64)
+        if box_center.shape != (3,):
+            continue
+        box_label = _memory_label_key(str(box.get("label", "")))
+        for entry_index, entry in enumerate(active_entries):
+            if _memory_label_key(str(entry.get("label", ""))) != box_label:
+                continue
+            entry_center = np.asarray(entry.get("center", ()), dtype=np.float64)
+            if entry_center.shape != (3,):
+                continue
+            distance = float(np.linalg.norm(box_center - entry_center))
+            candidates.append((distance, box_index, entry_index))
+
+    associations: dict[int, Mapping[str, Any]] = {}
+    used_boxes: set[int] = set()
+    used_entries: set[int] = set()
+    # Greedy nearest-neighbour matching is deterministic and sufficient here:
+    # boxes and memory entries originate from the same lifted 3D observation.
+    for distance, box_index, entry_index in sorted(candidates):
+        if box_index in used_boxes or entry_index in used_entries:
+            continue
+        associations[box_index] = active_entries[entry_index]
+        used_boxes.add(box_index)
+        used_entries.add(entry_index)
+    return associations
 
 
 def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
@@ -859,11 +923,26 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                             "video/egocentric_stream", rr.EncodedImage(path=image_path)
                         )
 
-        # 3B. Show clean lifted detections on the egocentric video at keyframes.
+        # 3B. Show only lifted detections represented by active R4DSG
+        # instances. The overlay must use persistent instance IDs, not the
+        # detector's short-term track IDs.
         frame_boxes = boxes_by_frame.get(frame_id, [])
-        if frame_boxes:
+        mem_entries = r4d_timeline.get(str(frame_id), [])
+        box_associations = _associate_boxes_with_memory(frame_boxes, mem_entries)
+        display_boxes: list[dict[str, Any]] = []
+        for box_index, box in enumerate(frame_boxes):
+            if bool(box.get("is_hand", False)):
+                display_box = dict(box)
+                display_box["_memory_entry"] = None
+                display_boxes.append(display_box)
+            elif box_index in box_associations:
+                display_box = dict(box)
+                display_box["_memory_entry"] = box_associations[box_index]
+                display_boxes.append(display_box)
+
+        if display_boxes:
             sorted_boxes = sorted(
-                frame_boxes,
+                display_boxes,
                 key=lambda b: float(b.get("confidence", 0.0)),
                 reverse=True,
             )
@@ -892,14 +971,21 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
             clean_labels: list[str] = []
             clean_colors: list[list[int]] = []
             for box in clean_boxes:
-                lbl = f"{box['label']} #{box['track_id']}"
-                if box.get("is_in_hand", False):
-                    lbl += " [In Hand]"
-                    clean_colors.append([245, 158, 11])  # Amber #F59E0B
-                elif box.get("is_hand", False):
-                    clean_colors.append([244, 63, 94])  # Rose
+                memory_entry = box.get("_memory_entry")
+                if memory_entry is not None:
+                    lbl = str(memory_entry["label"])
+                    if memory_entry.get("is_in_hand", False):
+                        lbl += " [In Hand]"
+                        clean_colors.append([245, 158, 11])  # Amber #F59E0B
+                    else:
+                        clean_colors.append(
+                            _track_color(int(memory_entry["instance_id"]))
+                        )
                 else:
-                    clean_colors.append(_track_color(int(box["track_id"])))
+                    # Hands are not R4DSG object instances; hide their
+                    # transient detector track IDs in the supervisor view.
+                    lbl = "Hand"
+                    clean_colors.append([244, 63, 94])  # Rose
                 clean_labels.append(lbl)
 
             rr.log(

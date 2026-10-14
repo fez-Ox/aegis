@@ -69,7 +69,9 @@ sam2:
   multimask_output: false
 
 perception:
-  detector_model: yolov8m-worldv2.pt
+  # YOLOE-seg provides open-vocabulary masks; SAM 2 refines them from the box.
+  detector_backend: yoloe
+  detector_model: yoloe-11l-seg.pt
   target_classes:
     - shoes
     - shoe
@@ -83,6 +85,8 @@ perception:
   min_points_in_box: 25
   # Keep identities alive across short detector misses between keyframes.
   track_max_gap: 3
+  reid_max_gap: 30
+  reid_appearance_threshold: 0.35
   track_smoothing: 0.65
   hand_contact_iou_threshold: 0.10
   hand_contact_max_distance: 0.35
