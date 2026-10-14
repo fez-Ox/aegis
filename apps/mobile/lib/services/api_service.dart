@@ -97,7 +97,7 @@ class ApiService {
   Future<bool> checkHealth() async {
     try {
       final uri = Uri.parse('$baseUrl/api/v1/health');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 2));
+      final response = await _client.get(uri).timeout(const Duration(seconds: 4));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         activeDatasetId = data['dataset_loaded'] as String? ?? activeDatasetId;

@@ -65,20 +65,19 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Ensure Android Platform Support
-        working-directory: apps/mobile
-        run: flutter create --platforms=android --org com.aegis .
-
-      - name: Allow LAN HTTP backend access
+      - name: Verify Android Network Permissions
         working-directory: apps/mobile
         run: |
           manifest="android/app/src/main/AndroidManifest.xml"
           if ! grep -q 'android.permission.INTERNET' "$manifest"; then
-            sed -i '0,/<application /s//<uses-permission android:name="android.permission.INTERNET"\/>\n    <application /' "$manifest"
+            echo "Error: Missing INTERNET permission in $manifest"
+            exit 1
           fi
           if ! grep -q 'usesCleartextTraffic' "$manifest"; then
-            sed -i '0,/<application /s//<application android:usesCleartextTraffic="true" /' "$manifest"
+            echo "Error: Missing usesCleartextTraffic in $manifest"
+            exit 1
           fi
+          echo "Android network permissions and cleartext traffic verified."
 
       - name: Install Flutter dependencies
         working-directory: apps/mobile
