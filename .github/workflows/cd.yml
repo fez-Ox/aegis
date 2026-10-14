@@ -69,10 +69,13 @@ jobs:
         working-directory: apps/mobile
         run: flutter create --platforms=android --org com.aegis .
 
-      - name: Allow local HTTP backend access
+      - name: Allow LAN HTTP backend access
         working-directory: apps/mobile
         run: |
           manifest="android/app/src/main/AndroidManifest.xml"
+          if ! grep -q 'android.permission.INTERNET' "$manifest"; then
+            sed -i '0,/<application /s//<uses-permission android:name="android.permission.INTERNET"\/>\n    <application /' "$manifest"
+          fi
           if ! grep -q 'usesCleartextTraffic' "$manifest"; then
             sed -i '0,/<application /s//<application android:usesCleartextTraffic="true" /' "$manifest"
           fi
