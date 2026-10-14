@@ -62,4 +62,34 @@ void main() {
     apiService.updateBaseUrl('192.168.10.11');
     expect(apiService.baseUrl, 'http://192.168.10.11:8000');
   });
+
+  test('Demo04 scene graph is queryable without a backend', () async {
+    final apiService = ApiService();
+    await apiService.selectDataset('demo04');
+
+    final rubbish = await apiService.queryItem('rubbish');
+    final food = await apiService.queryItem('food container');
+    final timeline = await apiService.fetchTimeline();
+
+    expect(rubbish.instanceLabel, 'Rubbish #5');
+    expect(rubbish.anchorLabel, 'Storage Cabinet #1');
+    expect(food.instanceLabel, 'Food Container #2');
+    expect(food.isPersistentMemory, isTrue);
+    expect(timeline, hasLength(5));
+  });
+
+  test('Demo06 scene graph is queryable without a backend', () async {
+    final apiService = ApiService();
+    await apiService.selectDataset('Demo06-Self');
+
+    final bottle = await apiService.queryItem('water bottle');
+    final laptop = await apiService.queryItem('laptop');
+    final timeline = await apiService.fetchTimeline();
+
+    expect(bottle.instanceLabel, 'Bottle #1');
+    expect(bottle.anchorLabel, 'Desk #2');
+    expect(laptop.instanceLabel, 'Laptop #2');
+    expect(laptop.isPersistentMemory, isTrue);
+    expect(timeline.single.object, 'Bottle #1');
+  });
 }
