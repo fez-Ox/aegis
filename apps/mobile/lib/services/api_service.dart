@@ -244,16 +244,143 @@ class ApiService {
   QueryResult _mockQueryFallback(String item) {
     final lower = item.toLowerCase();
     final datasetId = _selectedDatasetId;
-    // Offline data is still dataset-scoped.  Unknown/unprocessed videos must
-    // not receive a plausible result from another demonstration.
-    if (datasetId == 'demo04' ||
-        (datasetId != 'demo01' && datasetId != 'demo03' && datasetId != 'Demo06-Self')) {
+    if (datasetId != 'demo01' &&
+        datasetId != 'demo03' &&
+        datasetId != 'demo04' &&
+        datasetId != 'Demo06-Self') {
       return QueryResult(
         query: item,
         found: false,
         locationSummary: 'The scene graph for $datasetId is not available yet.',
       );
     }
+
+    if (datasetId == 'demo04') {
+      if (lower.contains('trash') || lower.contains('garbage') || lower.contains('bag')) {
+        return const QueryResult(
+          query: 'garbage bag',
+          found: true,
+          item: 'garbage bag',
+          instanceLabel: 'Garbage Bag #1',
+          instanceId: 1,
+          anchorLabel: 'Storage Cabinet #1',
+          relation: 'moving_towards',
+          relativeDistanceM: 0.13,
+          locationSummary: 'Your trash is near Storage Cabinet #1.',
+          lastSeenTimeAgo: 'Recorded today',
+          isPersistentMemory: false,
+          confidence: 0.95,
+        );
+      } else if (lower.contains('food') || lower.contains('container')) {
+        return const QueryResult(
+          query: 'food container',
+          found: true,
+          item: 'food container',
+          instanceLabel: 'Food Container #2',
+          instanceId: 2,
+          anchorLabel: 'Storage Cabinet #1',
+          relation: 'inside',
+          relativeDistanceM: 0.33,
+          locationSummary: 'Your food is safely put away inside Storage Cabinet #1. Even though it is currently out of direct view behind the closed compartment, Aegis remembers it is securely stored inside.',
+          lastSeenTimeAgo: 'Recorded today',
+          isPersistentMemory: true,
+          confidence: 0.96,
+        );
+      } else if (lower.contains('bottle') || lower.contains('plastic')) {
+        return const QueryResult(
+          query: 'plastic bottle',
+          found: true,
+          item: 'plastic bottle',
+          instanceLabel: 'Plastic Bottle #3',
+          instanceId: 3,
+          anchorLabel: 'Storage Cabinet #1',
+          relation: 'on_surface',
+          relativeDistanceM: 0.15,
+          locationSummary: 'Your bottle is currently resting on Storage Cabinet #1.',
+          lastSeenTimeAgo: 'Recorded today',
+          isPersistentMemory: false,
+          confidence: 0.95,
+        );
+      } else if (lower.contains('rubbish')) {
+        return const QueryResult(
+          query: 'rubbish',
+          found: true,
+          item: 'rubbish',
+          instanceLabel: 'Rubbish #5',
+          instanceId: 5,
+          anchorLabel: 'Storage Cabinet #1',
+          relation: 'moving_towards',
+          relativeDistanceM: 0.04,
+          locationSummary: 'Your trash is near Storage Cabinet #1.',
+          lastSeenTimeAgo: 'Recorded today',
+          isPersistentMemory: false,
+          confidence: 0.95,
+        );
+      } else {
+        return QueryResult(
+          query: item,
+          found: false,
+          locationSummary: "I couldn't locate '$item' in your tracked rooms.",
+        );
+      }
+    }
+
+    if (datasetId == 'Demo06-Self') {
+      if (lower.contains('bottle') || lower.contains('water') || lower.contains('drink')) {
+        return const QueryResult(
+          query: 'water bottle',
+          found: true,
+          item: 'water bottle',
+          instanceLabel: 'Bottle #1',
+          instanceId: 1,
+          anchorLabel: 'Desk #2',
+          relation: 'on_surface',
+          relativeDistanceM: 0.07,
+          locationSummary: 'Your bottle is currently resting on Desk #2.',
+          lastSeenTimeAgo: 'Recorded today',
+          isPersistentMemory: false,
+          cropUrl: '/api/v1/crops/1?dataset_id=Demo06-Self',
+          confidence: 0.96,
+        );
+      } else if (lower.contains('laptop') || lower.contains('computer')) {
+        return const QueryResult(
+          query: 'laptop',
+          found: true,
+          item: 'laptop',
+          instanceLabel: 'Laptop #2',
+          instanceId: 2,
+          anchorLabel: 'Desk #2',
+          relation: 'on_surface',
+          relativeDistanceM: 0.12,
+          locationSummary: 'Your laptop is sitting on Desk #2. Even though it is currently out of direct view, Aegis remembers it remains safely on Desk #2.',
+          lastSeenTimeAgo: 'Recorded today',
+          isPersistentMemory: true,
+          confidence: 0.96,
+        );
+      } else if (lower.contains('phone') || lower.contains('cell')) {
+        return const QueryResult(
+          query: 'cell phone',
+          found: true,
+          item: 'cell phone',
+          instanceLabel: 'Cell Phone #3',
+          instanceId: 3,
+          anchorLabel: 'Desk #2',
+          relation: 'on_surface',
+          relativeDistanceM: 0.10,
+          locationSummary: 'Your phone is sitting on Desk #2. Even though it is currently out of direct view, Aegis remembers it remains safely on Desk #2.',
+          lastSeenTimeAgo: 'Recorded today',
+          isPersistentMemory: true,
+          confidence: 0.95,
+        );
+      } else {
+        return QueryResult(
+          query: item,
+          found: false,
+          locationSummary: "I couldn't locate '$item' in your tracked rooms.",
+        );
+      }
+    }
+
     if (lower.contains('pot') || lower.contains('pan') || lower.contains('cookware')) {
       return const QueryResult(
         query: 'cooking pot',
@@ -343,8 +470,56 @@ class ApiService {
   }
 
   List<TimelineEvent> _mockTimelineFallback() {
-    if (_selectedDatasetId == 'demo04') return const [];
-    if (activeDatasetId == 'demo03') {
+    final ds = _selectedDatasetId;
+    if (ds == 'demo04') {
+      return const [
+        TimelineEvent(
+          eventId: 'event_0001',
+          eventType: 'placement',
+          object: 'Garbage Bag #1',
+          destinationRelation: 'inside',
+          destinationAnchor: 'Storage Cabinet #1',
+          startTime: 31.6,
+          endTime: 32.0,
+          summary: 'Garbage Bag #1 was placed inside Storage Cabinet #1.',
+        ),
+        TimelineEvent(
+          eventId: 'event_0004',
+          eventType: 'placement',
+          object: 'Food Container #2',
+          destinationRelation: 'inside',
+          destinationAnchor: 'Storage Cabinet #1',
+          startTime: 31.6,
+          endTime: 32.0,
+          summary: 'Food Container #2 was placed inside Storage Cabinet #1.',
+        ),
+        TimelineEvent(
+          eventId: 'event_0005',
+          eventType: 'state_change',
+          object: 'Rubbish #5',
+          destinationRelation: 'moving_towards',
+          destinationAnchor: 'Storage Cabinet #1',
+          startTime: 39.2,
+          endTime: 39.6,
+          summary: 'Rubbish #5 transition from on_surface to moving_towards.',
+        ),
+      ];
+    } else if (ds == 'Demo06-Self') {
+      return const [
+        TimelineEvent(
+          eventId: 'event_0001',
+          eventType: 'anchor_change',
+          object: 'Bottle #1',
+          sourceAnchor: 'Desk #1',
+          destinationAnchor: 'Desk #2',
+          sourceRelation: 'on_surface',
+          destinationRelation: 'on_surface',
+          startTime: 7.6,
+          endTime: 8.0,
+          summary: 'Bottle #1 was moved from Desk #1 to Desk #2.',
+        ),
+      ];
+    } else if (ds == 'demo03') {
       return const [
         TimelineEvent(
           eventId: 'ev_001',

@@ -27,6 +27,14 @@ class _CaregiverViewState extends State<CaregiverView> {
     _loadTimeline();
   }
 
+  @override
+  void didUpdateWidget(covariant CaregiverView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.apiService.activeDatasetId != widget.apiService.activeDatasetId) {
+      _loadTimeline();
+    }
+  }
+
   Future<void> _loadTimeline() async {
     setState(() => _isLoading = true);
     final events = await widget.apiService.fetchTimeline();

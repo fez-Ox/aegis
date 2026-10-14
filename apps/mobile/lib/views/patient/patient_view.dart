@@ -81,9 +81,9 @@ class _PatientViewState extends State<PatientView> {
     } else if (ds.contains('demo06') || ds.contains('self') || ds.contains('desk') || ds.contains('office')) {
       _quickItems = [
         {'label': 'Water Bottle', 'query': 'water bottle', 'icon': Icons.local_drink_rounded, 'color': AppTheme.tealAccent},
-        {'label': 'Desk #1', 'query': 'bottle on desk 1', 'icon': Icons.table_restaurant_rounded, 'color': AppTheme.royalAmethyst},
-        {'label': 'Desk #2', 'query': 'bottle on desk 2', 'icon': Icons.desk_rounded, 'color': AppTheme.alertAmber},
-        {'label': 'Keys', 'query': 'keys', 'icon': Icons.key_rounded, 'color': const Color(0xFFEC4899)},
+        {'label': 'Laptop', 'query': 'laptop', 'icon': Icons.laptop_mac_rounded, 'color': AppTheme.royalAmethyst},
+        {'label': 'Cell Phone', 'query': 'cell phone', 'icon': Icons.smartphone_rounded, 'color': const Color(0xFF0EA5E9)},
+        {'label': 'Desk #2', 'query': 'bottle', 'icon': Icons.desk_rounded, 'color': AppTheme.alertAmber},
       ];
     } else if (ds.contains('demo05') || ds.contains('cloth') || ds.contains('laundry')) {
       _quickItems = [

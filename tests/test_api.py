@@ -197,3 +197,25 @@ def test_query_generic_demo03_dataset() -> None:
     assert data["found"] is True
     assert "Cooking Pot" in data["instance_label"]
     assert "Sink" in data["anchor_label"] or "Refrigerator" in data["anchor_label"]
+
+
+def test_demo04_scene_graph_queries_and_timeline() -> None:
+    """Verify demo04 accurately queries garbage bags and returns pipeline timeline events."""
+    # 1. Query garbage bag in demo04
+    res = client.get("/api/v1/query?item=garbage bag&dataset_id=demo04").json()
+    assert res["found"] is True
+    assert "Garbage Bag" in res["instance_label"]
+    assert "Storage Cabinet #1" in res["anchor_label"]
+
+    # 2. Query food container in demo04
+    food_res = client.get("/api/v1/query?item=food container&dataset_id=demo04").json()
+    assert food_res["found"] is True
+    assert "Food Container #2" in food_res["instance_label"]
+    assert "Storage Cabinet #1" in food_res["anchor_label"]
+
+    # 3. Timeline events
+    tl_res = client.get("/api/v1/timeline?dataset_id=demo04")
+    assert tl_res.status_code == 200
+    events = tl_res.json()
+    assert len(events) >= 1
+    assert any("Garbage Bag" in e["object"] for e in events)
