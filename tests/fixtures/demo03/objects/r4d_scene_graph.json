@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "dataset_id": "demo03",
+  "anchors": [
+    {
+      "anchor_id": 1,
+      "label": "Refrigerator #1",
+      "center": [0.0, 0.0, 1.0],
+      "size": [1.0, 0.8, 1.8]
+    },
+    {
+      "anchor_id": 2,
+      "label": "Sink #2",
+      "center": [1.0, 0.0, 0.9],
+      "size": [1.0, 0.8, 1.0]
+    }
+  ],
+  "events": [
+    {
+      "event_id": "event_0001",
+      "event_type": "state_change",
+      "instance_id": 1,
+      "object": "Cooking Pot #1",
+      "source_relation": "carried_by_user",
+      "destination_relation": "on_surface",
+      "source_anchor": "User Hands",
+      "destination_anchor": "Sink #2",
+      "start_time": 10.0,
+      "end_time": 20.0
+    }
+  ],
+  "timeline": {
+    "100": [
+      {
+        "frame_id": 100,
+        "timestamp": 10.0,
+        "instance_id": 1,
+        "label": "Cooking Pot #1",
+        "anchor_id": 2,
+        "anchor_label": "Sink #2",
+        "relation": "on_surface",
+        "relative_distance": 0.25,
+        "last_seen_timestamp": 20.0,
+        "is_active_view": true,
+        "is_in_hand": false
+      },
+      {
+        "frame_id": 100,
+        "timestamp": 10.0,
+        "instance_id": 2,
+        "label": "Bowl #1",
+        "anchor_id": 1,
+        "anchor_label": "Refrigerator #1",
+        "relation": "on_surface",
+        "relative_distance": 0.2,
+        "last_seen_timestamp": 10.0,
+        "is_active_view": true,
+        "is_in_hand": false
+      }
+    ]
+  }
+}

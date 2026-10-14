@@ -7,14 +7,14 @@ void main() {
     final apiService = ApiService();
     await tester.pumpWidget(AegisApp(apiService: apiService));
 
-    // Verify initial branding and instruction
+    // Verify initial branding and active-scene controls
     expect(find.text('AEGIS'), findsOneWidget);
-    expect(find.text('Tap an item to find where it is right now'), findsOneWidget);
-    expect(find.text('Shoes'), findsOneWidget);
+    expect(find.text('ACTIVE VIDEO SCENE'), findsOneWidget);
+    expect(find.text('Active Shoes'), findsOneWidget);
     expect(find.text('Keys'), findsOneWidget);
 
-    // Tap on Shoes tile to trigger recall
-    await tester.tap(find.text('Shoes'));
+    // Tap on the shoes tile to trigger recall
+    await tester.tap(find.text('Active Shoes'));
     await tester.pumpAndSettle();
 
     // Verify dementia result card appears with plain-English location
@@ -45,12 +45,10 @@ void main() {
     await tester.tap(find.text('Caregiver Audit'));
     await tester.pumpAndSettle();
 
-    // Verify recent 3 searches header and seed items are visible
+    // Verify the dataset-scoped search history is visible
     expect(find.text('Patient Recent Search History'), findsOneWidget);
-    expect(find.text('3 Recent'), findsOneWidget);
+    expect(find.text('1 Recent'), findsOneWidget);
     expect(find.text('Shoes'), findsOneWidget);
-    expect(find.text('Keys'), findsOneWidget);
-    expect(find.text('Glasses'), findsOneWidget);
   });
 
   test('ApiService getRecentSearches strictly limits returned count to 3', () {

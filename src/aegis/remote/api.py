@@ -142,7 +142,7 @@ _GRAPH_CACHE: dict[str, dict[str, Any]] = {}
 
 def get_search_paths(dataset_id: str) -> list[Path]:
     """Return priority paths to locate r4d_scene_graph.json strictly for the given dataset."""
-    return [
+    paths = [
         Path(
             f"/data/{dataset_id}/objects/r4d_scene_graph.json"
         ),  # Modal persistent volume
@@ -151,6 +151,14 @@ def get_search_paths(dataset_id: str) -> list[Path]:
         Path(f"outputs/{dataset_id}/r4d_scene_graph.json"),
         Path(f"data/{dataset_id}/r4d_scene_graph.json"),
     ]
+    # CI uses small tracked scene-graph fixtures instead of downloading large
+    # video artifacts. This is opt-in and never affects production deployments.
+    fixture_root = os.getenv("AEGIS_TEST_FIXTURE_ROOT")
+    if fixture_root:
+        paths.append(
+            Path(fixture_root) / dataset_id / "objects" / "r4d_scene_graph.json"
+        )
+    return paths
 
 
 def list_available_datasets() -> list[str]:
@@ -160,7 +168,11 @@ def list_available_datasets() -> list[str]:
     graph is pending, but their queries are still isolated and return no data.
     """
     discovered: set[str] = set()
-    for root_dir in [Path("outputs"), Path("data"), Path("/data")]:
+    roots = [Path("outputs"), Path("data"), Path("/data")]
+    fixture_root = os.getenv("AEGIS_TEST_FIXTURE_ROOT")
+    if fixture_root:
+        roots.append(Path(fixture_root))
+    for root_dir in roots:
         if not root_dir.is_dir():
             continue
         for item in root_dir.iterdir():
