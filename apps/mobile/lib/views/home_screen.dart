@@ -322,10 +322,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             onPressed: () async {
               widget.apiService.updateBaseUrl(controller.text);
+              final navigator = Navigator.of(ctx);
+              final messenger = ScaffoldMessenger.of(context);
               final ok = await widget.apiService.checkHealth();
               if (mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
+                navigator.pop();
+                messenger.showSnackBar(
                   SnackBar(
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
