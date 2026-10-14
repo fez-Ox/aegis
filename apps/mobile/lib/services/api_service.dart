@@ -84,7 +84,7 @@ class ApiService {
       trimmed = 'http://$trimmed';
     }
     final parsed = Uri.tryParse(trimmed);
-    if (parsed != null && parsed.host.isNotEmpty && parsed.port == 0) {
+    if (parsed != null && parsed.host.isNotEmpty && !parsed.hasPort) {
       trimmed = parsed.replace(port: 8000).toString();
     }
     while (trimmed.endsWith('/')) {

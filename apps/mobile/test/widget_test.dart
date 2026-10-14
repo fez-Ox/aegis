@@ -56,4 +56,10 @@ void main() {
     final recent = apiService.getRecentSearches(limit: 3);
     expect(recent.length, lessThanOrEqualTo(3));
   });
+
+  test('ApiService adds the default LAN port to a bare host', () {
+    final apiService = ApiService();
+    apiService.updateBaseUrl('192.168.10.11');
+    expect(apiService.baseUrl, 'http://192.168.10.11:8000');
+  });
 }
