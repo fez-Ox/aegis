@@ -10,8 +10,80 @@ import re
 from typing import Any, ClassVar
 
 
+def room_phrase(room: str | None) -> str:
+    """Grammar-aware room clause for natural explanations ("in the Kitchen")."""
+
+    if not room:
+        return ""
+    if room.lower().startswith("room "):
+        return f" in {room}"
+    return f" in the {room}"
+
+
+def _insert_room_clause(explanation: str, anchor: str, room: str | None) -> str:
+    """Attach the room clause to the sentence that names the anchor.
+
+    Keeps multi-sentence, dementia-friendly explanations readable: the room
+    belongs with the location ("...inside Storage Cabinet #1 in the Entryway."),
+    not tacked onto the closing reassurance.
+    """
+
+    clause = room_phrase(room)
+    if not clause or not anchor:
+        return explanation
+    if room.lower() in str(anchor).lower():
+        return explanation
+
+    anchor_pos = explanation.find(str(anchor))
+    if anchor_pos >= 0:
+        period_pos = explanation.find(".", anchor_pos)
+        if period_pos >= 0:
+            return explanation[:period_pos] + clause + explanation[period_pos:]
+    stripped = explanation.rstrip(".")
+    return f"{stripped}{clause}." if stripped else explanation
+
+
 class QueryReasoningEngine:
     """Disambiguates user queries and generates grounded spatial explanations."""
+
+    ROOM_KEYWORDS: ClassVar[dict[str, list[str]]] = {
+        "kitchen": ["kitchen"],
+        "bedroom": ["bedroom", "bed room"],
+        "living room": ["living room", "lounge"],
+        "bathroom": ["bathroom", "washroom"],
+        "dining room": ["dining room", "dining"],
+        "hallway": ["hallway", "corridor", "hall"],
+        "entryway": ["entryway", "foyer", "entrance hall"],
+        "office": ["office", "study room"],
+        "garage": ["garage"],
+        "basement": ["basement"],
+        "stairway": ["stairway", "staircase"],
+        "balcony": ["balcony", "terrace"],
+        "storage room": ["storage room", "utility room"],
+    }
+
+    # Words that refer to rooms rather than items; they must never leak into
+    # target-item extraction (e.g. "keys in the kitchen" targets keys).
+    _ROOM_IGNORE_WORDS: ClassVar[set[str]] = {
+        "kitchen",
+        "bedroom",
+        "bathroom",
+        "living",
+        "dining",
+        "hallway",
+        "corridor",
+        "hall",
+        "entryway",
+        "foyer",
+        "office",
+        "garage",
+        "basement",
+        "stairway",
+        "staircase",
+        "balcony",
+        "terrace",
+        "room",
+    }
 
     ITEM_SYNONYMS: ClassVar[dict[str, list[str]]] = {
         "shoes": [
@@ -96,6 +168,15 @@ class QueryReasoningEngine:
         """Extract canonical item from natural language query."""
         clean = query.strip().lower()
 
+        # Remove room mentions first: they describe where to look, not what.
+        for synonyms in cls.ROOM_KEYWORDS.values():
+            for synonym in synonyms:
+                clean = re.sub(r"\b" + re.escape(synonym) + r"\b", " ", clean)
+        clean = re.sub(r"\brooms?\s*#?\s*\d*\b", " ", clean)
+        clean = " ".join(clean.split())
+        if not clean:
+            return query.strip().lower()
+
         # 1. Exact or synonym match against known synonyms
         for canonical, synonyms in cls.ITEM_SYNONYMS.items():
             if canonical in clean:
@@ -124,6 +205,7 @@ class QueryReasoningEngine:
             "what",
             "happened",
             "to",
+            *cls._ROOM_IGNORE_WORDS,
         }
         meaningful = [t for t in tokens if t not in ignore_words]
 
@@ -148,6 +230,29 @@ class QueryReasoningEngine:
         ):
             return item[:-1]
         return item
+
+    @classmethod
+    def extract_room_filter(cls, query: str) -> str | None:
+        """Extract a room constraint from a query ("keys in the kitchen" -> "kitchen").
+
+        Returns the canonical room keyword (lowercase) or None. Also supports
+        positional references like "room 1" / "room #2", which map to the
+        neutral "Room #N" labels produced by the memory layer.
+        """
+
+        clean = " ".join(query.strip().lower().split())
+
+        positional = re.search(r"\brooms?\s*#?\s*(\d+)\b", clean)
+        if positional:
+            return f"room #{positional.group(1)}"
+
+        for canonical, synonyms in cls.ROOM_KEYWORDS.items():
+            if canonical in clean:
+                return canonical
+            for synonym in synonyms:
+                if re.search(r"\b" + re.escape(synonym) + r"\b", clean):
+                    return canonical
+        return None
 
     @classmethod
     def reason_spatio_temporal_state(
@@ -239,10 +344,14 @@ class QueryReasoningEngine:
         elif not is_active_view:
             edge_case = "occlusion_object_permanence"
 
+        room_label = primary_match.get("room_label")
+        explanation = _insert_room_clause(explanation, str(anchor), room_label)
+
         return {
             "canonical_item": target_item,
             "instance_label": label,
             "anchor_label": anchor,
+            "room_label": room_label,
             "relation": relation,
             "relative_distance_m": round(float(dist_m), 2) if dist_m else 0.1,
             "is_persistent_memory": not is_active_view,
