@@ -8,7 +8,7 @@ Guidance for coding agents working in this repository.
 
 Stores and retrieves memories that are grounded in both *when* (temporal) and *where* (spatial) events occurred, to support assistive-care applications (e.g., context-aware reminders, activity recall for users and caregivers).
 
-**Current Status:** Successfully implemented the **R4DSG (Relative 4D Scene Graph) Spatio-Temporal Memory Architecture** with **Multi-Instance Object Permanence**, **3D-Grounded Instance Association**, **Upright Natural Coordinate Scaling ($Z$-Up)**, and **Juxtaposed 15 FPS First-Person Video & 3D Memory Visualization** in Rerun.
+**Current Status:** Successfully implemented the **R4DSG (Relative 4D Scene Graph) Spatio-Temporal Memory Architecture** with **Room-Level Spatial Memory (Rooms → Anchors → Objects)**, **Multi-Instance Object Permanence**, **3D-Grounded Instance Association**, raw **VGGT-Ω World Coordinates** (no manual scale/axis transforms), and **Juxtaposed 15 FPS First-Person Video & 3D Memory Visualization** in Rerun.
 
 ## Stack & Tooling
 
@@ -16,7 +16,7 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 - Use `uv` for dependency management and running scripts (`uv add`, `uv run`); avoid ad-hoc pip installs.
 - Build/test commands:
   - Lint: `uvx ruff check src tests run_pipeline.py run_server.py && uvx ruff format --check src tests run_pipeline.py run_server.py`
-  - Tests: `uv run pytest` (All 35 tests passing)
+  - Tests: `uv run pytest`
 
 ## Repository Layout
 
@@ -27,11 +27,11 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 - `outputs/`: Downloaded artifacts (`outputs/demo.rrd`, `outputs/demo01/objects/r4d_scene_graph.json`, etc.).
 - `tests/`: Automated unit tests (`test_config.py`, `test_geometry.py`, `test_lifting.py`, `test_scene_graph.py`).
 - `src/aegis/`:
-  - `core/`: Config (`config.py`), data models (`models.py`: `BoundingBox3D` with rotation/yaw, `Detection2D` with masks), canonical volume paths (`paths.py`).
+  - `core/`: Config (`config.py`, incl. `memory.rooms`), data models (`models.py`: `BoundingBox3D` with rotation/yaw, `Detection2D` with masks), canonical volume paths (`paths.py`).
   - `geometry/`: `vggt_runner.py` (VGGT-Ω feed-forward 3D reconstruction), `lifting.py` (SAM 2 mask-grounded 2D-to-3D lifting, Z-aligned OBB fitting, containment states), `backproject.py`, `transforms.py`.
   - `perception/`: `detector.py` (open-vocab 2D object detection via YOLO-World + SAM 2 instance segmentation).
-  - `memory/`: `scene_graph.py` (R4DSG Relative 4D Scene Graph memory engine, spatial anchors, multi-instance object permanence, 3D-grounded instance association).
-  - `remote/`: `modal_app.py` (Modal GPU/CPU images on L4 GPUs with secret injection), `workers.py` (orchestration of VGGT-Ω, SAM 2 mask lifting, R4DSG memory construction, and juxtaposed 2D/3D Rerun logging).
+  - `memory/`: `scene_graph.py` (R4DSG Relative 4D Scene Graph memory engine, spatial anchors, multi-instance object permanence, 3D-grounded instance association), `rooms.py` (room-level region estimation: trajectory clustering + landmark typing), `reasoning.py` (query reasoning incl. room clauses and room filters), `home_registry.py` (per-home room calibration registry, `home_map.json`).
+  - `remote/`: `modal_app.py` (Modal GPU/CPU images on L4 GPUs with secret injection), `workers.py` (orchestration of VGGT-Ω, SAM 2 mask lifting, R4DSG memory construction, room-aware Rerun logging in raw VGGT-Ω coordinates), `api.py` (FastAPI gateway incl. `GET /api/v1/rooms`, `POST /api/v1/rooms/rename`).
   - `ingestion/`: Video normalization and frame extraction.
   - `visualization/`: Visualization utilities.
 
@@ -39,45 +39,54 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 
 ## What Has Been Completed
 
-1. **R4DSG Relative 4D Scene Graph Memory Engine (`src/aegis/poc/memory/scene_graph.py`)**:
-   - Replaced noisy raw point-cloud representations with structured 3D spatial anchors (`Storage Cabinet #1`, `Floor Entrance`) and persistent 3D object instance boxes.
-   - Implemented 3D-grounded persistent instance association (`Shoes #1 [Active Pair]`, `Shoes #2 [Left Shelf]`, `Shoes #3 [Middle Shelf]`, `Shoes #4 [Right Shelf]`).
-   - Implemented dynamic anchor-relative vectors ($O \rightarrow A$) with metric distance readouts.
+1. **Room-Level Spatial Memory (`src/aegis/memory/rooms.py`, integrated in `scene_graph.py`)**:
+   - 3-level hierarchy: **Rooms → Spatial Anchors → Object Instances** (`RoomRegion`, persisted in `r4d_scene_graph.json`).
+   - Rooms estimated Hydra-style by clustering the camera wearer's trajectory on the floor plane (online spatial clustering + revisit merging), typed HOV-SG-style by room-defining landmarks (`door`, `sofa`, `bed`, `television`, `toilet`, `kitchen counter`, `dining table`, `stairs`) detected by the open-vocab detector; landmarks are room evidence only and never become object memories.
+   - Objects are room-grounded: placed objects inherit their anchor's room, carried objects inherit the wearer's per-frame room; `_insert_room_clause` produces answers like "…inside Storage Cabinet #1 in Room #1."
+   - `room_change` events for the camera wearer; queries support room constraints ("keys in the kitchen").
+   - Caregiver room naming persists via `POST /api/v1/rooms/rename`; `home_registry.py` (`home_map.json` per `home_id`) matches sessions onto stable room identities.
+   - Room-level evaluation protocol documented in `docs/evaluation_plan.md` (Hydra region precision/recall).
 
-2. **Upright Natural Coordinate Scaling ($Z$-Up)**:
-   - Transformed raw miniature/tilted OpenCV camera coordinates to standard Upright World Coordinates ($+Z$ Up, $+Y$ Forward, $+X$ Right, Scale $S=5.0\times$).
-   - Cabinet stands upright, and vertical lift from floor to shelf is physically accurate ($\approx 1.08\,\text{m}$).
+2. **R4DSG Relative 4D Scene Graph Memory Engine (`src/aegis/poc/memory/scene_graph.py`)**:
+   - Structured 3D spatial anchors (`Storage Cabinet #1`, `Floor Entrance`) and persistent 3D object instance boxes.
+   - 3D-grounded persistent instance association (`Shoes #1 [Active Pair]`, `Shoes #2 [Left Shelf]`, `Shoes #3 [Middle Shelf]`, `Shoes #4 [Right Shelf]`).
+   - Dynamic anchor-relative vectors ($O \rightarrow A$) with metric distance readouts.
 
-3. **Juxtaposed 15 FPS Video & Clean 2D Overlays**:
-   - Ingestion increased to 15 FPS (648 frames) for fluid video playback.
-   - Synchronized 2D bounding boxes (`rr.Boxes2D`) rendered on top of the first-person video stream, color-matched to the 3D bounding boxes.
-   - De-cluttered view with at most 1–3 non-overlapping bounding boxes per frame.
+3. **Raw VGGT-Ω World Coordinates (no manual transforms)**:
+   - The ×5.0 Z-up scale/axis permutation was removed; VGGT-Ω output is the single source of truth for scale and orientation (fixes the altitude-drift artifact). Rerun uses `ViewCoordinates.RIGHT_HAND_Y_DOWN` (OpenCV-style: +X right, +Y down, +Z forward) as a display hint only.
 
-4. **Testing & Code Quality**:
-   - 16 unit tests passing cleanly in `poc/tests/`; `ruff` lint checks 100% compliant.
+4. **Juxtaposed 15 FPS Video & Clean 2D Overlays**:
+   - Ingestion at 15 FPS (648 frames); synchronized 2D bounding boxes (`rr.Boxes2D`) on the first-person stream, color-matched to 3D boxes; ≤ 3 non-overlapping boxes per frame.
+   - 3D view: anchors, room footprints with per-room palette and room-colored trajectory.
 
 5. **Apple HIG Design Architecture & Patient Search Audit (`apps/mobile/`)**:
-   - Modernized client aesthetics strictly adhering to Apple Human Interface Guidelines (`.claude/SKILL.md`).
-   - Inset grouped cards (`AppTheme.iosCardDecoration`), SF typography hierarchy, and minimum 44×44 pt touch targets.
-   - iOS-style sliding segmented control with tactile haptics (`HapticFeedback.selectionClick()`).
-   - Dedicated "Patient Recent Search History" in Caregiver Audit tab showing the top-3 recent recall queries with recency, status, and persistent memory badges.
-   - Apple modal sheets featuring grabber handles and Cupertino-styled alerts.
+   - Inset grouped cards, SF typography hierarchy, 44×44 pt touch targets, iOS segmented control with haptics, patient recent search history, Cupertino modal sheets/alerts.
+
+6. **Testing & Code Quality**:
+   - All unit tests passing (`tests/test_config.py`, `test_geometry.py`, `test_lifting.py`, `test_scene_graph.py`, `test_rooms.py`, `test_home_registry.py`, `test_reasoning.py`, `test_api.py`, `test_rerun_visualization.py`); `ruff` lint and format 100% compliant.
+
+---
 
 ## Architectural Principles & Invariants
 
 1. **R4DSG (Relative 4D Scene Graph) Memory**:
-   - Environment is represented by stable 3D Spatial Anchors (`Storage Cabinet`, `Floor Entrance`) and persistent 3D Object Instances (`Shoes #1`, `Shoes #2`, etc.).
+   - 3-level hierarchy: stable **Rooms** (trajectory zones) → stable 3D **Spatial Anchors** (`Storage Cabinet`, `Desk`) → persistent **Object Instances** (`Shoes #1`, `Keys #1`).
    - Dynamic anchor-relative vectors ($O \rightarrow A$) provide real-time metric distance and relational states (`inside`, `moving_towards`, `on_floor`).
    - Do not rely on dense noisy point clouds for object-centric spatio-temporal memory.
 
-2. **3D-Grounded Instance Association & Object Permanence**:
-   - Distinguish multiple objects of the same semantic class by 3D spatial clustering and assign unique, permanent instance IDs (`Shoes #1 [Active Pair]`, `Shoes #2 [Left Shelf]`, `Shoes #3 [Middle Shelf]`, `Shoes #4 [Right Shelf]`).
-   - Objects maintain continuous 3D spatial permanence (`✦ PERSISTENT MEMORY`) after leaving camera field-of-view or being occluded.
+2. **Room Grounding**:
+   - Rooms come from trajectory clustering + sparse landmark evidence, never from dense clouds.
+   - Room-defining landmarks are architectural context only — never stored as personal-object memories.
+   - Room naming is caregiver-calibrated (`home_map.json`); neutral labels are `Room #N`.
 
-3. **Standard Upright Coordinate System ($Z$-Up)**:
-   - Always transform raw camera coordinates to $+Z$ Up (Height), $+Y$ Forward (Depth), $+X$ Right with natural room scaling ($S = 5.0\times$).
+3. **3D-Grounded Instance Association & Object Permanence**:
+   - Distinguish multiple objects of the same semantic class by 3D spatial clustering and assign unique, permanent instance IDs.
+   - Objects maintain continuous 3D spatial permanence (`✦ PERSISTENT MEMORY`) after leaving camera field-of-view or being occluded, including while carried across rooms.
 
-4. **Juxtaposed Visualization Standards in Rerun**:
+4. **Raw VGGT-Ω Coordinates**:
+   - Never reintroduce manual scale or axis permutations; VGGT-Ω is the single source of truth for coordinates and scale.
+
+5. **Juxtaposed Visualization Standards in Rerun**:
    - High ingestion framerate (15 FPS, 648 frames) for fluid video playback.
    - Pristine egocentric video on the left, synchronized 3D spatial memory on the right, without 2D overlay clutter.
 

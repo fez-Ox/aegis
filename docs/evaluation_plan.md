@@ -57,6 +57,26 @@ a short development pilot and then measured on Demo04.
   persistence recall >= 0.90. Report mean absolute centre error rather than
   claiming metric accuracy without physical measurements.
 
+### Rooms (region-level spatial memory)
+
+Following the Hydra region-evaluation protocol, score the Rooms level of the
+hierarchy (`Room -> Anchor -> Object`) against per-dataset room ground truth:
+
+- **Room region precision/recall:** annotate room boundaries and labels per
+  evaluation video; a predicted `RoomRegion` is correct when its footprint
+  contains the ground-truth region centroid and its label matches (typed
+  rooms) or is neutral (`Room #N`, which only validates segmentation).
+- **Room segmentation accuracy:** fraction of keyframe camera positions whose
+  `room_for_point` assignment matches the ground-truth room at that timestamp.
+- **Room transition events:** recall/precision of `room_change` events with a
+  +/-1 second boundary tolerance, mirroring the object-event protocol.
+- **Room-grounded query accuracy:** correct-room rate for queries whose answer
+  names a room (`in the Kitchen`); a right anchor in the wrong room counts as
+  wrong answer.
+- Proposed targets: room segmentation accuracy >= 0.90, room change event F1
+  >= 0.70, room-grounded query correct-room rate >= 0.90 once caregivers
+  rename rooms in the persisted graph.
+
 ### Query/API/mobile
 
 - **Dataset isolation:** cross-dataset leakage rate must be exactly 0. Run
