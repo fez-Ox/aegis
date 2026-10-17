@@ -7,6 +7,19 @@ from aegis.memory.scene_graph import (
 )
 
 
+def _identity_pose(frame_id: int, x: float, y: float, z: float) -> dict:
+    return {
+        "frame_id": frame_id,
+        "timestamp": frame_id * 0.4,
+        "matrix": [
+            [1.0, 0.0, 0.0, x],
+            [0.0, 1.0, 0.0, y],
+            [0.0, 0.0, 1.0, z],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    }
+
+
 def test_extract_spatial_anchors() -> None:
     cab1 = BoundingBox3D(
         frame_id=1,
@@ -434,3 +447,185 @@ def test_bottle_occlusion_and_relocation_r4dsg() -> None:
     ev = next(e for e in graph.events if "bottle" in e["object"].lower())
     assert "Desk #1" in ev["source_anchor"]
     assert "Desk #2" in ev["destination_anchor"]
+
+
+def test_room_grounding_flows_to_anchors_and_entries() -> None:
+    """Room binding: anchors inherit their room and objects follow their anchor."""
+    desk1 = BoundingBox3D(
+        frame_id=10,
+        timestamp=1.0,
+        track_id=1,
+        label="desk",
+        confidence=0.9,
+        center=(0.1, 0.2, 0.3),
+        size=(0.3, 0.1, 0.1),
+        bbox_2d=(10.0, 10.0, 100.0, 100.0),
+    )
+    desk2 = BoundingBox3D(
+        frame_id=30,
+        timestamp=3.0,
+        track_id=2,
+        label="desk",
+        confidence=0.9,
+        center=(6.0, 0.0, 0.5),
+        size=(0.3, 0.1, 0.1),
+        bbox_2d=(10.0, 10.0, 100.0, 100.0),
+    )
+    bottle_frame10 = BoundingBox3D(
+        frame_id=10,
+        timestamp=1.0,
+        track_id=3,
+        label="bottle",
+        confidence=0.9,
+        center=(0.12, 0.18, 0.28),
+        size=(0.05, 0.05, 0.1),
+        bbox_2d=(20.0, 20.0, 40.0, 60.0),
+        spatial_state="on_surface",
+    )
+    bottle_frame30 = BoundingBox3D(
+        frame_id=30,
+        timestamp=3.0,
+        track_id=3,
+        label="bottle",
+        confidence=0.9,
+        center=(5.95, 0.05, 0.55),
+        size=(0.05, 0.05, 0.1),
+        bbox_2d=(20.0, 20.0, 40.0, 60.0),
+        spatial_state="on_surface",
+    )
+
+    poses = [
+        _identity_pose(0, 0.0, 1.5, 0.0),
+        _identity_pose(1, 0.1, 1.5, 0.1),
+        _identity_pose(2, 0.2, 1.5, 0.0),
+        _identity_pose(3, 6.0, 1.5, 0.2),
+        _identity_pose(4, 6.1, 1.5, 0.1),
+        _identity_pose(5, 6.2, 1.5, 0.3),
+    ]
+    all_frames = [0, 1, 2, 3, 4, 5, 10, 12, 20, 30]
+    all_ts = [0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 4.0, 4.8, 8.0, 12.0]
+
+    graph = build_relative_4d_scene_graph(
+        [desk1, desk2, bottle_frame10, bottle_frame30],
+        all_frames,
+        all_ts,
+        camera_poses=poses,
+    )
+
+    # Two trajectory rooms estimated from the wearer waiting at two desks.
+    assert len(graph.rooms) == 2
+    room_labels = {room.label for room in graph.rooms}
+    assert room_labels == {"Room #1", "Room #2"}
+
+    # Anchors bind to the room containing their centroid.
+    desk1_anchor = next(a for a in graph.anchors if a.label == "Desk #1")
+    desk2_anchor = next(a for a in graph.anchors if a.label == "Desk #2")
+    assert desk1_anchor.room_label == "Room #1"
+    assert desk2_anchor.room_label == "Room #2"
+
+    # Bottle entries inherit their anchor's room.
+    b10 = next(
+        e
+        for e in graph.memory_timeline[10]
+        if "bottle" in e.label.lower() and e.is_active_view
+    )
+    assert b10.room_label == "Room #1"
+    b30 = next(
+        e
+        for e in graph.memory_timeline[30]
+        if "bottle" in e.label.lower() and e.is_active_view
+    )
+    assert b30.room_label == "Room #2"
+
+    # Serialization exposes the rooms layer.
+    data = graph.as_dict()
+    assert len(data["rooms"]) == 2
+    assert all("room_label" in anchor for anchor in data["anchors"])
+
+
+def test_carried_object_inherits_wearer_room_and_room_change_event() -> None:
+    cabinet = BoundingBox3D(
+        frame_id=1,
+        timestamp=0.1,
+        track_id=10,
+        label="storage cabinet",
+        confidence=0.9,
+        center=(0.0, 3.0, 1.0),
+        size=(1.0, 0.6, 1.5),
+        bbox_2d=(10.0, 10.0, 100.0, 100.0),
+    )
+    shoes_in_hand = BoundingBox3D(
+        frame_id=300,
+        timestamp=20.0,
+        track_id=1,
+        label="shoes",
+        confidence=0.9,
+        center=(0.0, 0.5, 0.2),
+        size=(0.2, 0.2, 0.2),
+        bbox_2d=(50.0, 50.0, 120.0, 120.0),
+        spatial_state="in_hand",
+        is_in_hand=True,
+    )
+    poses = {
+        300: _identity_pose(300, 0.0, 1.5, 0.0)["matrix"],
+        350: _identity_pose(350, 0.0, 1.5, 8.0)["matrix"],  # Walked 8 m away
+        400: _identity_pose(400, 0.0, 1.5, 8.1)["matrix"],
+    }
+
+    graph = build_relative_4d_scene_graph(
+        [cabinet, shoes_in_hand],
+        [300, 350, 400],
+        [20.0, 23.3, 26.6],
+        camera_poses=poses,
+        min_zone_keyframes=1,
+    )
+
+    f300 = graph.memory_timeline[300]
+    shoes_300 = next(e for e in f300 if "shoe" in e.label.lower())
+    assert shoes_300.relation == "carried_by_user"
+    assert shoes_300.room_label == "Room #1"
+
+    # Occluded while carried: the room follows the camera wearer.
+    shoes_350 = next(e for e in graph.memory_timeline[350] if "shoe" in e.label.lower())
+    assert shoes_350.relation == "carried_by_user"
+    assert shoes_350.room_label == "Room #2"
+
+    room_changes = [ev for ev in graph.events if ev["event_type"] == "room_change"]
+    assert len(room_changes) == 1
+    assert room_changes[0]["source_room"] == "Room #1"
+    assert room_changes[0]["destination_room"] == "Room #2"
+    assert room_changes[0]["object"] == "Camera Wearer"
+
+
+def test_room_landmarks_are_excluded_from_object_memory() -> None:
+    """Doors and beds are architectural evidence, never misplaced objects."""
+    sofa = BoundingBox3D(
+        frame_id=1,
+        timestamp=0.2,
+        track_id=1,
+        label="sofa",
+        confidence=0.9,
+        center=(0.0, 0.0, 0.5),
+        size=(1.5, 0.8, 0.6),
+        bbox_2d=(10.0, 10.0, 100.0, 100.0),
+    )
+    keys = BoundingBox3D(
+        frame_id=1,
+        timestamp=0.2,
+        track_id=2,
+        label="keys",
+        confidence=0.9,
+        center=(0.2, 0.0, 0.7),
+        size=(0.05, 0.05, 0.05),
+        bbox_2d=(30.0, 30.0, 50.0, 50.0),
+    )
+
+    graph = build_relative_4d_scene_graph([sofa, keys], [1, 2], [0.2, 0.4])
+    labels = {
+        entry.label for entries in graph.memory_timeline.values() for entry in entries
+    }
+    assert all("sofa" not in label.lower() for label in labels)
+    assert "Keys #1" in labels
+    # The landmark still typed the implicit/trajectory room as Living Room when
+    # a trajectory exists; without one, the room stays neutral.
+    assert all(room.label in {"Room #1", "Living Room"} for room in graph.rooms)

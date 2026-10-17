@@ -15,6 +15,13 @@ from typing import Any
 import numpy as np
 
 from aegis.core.models import BoundingBox3D
+from aegis.memory.rooms import (
+    RoomRegion,
+    extract_room_regions,
+    implicit_room_from_anchors,
+    is_room_landmark_label,
+    room_for_point,
+)
 
 ANCHOR_CLASS_NAMES = {
     "cabinet",
@@ -45,15 +52,22 @@ class SpatialAnchor:
     center: tuple[float, float, float]
     size: tuple[float, float, float]
     observations_count: int = 1
+    room_id: int | None = None
+    room_label: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "anchor_id": self.anchor_id,
             "label": self.label,
             "center": list(self.center),
             "size": list(self.size),
             "observations_count": self.observations_count,
         }
+        if self.room_id is not None:
+            data["room_id"] = self.room_id
+        if self.room_label is not None:
+            data["room_label"] = self.room_label
+        return data
 
 
 @dataclass
@@ -78,6 +92,8 @@ class ObjectMemoryEntry:
     is_in_hand: bool = False
     carrier: str | None = None
     in_hand_offset: tuple[float, float, float] | None = None
+    room_id: int | None = None
+    room_label: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -100,6 +116,10 @@ class ObjectMemoryEntry:
             data["carrier"] = self.carrier
         if self.in_hand_offset is not None:
             data["in_hand_offset"] = list(self.in_hand_offset)
+        if self.room_id is not None:
+            data["room_id"] = self.room_id
+        if self.room_label is not None:
+            data["room_label"] = self.room_label
         if self.rotation is not None:
             data["rotation"] = list(self.rotation)
         if self.yaw is not None:
@@ -112,12 +132,14 @@ class Relative4DSceneGraph:
     """Relative 4D Scene Graph memory store."""
 
     anchors: list[SpatialAnchor] = field(default_factory=list)
+    rooms: list[RoomRegion] = field(default_factory=list)
     memory_timeline: dict[int, list[ObjectMemoryEntry]] = field(default_factory=dict)
     events: list[dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "anchors": [anchor.as_dict() for anchor in self.anchors],
+            "rooms": [room.as_dict() for room in self.rooms],
             "timeline": {
                 str(frame_id): [entry.as_dict() for entry in entries]
                 for frame_id, entries in self.memory_timeline.items()
@@ -419,6 +441,8 @@ def _build_events(
                         if curr_rel == "carried_by_user"
                         else "Storage Cabinet #1"
                     ),
+                    "source_room": previous_end.room_label,
+                    "destination_room": current_start.room_label,
                     "source_relation": prev_rel,
                     "destination_relation": curr_rel,
                     "start_time": previous_end.timestamp,
@@ -433,13 +457,74 @@ def _build_events(
     return events
 
 
+def _wearer_room_events(
+    wearer_room_by_frame: Mapping[int, RoomRegion | None],
+    timestamps_by_frame: Mapping[int, float],
+) -> list[dict[str, Any]]:
+    """Compress the camera wearer's room trajectory into room_change events."""
+
+    events: list[dict[str, Any]] = []
+    ordered_frames = sorted(
+        (fid for fid, room in wearer_room_by_frame.items() if room is not None),
+        key=lambda fid: (timestamps_by_frame.get(fid, 0.0), fid),
+    )
+    previous_frame: int | None = None
+    for frame_id in ordered_frames:
+        room = wearer_room_by_frame[frame_id]
+        if previous_frame is not None:
+            previous_room = wearer_room_by_frame[previous_frame]
+            if previous_room is not None and room.room_id != previous_room.room_id:
+                events.append(
+                    {
+                        "event_id": "",
+                        "event_type": "room_change",
+                        "instance_id": 0,
+                        "object": "Camera Wearer",
+                        "source_anchor": None,
+                        "destination_anchor": None,
+                        "source_room": previous_room.label,
+                        "destination_room": room.label,
+                        "source_relation": None,
+                        "destination_relation": None,
+                        "start_time": float(
+                            timestamps_by_frame.get(previous_frame, 0.0)
+                        ),
+                        "end_time": float(timestamps_by_frame.get(frame_id, 0.0)),
+                        "source_frame": previous_frame,
+                        "destination_frame": frame_id,
+                        "evidence_frames": [previous_frame, frame_id],
+                    }
+                )
+        previous_frame = frame_id
+    return events
+
+
+def _renumber_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sort events chronologically and reassign stable event IDs."""
+
+    ordered = sorted(
+        events,
+        key=lambda event: (
+            float(event.get("start_time", 0.0)),
+            event["event_type"] != "room_change",
+        ),
+    )
+    for index, event in enumerate(ordered):
+        event["event_id"] = f"event_{index + 1:04d}"
+    return ordered
+
+
 def build_relative_4d_scene_graph(
     boxes_3d: Sequence[BoundingBox3D],
     all_frame_ids: Sequence[int],
     timestamps: Sequence[float],
     camera_poses: Sequence[Any] | Mapping[int, Any] | None = None,
+    *,
+    estimate_rooms: bool = True,
+    zone_link_radius: float = 1.5,
+    min_zone_keyframes: int = 3,
 ) -> Relative4DSceneGraph:
-    """Build persistent object memory, anchor-relative states, in-hand kinematics, and transitions."""
+    """Build persistent object memory, anchor-relative states, in-hand kinematics, room grounding, and transitions."""
 
     anchors = extract_spatial_anchors(boxes_3d)
 
@@ -466,9 +551,43 @@ def build_relative_4d_scene_graph(
                 t_vec = m[:3, 3]
                 pose_by_frame[fid_k] = (r_mat, t_vec)
 
+    # ---- Room estimation (Rooms -> Anchors -> Objects hierarchy) ----------
+    rooms: list[RoomRegion] = []
+    if estimate_rooms:
+        rooms = extract_room_regions(
+            camera_poses,
+            boxes_3d,
+            zone_link_radius=zone_link_radius,
+            min_zone_keyframes=min_zone_keyframes,
+        )
+    if not rooms:
+        # Anchor-only memories (no usable trajectory) still get room-grounded
+        # answers through a single implicit room around the anchors.
+        rooms = implicit_room_from_anchors([anchor.center for anchor in anchors])
+
+    for anchor in anchors:
+        bound_room = room_for_point(anchor.center, rooms)
+        if bound_room is not None:
+            anchor.room_id = bound_room.room_id
+            anchor.room_label = bound_room.label
+
+    timestamps_by_frame = {
+        int(frame_id): float(timestamp)
+        for frame_id, timestamp in zip(all_frame_ids, timestamps, strict=False)
+    }
+    wearer_room_by_frame: dict[int, RoomRegion | None] = {}
+    for pose_frame_id, (_rotation, t_vec) in pose_by_frame.items():
+        wearer_room_by_frame[pose_frame_id] = room_for_point(t_vec, rooms)
+
     by_frame: dict[int, list[BoundingBox3D]] = {}
     for box in boxes_3d:
-        if not _is_anchor_label(box.label) and not getattr(box, "is_hand", False):
+        # Room landmarks (doors, beds, sofas, ...) feed room estimation only;
+        # they are architectural context, not personal-object memories.
+        if (
+            not _is_anchor_label(box.label)
+            and not is_room_landmark_label(box.label)
+            and not getattr(box, "is_hand", False)
+        ):
             by_frame.setdefault(int(box.frame_id), []).append(box)
 
     last_known_by_instance: dict[int, dict[str, Any]] = {}
@@ -599,6 +718,21 @@ def build_relative_4d_scene_graph(
                 else None
             )
 
+            # Room grounding: carried objects follow the camera wearer's room,
+            # placed objects inherit their anchor's room, unbound objects use
+            # their own 3D position.
+            if relation == "carried_by_user":
+                wearer_room = wearer_room_by_frame.get(frame_id)
+                entry_room_id = wearer_room.room_id if wearer_room else None
+                entry_room_label = wearer_room.label if wearer_room else None
+            elif anchor.room_label is not None:
+                entry_room_id = anchor.room_id
+                entry_room_label = anchor.room_label
+            else:
+                fallback_room = room_for_point(b_center, rooms)
+                entry_room_id = fallback_room.room_id if fallback_room else None
+                entry_room_label = fallback_room.label if fallback_room else None
+
             entry = ObjectMemoryEntry(
                 frame_id=frame_id,
                 timestamp=float(timestamp),
@@ -618,6 +752,8 @@ def build_relative_4d_scene_graph(
                 is_in_hand=is_currently_in_hand,
                 carrier="camera_wearer" if is_currently_in_hand else None,
                 in_hand_offset=offset_val,
+                room_id=entry_room_id,
+                room_label=entry_room_label,
             )
             frame_entries.append(entry)
 
@@ -630,6 +766,8 @@ def build_relative_4d_scene_graph(
                 "relative_vector": entry.relative_vector,
                 "relative_distance": entry.relative_distance,
                 "relation": relation,
+                "room_id": entry_room_id,
+                "room_label": entry_room_label,
                 "last_seen_timestamp": float(timestamp),
                 "rotation": box.rotation,
                 "yaw": box.yaw,
@@ -710,6 +848,19 @@ def build_relative_4d_scene_graph(
                 rel_vec = np.asarray(current_center, dtype=np.float64) - anc_center
                 rel_dist = float(np.linalg.norm(rel_vec))
 
+                # Room grounding for propagated entries
+                if current_rel == "carried_by_user":
+                    wearer_room = wearer_room_by_frame.get(frame_id)
+                    entry_room_id = wearer_room.room_id if wearer_room else None
+                    entry_room_label = wearer_room.label if wearer_room else None
+                elif cur_anchor is not None and cur_anchor.room_label is not None:
+                    entry_room_id = cur_anchor.room_id
+                    entry_room_label = cur_anchor.room_label
+                else:
+                    fallback_room = room_for_point(current_center, rooms)
+                    entry_room_id = fallback_room.room_id if fallback_room else None
+                    entry_room_label = fallback_room.label if fallback_room else None
+
                 frame_entries.append(
                     ObjectMemoryEntry(
                         frame_id=frame_id,
@@ -730,14 +881,21 @@ def build_relative_4d_scene_graph(
                         is_in_hand=is_in_hand,
                         carrier=carrier,
                         in_hand_offset=offset_val,
+                        room_id=entry_room_id,
+                        room_label=entry_room_label,
                     )
                 )
+                lk["room_id"] = entry_room_id
+                lk["room_label"] = entry_room_label
 
         timeline[frame_id] = frame_entries
 
     events = _build_events(timeline)
+    events.extend(_wearer_room_events(wearer_room_by_frame, timestamps_by_frame))
+    events = _renumber_events(events)
     return Relative4DSceneGraph(
         anchors=anchors,
+        rooms=rooms,
         memory_timeline=timeline,
         events=events,
     )

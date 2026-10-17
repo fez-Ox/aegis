@@ -1,42 +1,94 @@
 {
-  "schema_version": 1,
-  "dataset_id": "demo01",
   "anchors": [
     {
       "anchor_id": 1,
+      "center": [
+        0.0,
+        0.0,
+        0.8
+      ],
       "label": "Storage Cabinet #1",
-      "center": [0.0, 0.0, 0.8],
-      "size": [0.9, 0.5, 1.5]
+      "room_id": 1,
+      "room_label": "Room #1",
+      "size": [
+        0.9,
+        0.5,
+        1.5
+      ]
     }
   ],
+  "dataset_id": "demo01",
   "events": [
     {
+      "destination_anchor": "Storage Cabinet #1",
+      "destination_relation": "inside",
+      "destination_room": "Room #1",
+      "end_time": 35.6,
       "event_id": "event_0001",
       "event_type": "placement",
       "instance_id": 1,
       "object": "Shoes #1 [Active Pair]",
-      "source_relation": "on_floor",
-      "destination_relation": "inside",
       "source_anchor": "Floor Entrance",
-      "destination_anchor": "Storage Cabinet #1",
-      "start_time": 8.0,
-      "end_time": 35.6
+      "source_relation": "on_floor",
+      "source_room": "Room #1",
+      "start_time": 8.0
     }
   ],
+  "rooms": [
+    {
+      "centroid": [
+        0.0,
+        0.0,
+        0.8
+      ],
+      "end_timestamp": 42.8,
+      "evidence_labels": [],
+      "footprint": [
+        [
+          -1.0,
+          0.0,
+          -1.0
+        ],
+        [
+          1.0,
+          0.0,
+          -1.0
+        ],
+        [
+          1.0,
+          0.0,
+          1.0
+        ],
+        [
+          -1.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "keyframe_count": 108,
+      "label": "Room #1",
+      "room_id": 1,
+      "room_type": "Room",
+      "start_timestamp": 0.0
+    }
+  ],
+  "schema_version": 1,
   "timeline": {
     "642": [
       {
-        "frame_id": 642,
-        "timestamp": 42.81,
-        "instance_id": 1,
-        "label": "Shoes #1 [Active Pair]",
         "anchor_id": 1,
         "anchor_label": "Storage Cabinet #1",
+        "frame_id": 642,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Shoes #1 [Active Pair]",
+        "last_seen_timestamp": 35.6,
         "relation": "inside",
         "relative_distance": 0.09,
-        "last_seen_timestamp": 35.6,
-        "is_active_view": false,
-        "is_in_hand": false
+        "room_id": 1,
+        "room_label": "Room #1",
+        "timestamp": 42.81
       }
     ]
   }

@@ -1,61 +1,127 @@
 {
-  "schema_version": 1,
-  "dataset_id": "demo03",
   "anchors": [
     {
       "anchor_id": 1,
+      "center": [
+        0.0,
+        0.0,
+        1.0
+      ],
       "label": "Refrigerator #1",
-      "center": [0.0, 0.0, 1.0],
-      "size": [1.0, 0.8, 1.8]
+      "room_id": 1,
+      "room_label": "Kitchen",
+      "size": [
+        1.0,
+        0.8,
+        1.8
+      ]
     },
     {
       "anchor_id": 2,
+      "center": [
+        1.0,
+        0.0,
+        0.9
+      ],
       "label": "Sink #2",
-      "center": [1.0, 0.0, 0.9],
-      "size": [1.0, 0.8, 1.0]
+      "room_id": 1,
+      "room_label": "Kitchen",
+      "size": [
+        1.0,
+        0.8,
+        1.0
+      ]
     }
   ],
+  "dataset_id": "demo03",
   "events": [
     {
+      "destination_anchor": "Sink #2",
+      "destination_relation": "on_surface",
+      "destination_room": "Kitchen",
+      "end_time": 20.0,
       "event_id": "event_0001",
       "event_type": "state_change",
       "instance_id": 1,
       "object": "Cooking Pot #1",
-      "source_relation": "carried_by_user",
-      "destination_relation": "on_surface",
       "source_anchor": "User Hands",
-      "destination_anchor": "Sink #2",
-      "start_time": 10.0,
-      "end_time": 20.0
+      "source_relation": "carried_by_user",
+      "source_room": "Kitchen",
+      "start_time": 10.0
     }
   ],
+  "rooms": [
+    {
+      "centroid": [
+        0.5,
+        0.0,
+        0.95
+      ],
+      "end_timestamp": 30.0,
+      "evidence_labels": [
+        "Refrigerator"
+      ],
+      "footprint": [
+        [
+          -1.0,
+          0.0,
+          -1.0
+        ],
+        [
+          2.5,
+          0.0,
+          -1.0
+        ],
+        [
+          2.5,
+          0.0,
+          2.0
+        ],
+        [
+          -1.0,
+          0.0,
+          2.0
+        ]
+      ],
+      "keyframe_count": 132,
+      "label": "Kitchen",
+      "room_id": 1,
+      "room_type": "Kitchen",
+      "start_timestamp": 0.0
+    }
+  ],
+  "schema_version": 1,
   "timeline": {
     "100": [
       {
-        "frame_id": 100,
-        "timestamp": 10.0,
-        "instance_id": 1,
-        "label": "Cooking Pot #1",
         "anchor_id": 2,
         "anchor_label": "Sink #2",
+        "frame_id": 100,
+        "instance_id": 1,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Cooking Pot #1",
+        "last_seen_timestamp": 20.0,
         "relation": "on_surface",
         "relative_distance": 0.25,
-        "last_seen_timestamp": 20.0,
-        "is_active_view": true,
-        "is_in_hand": false
+        "room_id": 1,
+        "room_label": "Kitchen",
+        "timestamp": 10.0
       },
       {
-        "frame_id": 100,
-        "timestamp": 10.0,
-        "instance_id": 2,
-        "label": "Bowl #1",
         "anchor_id": 1,
         "anchor_label": "Refrigerator #1",
+        "frame_id": 100,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Bowl #1",
+        "last_seen_timestamp": 10.0,
         "relation": "on_surface",
         "relative_distance": 0.2,
-        "last_seen_timestamp": 10.0,
-        "is_active_view": true,
-        "is_in_hand": false
+        "room_id": 1,
+        "room_label": "Kitchen",
+        "timestamp": 10.0
       }
     ]
   }

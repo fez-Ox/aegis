@@ -1,48 +1,110 @@
 {
-  "schema_version": 1,
-  "dataset_id": "Demo06-Self",
   "anchors": [
     {
       "anchor_id": 1,
+      "center": [
+        0.0,
+        0.0,
+        0.8
+      ],
       "label": "Desk #1",
-      "center": [0.0, 0.0, 0.8],
-      "size": [1.0, 0.8, 0.8]
+      "room_id": 1,
+      "room_label": "Room #1",
+      "size": [
+        1.0,
+        0.8,
+        0.8
+      ]
     },
     {
       "anchor_id": 2,
+      "center": [
+        1.0,
+        0.0,
+        0.8
+      ],
       "label": "Desk #2",
-      "center": [1.0, 0.0, 0.8],
-      "size": [1.0, 0.8, 0.8]
+      "room_id": 1,
+      "room_label": "Room #1",
+      "size": [
+        1.0,
+        0.8,
+        0.8
+      ]
     }
   ],
+  "dataset_id": "Demo06-Self",
   "events": [
     {
+      "destination_anchor": "Desk #2",
+      "destination_relation": "on_surface",
+      "destination_room": "Room #1",
+      "end_time": 15.0,
       "event_id": "event_0001",
       "event_type": "anchor_change",
       "instance_id": 1,
       "object": "Bottle #1",
-      "source_relation": "on_surface",
-      "destination_relation": "on_surface",
       "source_anchor": "Desk #1",
-      "destination_anchor": "Desk #2",
-      "start_time": 5.0,
-      "end_time": 15.0
+      "source_relation": "on_surface",
+      "source_room": "Room #1",
+      "start_time": 5.0
     }
   ],
+  "rooms": [
+    {
+      "centroid": [
+        0.5,
+        0.0,
+        0.8
+      ],
+      "end_timestamp": 20.0,
+      "evidence_labels": [],
+      "footprint": [
+        [
+          -1.0,
+          0.0,
+          -1.0
+        ],
+        [
+          2.0,
+          0.0,
+          -1.0
+        ],
+        [
+          2.0,
+          0.0,
+          2.0
+        ],
+        [
+          -1.0,
+          0.0,
+          2.0
+        ]
+      ],
+      "keyframe_count": 96,
+      "label": "Room #1",
+      "room_id": 1,
+      "room_type": "Room",
+      "start_timestamp": 0.0
+    }
+  ],
+  "schema_version": 1,
   "timeline": {
     "100": [
       {
-        "frame_id": 100,
-        "timestamp": 10.0,
-        "instance_id": 1,
-        "label": "Bottle #1",
         "anchor_id": 2,
         "anchor_label": "Desk #2",
+        "frame_id": 100,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Bottle #1",
+        "last_seen_timestamp": 15.0,
         "relation": "on_surface",
         "relative_distance": 0.05,
-        "last_seen_timestamp": 15.0,
-        "is_active_view": false,
-        "is_in_hand": false
+        "room_id": 1,
+        "room_label": "Room #1",
+        "timestamp": 10.0
       }
     ]
   }
