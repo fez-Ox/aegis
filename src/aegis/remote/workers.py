@@ -379,7 +379,13 @@ def run_detect_and_lift(
         pose_records = pose_data.get("poses", [])
 
     scene_graph = build_relative_4d_scene_graph(
-        lifted_boxes, all_kf_ids, all_ts, camera_poses=pose_records
+        lifted_boxes,
+        all_kf_ids,
+        all_ts,
+        camera_poses=pose_records,
+        estimate_rooms=config.memory.rooms.enabled,
+        zone_link_radius=config.memory.rooms.zone_link_radius,
+        min_zone_keyframes=config.memory.rooms.min_zone_keyframes,
     )
 
     paths.objects_json.parent.mkdir(parents=True, exist_ok=True)
@@ -424,7 +430,9 @@ def run_detect_and_lift(
                 "pointcloud_file": str(paths.pointcloud_ply),
             },
             "layer_2": {
-                "description": "R4DSG Persistent Object Tracker & Relational States",
+                "description": "R4DSG Persistent Object Tracker & Relational States "
+                "(Rooms -> Anchors -> Objects hierarchy)",
+                "room_count": len(scene_graph.rooms),
                 "total_instances": len(motion_trails),
                 "total_boxes_3d": len(lifted_boxes),
                 "objects": serialize_boxes_3d(lifted_boxes),
@@ -486,6 +494,86 @@ TRACK_PALETTE = [
 
 def _track_color(track_id: int) -> list[int]:
     return TRACK_PALETTE[(track_id - 1) % len(TRACK_PALETTE)]
+
+
+ROOM_PALETTE = [
+    [59, 130, 246],  # Blue
+    [234, 179, 8],  # Amber
+    [16, 185, 129],  # Emerald
+    [236, 72, 153],  # Pink
+    [168, 85, 247],  # Purple
+    [20, 184, 166],  # Teal
+    [249, 115, 22],  # Orange
+    [148, 163, 184],  # Slate
+]
+
+
+def _room_color(room_id: int) -> list[int]:
+    return ROOM_PALETTE[(room_id - 1) % len(ROOM_PALETTE)]
+
+
+def _room_colored_trajectory(
+    pose_records: Sequence[Mapping[str, Any]],
+    trajectory_points: np.ndarray,
+    rooms: Sequence[Mapping[str, Any]],
+) -> tuple[list[np.ndarray], list[list[int]]] | None:
+    """Split the camera trajectory into per-room colored line strips.
+
+    Returns None when no room information is available so callers can fall
+    back to the single-color trajectory.
+    """
+
+    from aegis.memory.rooms import RoomRegion, room_for_point
+
+    if not rooms or len(trajectory_points) != len(pose_records):
+        return None
+    room_regions = [
+        RoomRegion(
+            room_id=int(room.get("room_id", 0)),
+            label=str(room.get("label", "Room")),
+            room_type=str(room.get("room_type", "Room")),
+            centroid=tuple(float(v) for v in room.get("centroid", (0.0, 0.0, 0.0))),
+            footprint=[
+                tuple(float(v) for v in point) for point in room.get("footprint", [])
+            ],
+        )
+        for room in rooms
+    ]
+    strips: list[np.ndarray] = []
+    colors: list[list[int]] = []
+    current_points: list[np.ndarray] = []
+    current_room_id: int | None = None
+    for index, record in enumerate(pose_records):
+        position = trajectory_points[index]
+        matrix = record.get("matrix")
+        if matrix is None:
+            room_region = None
+        else:
+            translation = np.asarray(matrix, dtype=np.float64)[:3, 3]
+            room_region = room_for_point(translation, room_regions)
+        room_id = room_region.room_id if room_region is not None else None
+        if room_id != current_room_id and current_points:
+            strips.append(np.asarray(current_points, dtype=np.float32))
+            colors.append(
+                _room_color(current_room_id)
+                if current_room_id is not None
+                else [251, 191, 36]
+            )
+            current_points = []
+        current_points.append(
+            [float(position[0]), float(position[1]), float(position[2])]
+        )
+        current_room_id = room_id
+    if current_points:
+        strips.append(np.asarray(current_points, dtype=np.float32))
+        colors.append(
+            _room_color(current_room_id)
+            if current_room_id is not None
+            else [251, 191, 36]
+        )
+    if not strips:
+        return None
+    return strips, colors
 
 
 def _memory_label_key(label: str) -> str:
@@ -577,86 +665,20 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         ]
     )
 
-    SCALE = 5.0
+    def to_scene(pt: Sequence[float]) -> list[float]:
+        """Raw VGGT-Ω world point (single source of truth for scale)."""
 
-    def to_zup(pt: Sequence[float]) -> list[float]:
-        return [float(pt[0]) * SCALE, float(pt[2]) * SCALE, -float(pt[1]) * SCALE]
+        return [float(pt[0]), float(pt[1]), float(pt[2])]
 
-    def to_zup_size(sz: Sequence[float]) -> list[float]:
-        return [float(sz[0]) * SCALE, float(sz[2]) * SCALE, float(sz[1]) * SCALE]
+    def to_scene_size(sz: Sequence[float]) -> list[float]:
+        return [float(sz[0]), float(sz[1]), float(sz[2])]
 
-    def to_zup_direction(direction: Sequence[float]) -> np.ndarray:
-        return np.asarray(
-            [float(direction[0]), float(direction[2]), -float(direction[1])],
-            dtype=np.float64,
-        )
+    def raw_rotation(rotation: Sequence[float] | None) -> list[float]:
+        """Pass-through quaternion (xyzw) with a neutral identity fallback."""
 
-    def quaternion_to_matrix(quaternion: Sequence[float]) -> np.ndarray:
-        qx, qy, qz, qw = (float(value) for value in quaternion)
-        norm = float(np.linalg.norm([qx, qy, qz, qw]))
-        if norm <= 1e-8:
-            return np.eye(3, dtype=np.float64)
-        qx, qy, qz, qw = (value / norm for value in (qx, qy, qz, qw))
-        return np.asarray(
-            [
-                [
-                    1.0 - 2.0 * (qy * qy + qz * qz),
-                    2.0 * (qx * qy - qz * qw),
-                    2.0 * (qx * qz + qy * qw),
-                ],
-                [
-                    2.0 * (qx * qy + qz * qw),
-                    1.0 - 2.0 * (qx * qx + qz * qz),
-                    2.0 * (qy * qz - qx * qw),
-                ],
-                [
-                    2.0 * (qx * qz - qy * qw),
-                    2.0 * (qy * qz + qx * qw),
-                    1.0 - 2.0 * (qx * qx + qy * qy),
-                ],
-            ],
-            dtype=np.float64,
-        )
-
-    def matrix_to_quaternion(matrix: np.ndarray) -> list[float]:
-        trace = float(np.trace(matrix))
-        if trace > 0.0:
-            scale = np.sqrt(trace + 1.0) * 2.0
-            qw = 0.25 * scale
-            qx = (matrix[2, 1] - matrix[1, 2]) / scale
-            qy = (matrix[0, 2] - matrix[2, 0]) / scale
-            qz = (matrix[1, 0] - matrix[0, 1]) / scale
-        elif matrix[0, 0] > matrix[1, 1] and matrix[0, 0] > matrix[2, 2]:
-            scale = np.sqrt(1.0 + matrix[0, 0] - matrix[1, 1] - matrix[2, 2]) * 2.0
-            qw = (matrix[2, 1] - matrix[1, 2]) / scale
-            qx = 0.25 * scale
-            qy = (matrix[0, 1] + matrix[1, 0]) / scale
-            qz = (matrix[0, 2] + matrix[2, 0]) / scale
-        elif matrix[1, 1] > matrix[2, 2]:
-            scale = np.sqrt(1.0 + matrix[1, 1] - matrix[0, 0] - matrix[2, 2]) * 2.0
-            qw = (matrix[0, 2] - matrix[2, 0]) / scale
-            qx = (matrix[0, 1] + matrix[1, 0]) / scale
-            qy = 0.25 * scale
-            qz = (matrix[1, 2] + matrix[2, 1]) / scale
-        else:
-            scale = np.sqrt(1.0 + matrix[2, 2] - matrix[0, 0] - matrix[1, 1]) * 2.0
-            qw = (matrix[1, 0] - matrix[0, 1]) / scale
-            qx = (matrix[0, 2] + matrix[2, 0]) / scale
-            qy = (matrix[1, 2] + matrix[2, 1]) / scale
-            qz = 0.25 * scale
-        return [float(qx), float(qy), float(qz), float(qw)]
-
-    def zup_box_quaternion(rotation: Sequence[float] | None) -> list[float]:
         if rotation is None or len(rotation) != 4:
             return [0.0, 0.0, 0.0, 1.0]
-        # The displayed scene uses A=[x,z,-y]. Conjugating by A keeps box
-        # orientation consistent with the coordinate permutation.
-        axis_change = np.asarray(
-            [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]],
-            dtype=np.float64,
-        )
-        raw_rotation = quaternion_to_matrix(rotation)
-        return matrix_to_quaternion(axis_change @ raw_rotation @ axis_change.T)
+        return [float(value) for value in rotation]
 
     def camera_frustum(record: Mapping[str, Any], depth: float) -> np.ndarray:
         matrix = np.asarray(record["matrix"], dtype=np.float64)
@@ -674,8 +696,8 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
             dtype=np.float64,
         )
         corners_world = corners_camera @ rotation.T + origin
-        points = [to_zup(origin)]
-        points.extend(to_zup(point) for point in corners_world)
+        points = [to_scene(origin)]
+        points.extend(to_scene(point) for point in corners_world)
         # A closed pyramid wireframe with rays to two additional corners.
         return np.asarray(
             [
@@ -709,12 +731,13 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         iy = np.interp(all_fid_arr, kf_ids, kf_pos[:, 1])
         iz = np.interp(all_fid_arr, kf_ids, kf_pos[:, 2])
         for fid, x, y, z in zip(all_fids, ix, iy, iz, strict=True):
-            interp_positions[fid] = to_zup([float(x), float(y), float(z)])
+            interp_positions[fid] = to_scene([float(x), float(y), float(z)])
 
     # Load 3D object detections, motion trails, events, and R4DSG.
     motion_trails_by_track: dict[int, list[list[float]]] = {}
     boxes_by_frame: dict[int, list[dict[str, Any]]] = {}
     r4d_anchors: list[dict[str, Any]] = []
+    r4d_rooms: list[dict[str, Any]] = []
     r4d_timeline: dict[str, list[dict[str, Any]]] = {}
     r4d_events: list[dict[str, Any]] = []
 
@@ -722,6 +745,7 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     if r4d_path.exists():
         r4d_data = _read_json(r4d_path)
         r4d_anchors = r4d_data.get("anchors", [])
+        r4d_rooms = r4d_data.get("rooms", [])
         r4d_timeline = r4d_data.get("timeline", {})
         r4d_events = r4d_data.get("events", [])
 
@@ -761,14 +785,21 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     )
     rr.send_blueprint(blueprint)
 
-    # Set View Coordinates to Standard Intuitive Z-Up
-    rr.log("spatial_memory", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+    # Set View Coordinates to the raw VGGT-Ω world convention (OpenCV-style:
+    # +X right, +Y down, +Z forward). Display hint only — no data transform.
+    rr.log("spatial_memory", rr.ViewCoordinates.RIGHT_HAND_Y_DOWN, static=True)
 
     # 1. Log Spatial Anchors (The Room's Permanent Reference Frame)
     if r4d_anchors:
-        anc_centers = [to_zup(a["center"]) for a in r4d_anchors]
-        anc_sizes = [to_zup_size(a["size"]) for a in r4d_anchors]
-        anc_labels = [f"Anchor: {a['label']} #{a['anchor_id']}" for a in r4d_anchors]
+        anc_centers = [to_scene(a["center"]) for a in r4d_anchors]
+        anc_sizes = [to_scene_size(a["size"]) for a in r4d_anchors]
+        anc_labels = [
+            (
+                f"Anchor: {a['label']} #{a['anchor_id']}"
+                + (f" · {a['room_label']}" if a.get("room_label") else "")
+            )
+            for a in r4d_anchors
+        ]
         rr.log(
             "spatial_memory/anchors",
             rr.Boxes3D(
@@ -780,21 +811,119 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
             static=True,
         )
 
-    # 2. Log Camera Trajectory in Z-Up Coordinates
+    # 1B. Log Room-Level Depictions (Rooms -> Anchors -> Objects hierarchy)
+    # One entity group per room so the viewer can toggle rooms individually:
+    # a translucent floor slab (triangulated mesh), a closed outline,
+    # corner wall pillars, and a labeled centroid marker.
+    if r4d_rooms:
+        for room in r4d_rooms:
+            footprint = room.get("footprint") or []
+            if len(footprint) < 3:
+                continue
+            room_id = int(room.get("room_id", 1))
+            room_label = str(room.get("label", f"Room #{room_id}"))
+            room_entity = f"spatial_memory/rooms/room_{room_id}"
+            color = _room_color(room_id)
+            polygon = np.asarray(
+                [to_scene(point) for point in footprint], dtype=np.float32
+            )
+
+            # Translucent convex floor slab: fan-triangulate the convex hull.
+            triangles = np.asarray(
+                [[0, i, i + 1] for i in range(1, len(polygon) - 1)],
+                dtype=np.uint32,
+            )
+            slab_alpha = 46  # ~18% opacity keeps the room readable as a zone
+            rr.log(
+                f"{room_entity}/floor",
+                rr.Mesh3D(
+                    vertex_positions=polygon,
+                    triangle_indices=triangles,
+                    vertex_colors=[[(*color, slab_alpha)] for _ in polygon],
+                ),
+                static=True,
+            )
+
+            # Closed outline on the room plane.
+            closed_loop = np.vstack([polygon, polygon[:1]])
+            rr.log(
+                f"{room_entity}/outline",
+                rr.LineStrips3D(
+                    [closed_loop],
+                    radii=0.02,
+                    colors=[color],
+                    labels=[f"Room: {room_label}"],
+                ),
+                static=True,
+            )
+
+            # Corner wall pillars rising from the room plane ("up" is -Y).
+            pillar_height = 1.2
+            pillars = np.asarray(
+                [
+                    [
+                        [point[0], point[1], point[2]],
+                        [point[0], point[1] - pillar_height, point[2]],
+                    ]
+                    for point in polygon
+                ],
+                dtype=np.float32,
+            )
+            rr.log(
+                f"{room_entity}/walls",
+                rr.LineStrips3D(pillars, radii=0.02, colors=[color]),
+                static=True,
+            )
+
+            # Labeled centroid marker: the summoning point for each room.
+            centroid = room.get("centroid")
+            if centroid:
+                keyframe_count = int(room.get("keyframe_count", 0) or 0)
+                room_type = str(room.get("room_type", "Room"))
+                observation_note = (
+                    f"{keyframe_count} obs" if keyframe_count else "no trajectory"
+                )
+                rr.log(
+                    f"{room_entity}/label",
+                    rr.Points3D(
+                        [to_scene(centroid)],
+                        radii=0.05,
+                        colors=[color],
+                        labels=[
+                            f"Room: {room_label} · {room_type} · {observation_note}"
+                        ],
+                    ),
+                    static=True,
+                )
+
+    # 2. Log Camera Trajectory in VGGT World Coordinates, colored by room
     if len(trajectory) > 0:
-        zup_trajectory = np.asarray([to_zup(pt) for pt in trajectory], dtype=np.float32)
-        rr.log(
-            "spatial_memory/camera_trajectory",
-            rr.LineStrips3D(
-                [zup_trajectory], radii=0.015, colors=[[251, 191, 36]]
-            ),  # Amber
-            static=True,
+        trajectory_zup = np.asarray(
+            [to_scene(pt) for pt in trajectory], dtype=np.float32
         )
+        trajectory_strips = _room_colored_trajectory(
+            pose_records, trajectory_zup, r4d_rooms
+        )
+        if trajectory_strips is not None:
+            strips, colors = trajectory_strips
+            rr.log(
+                "spatial_memory/camera_trajectory",
+                rr.LineStrips3D(strips, radii=0.015, colors=colors),
+                static=True,
+            )
+        else:
+            rr.log(
+                "spatial_memory/camera_trajectory",
+                rr.LineStrips3D(
+                    [trajectory_zup], radii=0.015, colors=[[251, 191, 36]]
+                ),  # Amber
+                static=True,
+            )
 
     # 2C. Add a minimal visual reference frame and clean ground grid.
     if len(points) > 0:
         point_extent = np.ptp(points, axis=0)
-        reference_extent = max(float(np.max(point_extent)) * SCALE * 0.6, 1.0)
+        reference_extent = max(float(np.max(point_extent)) * 0.6, 1.0)
     else:
         reference_extent = 2.5
     axis_length = max(reference_extent * 0.18, 0.25)
@@ -807,20 +936,26 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                 [0.0, 0.0, axis_length],
             ],
             origins=[[0.0, 0.0, 0.0]] * 3,
-            colors=[[239, 68, 68], [34, 197, 94], [59, 130, 246]],
-            labels=["X right", "Y forward", "Z up"],
+            colors=[[239, 68, 68], [239, 68, 68], [59, 130, 246]],
+            labels=["X right", "Y down", "Z forward"],
         ),
         static=True,
     )
 
+    # In the Y-down VGGT convention "up" is -Y, so the floor plane sits at the
+    # largest trajectory height value.
+    if len(trajectory) > 0:
+        floor_y = float(np.max(trajectory[:, 1]))
+    else:
+        floor_y = 0.0
     grid_values = np.linspace(-reference_extent, reference_extent, 9)
     grid_strips = []
     for value in grid_values:
         grid_strips.append(
             np.asarray(
                 [
-                    [-reference_extent, float(value), 0.0],
-                    [reference_extent, float(value), 0.0],
+                    [-reference_extent, floor_y, float(value)],
+                    [reference_extent, floor_y, float(value)],
                 ],
                 dtype=np.float32,
             )
@@ -828,8 +963,8 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         grid_strips.append(
             np.asarray(
                 [
-                    [float(value), -reference_extent, 0.0],
-                    [float(value), reference_extent, 0.0],
+                    [float(value), floor_y, -reference_extent],
+                    [float(value), floor_y, reference_extent],
                 ],
                 dtype=np.float32,
             )
@@ -850,10 +985,25 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     if r4d_events:
         for event in r4d_events:
             ev_type = str(event.get("event_type", "transition")).upper()
+            if ev_type == "ROOM_CHANGE":
+                event_lines.append(
+                    f"- **[{ev_type}] {event['object']}**: "
+                    f"{event.get('source_room', 'unknown')} → {event.get('destination_room', 'unknown')} "
+                    f"({event['start_time']:.2f}s–{event['end_time']:.2f}s)"
+                )
+                continue
+            source_room = event.get("source_room")
+            destination_room = event.get("destination_room")
+            room_badges = ""
+            if source_room or destination_room:
+                room_badges = (
+                    f", rooms {source_room or '?'} → {destination_room or '?'}"
+                )
             event_lines.append(
                 f"- **[{ev_type}] {event['object']}**: "
                 f"{event.get('source_relation', 'unknown')} → {event.get('destination_relation', 'unknown')} "
-                f"({event['start_time']:.2f}s–{event['end_time']:.2f}s), "
+                f"({event['start_time']:.2f}s–{event['end_time']:.2f}s)"
+                f"{room_badges}, "
                 f"evidence frames {event.get('evidence_frames', [])}"
             )
     else:
@@ -1016,8 +1166,8 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         if frame_id in keyframe_id_set:
             mem_entries = r4d_timeline.get(str(frame_id), [])
             if mem_entries:
-                centers = [to_zup(e["center"]) for e in mem_entries]
-                sizes = [to_zup_size(e["size"]) for e in mem_entries]
+                centers = [to_scene(e["center"]) for e in mem_entries]
+                sizes = [to_scene_size(e["size"]) for e in mem_entries]
                 labels = []
                 colors = []
                 in_hand_links = []
@@ -1028,14 +1178,19 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                     relation = e.get("relation", "")
                     anchor_lbl = e.get("anchor_label", "Anchor")
                     base_lbl = e["label"]
-                    obj_center_zup = to_zup(e["center"])
+                    obj_center = to_scene(e["center"])
+                    room_lbl = e.get("room_label")
+                    # Room badge for placed / persisted objects: the label
+                    # becomes "Keys #1 · [Inside Desk #1 · Living Room]".
+                    if room_lbl and not is_in_hand:
+                        base_lbl = f"{base_lbl} · {room_lbl}"
 
                     if is_in_hand:
                         labels.append(f"{base_lbl} · [Carried by User]")
                         colors.append([245, 158, 11])  # Amber #F59E0B
                         if cam_pos is not None:
                             in_hand_links.append(
-                                np.asarray([cam_pos, obj_center_zup], dtype=np.float32)
+                                np.asarray([cam_pos, obj_center], dtype=np.float32)
                             )
                     elif relation == "inside":
                         labels.append(f"{base_lbl} · [Inside {anchor_lbl}]")
@@ -1047,7 +1202,7 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                         labels.append(f"{base_lbl} · ✦ PERSISTENT MEMORY")
                         colors.append([20, 184, 166])  # Teal #14B8A6
 
-                quats = [zup_box_quaternion(e.get("rotation")) for e in mem_entries]
+                quats = [raw_rotation(e.get("rotation")) for e in mem_entries]
 
                 rr.log(
                     "spatial_memory/persistent_objects",
@@ -1087,6 +1242,7 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
             "keyframe_count": len(pose_records),
             "point_count": len(points),
             "total_anchors": len(r4d_anchors),
+            "total_rooms": len(r4d_rooms),
             "total_tracks": len(motion_trails_by_track),
             "total_events": len(r4d_events),
             "open_command": f"rerun outputs/{dataset_id}/viewer/demo.rrd",
@@ -1106,6 +1262,7 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         "keyframe_count": len(pose_records),
         "point_count": len(points),
         "total_anchors": len(r4d_anchors),
+        "total_rooms": len(r4d_rooms),
         "total_tracks": len(motion_trails_by_track),
         "total_events": len(r4d_events),
         "recording": str(paths.rerun_recording),
