@@ -205,6 +205,24 @@ class PerceptionConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RoomMemoryConfig:
+    """Room-level spatial memory settings (top level of the memory hierarchy)."""
+
+    enabled: bool = True
+    # Floor-plane distance at which two keyframe positions join one room zone.
+    zone_link_radius: float = 1.5
+    # Minimum keyframes a trajectory zone needs before it becomes a room.
+    min_zone_keyframes: int = 3
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryConfig:
+    """Spatio-temporal memory construction settings."""
+
+    rooms: RoomMemoryConfig = field(default_factory=RoomMemoryConfig)
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeConfig:
     """Complete configuration passed from the local orchestrator to Modal."""
 
@@ -217,6 +235,7 @@ class RuntimeConfig:
     sam2: Sam2Config = field(default_factory=Sam2Config)
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
     geometry: GeometryConfig = field(default_factory=GeometryConfig)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
 
     @classmethod
@@ -232,6 +251,7 @@ class RuntimeConfig:
         sam2_raw = _mapping(raw.get("sam2"), "sam2")
         perception_raw = _mapping(raw.get("perception"), "perception")
         geometry_raw = _mapping(raw.get("geometry"), "geometry")
+        memory_raw = _mapping(raw.get("memory"), "memory")
         visualization_raw = _mapping(raw.get("visualization"), "visualization")
 
         storage_defaults = StorageConfig()
@@ -243,6 +263,7 @@ class RuntimeConfig:
         sam2_defaults = Sam2Config()
         perception_defaults = PerceptionConfig()
         geometry_defaults = GeometryConfig()
+        memory_defaults = MemoryConfig()
         visualization_defaults = VisualizationConfig()
 
         video = VideoConfig(
@@ -549,6 +570,20 @@ class RuntimeConfig:
         ):
             raise ValueError("visualization values must be positive")
 
+        rooms_defaults = memory_defaults.rooms
+        rooms_raw = _mapping(memory_raw.get("rooms"), "memory.rooms")
+        rooms = RoomMemoryConfig(
+            enabled=bool(rooms_raw.get("enabled", rooms_defaults.enabled)),
+            zone_link_radius=float(
+                rooms_raw.get("zone_link_radius", rooms_defaults.zone_link_radius)
+            ),
+            min_zone_keyframes=int(
+                rooms_raw.get("min_zone_keyframes", rooms_defaults.min_zone_keyframes)
+            ),
+        )
+        if rooms.zone_link_radius <= 0 or rooms.min_zone_keyframes < 1:
+            raise ValueError("memory.rooms thresholds are outside their valid ranges")
+
         return cls(
             storage=StorageConfig(
                 data_volume=str(
@@ -574,6 +609,7 @@ class RuntimeConfig:
             sam2=sam2,
             perception=perception,
             geometry=geometry,
+            memory=MemoryConfig(rooms=rooms),
             visualization=visualization,
         )
 

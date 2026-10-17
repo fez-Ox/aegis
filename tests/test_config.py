@@ -19,6 +19,35 @@ def test_example_config_loads() -> None:
     assert config_to_dict(config)["pose"]["stride"] == 1
 
 
+def test_room_memory_config_defaults_and_overrides() -> None:
+    config = RuntimeConfig.from_mapping({})
+    assert config.memory.rooms.enabled is True
+    assert config.memory.rooms.zone_link_radius == 1.5
+    assert config.memory.rooms.min_zone_keyframes == 3
+
+    custom = RuntimeConfig.from_mapping(
+        {
+            "memory": {
+                "rooms": {
+                    "enabled": False,
+                    "zone_link_radius": 2.0,
+                    "min_zone_keyframes": 5,
+                }
+            }
+        }
+    )
+    assert custom.memory.rooms.enabled is False
+    assert custom.memory.rooms.zone_link_radius == 2.0
+    assert custom.memory.rooms.min_zone_keyframes == 5
+
+
+def test_room_memory_config_rejects_invalid_thresholds() -> None:
+    with pytest.raises(ValueError):
+        RuntimeConfig.from_mapping({"memory": {"rooms": {"zone_link_radius": 0.0}}})
+    with pytest.raises(ValueError):
+        RuntimeConfig.from_mapping({"memory": {"rooms": {"min_zone_keyframes": 0}}})
+
+
 def test_dataset_paths_are_canonical() -> None:
     config = RuntimeConfig.from_mapping({})
     paths = dataset_paths(config, "demo01")

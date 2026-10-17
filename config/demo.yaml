@@ -80,6 +80,17 @@ perception:
     - shelf
     - hand
     - human hand
+    # Room-defining landmarks: room-level evidence for the memory layer.
+    # They are never stored as personal-object memories.
+    - door
+    - sofa
+    - bed
+    - television
+    - toilet
+    - kitchen counter
+    - dining table
+    - stairs
+    - window
   confidence_threshold: 0.45
   iou_threshold: 0.45
   min_points_in_box: 25
@@ -101,6 +112,16 @@ geometry:
   # monocular/arbitrary-scale; tune these values only for visualization.
   depth_scale: 1.0
   pose_scale: 1.0
+
+memory:
+  rooms:
+    # Room-level spatial memory (Rooms -> Anchors -> Objects hierarchy).
+    enabled: true
+    # Floor-plane radius (meters, VGGT-Ω scale) at which two camera keyframes
+    # belong to the same room zone; doorway crossings split beyond this.
+    zone_link_radius: 1.5
+    # Minimum keyframes observed in a zone before it becomes a room region.
+    min_zone_keyframes: 3
 
 visualization:
   log_video: true
