@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 from aegis.core.config import CameraConfig, VideoConfig
+from aegis.ingestion.contracts import (
+    NORMALIZED_DATASET_SCHEMA_VERSION,
+    validate_normalized_metadata,
+)
 
 
 def _read_calibration(path: Path) -> list[float]:
@@ -89,8 +94,15 @@ def preprocess_video(
     camera: CameraConfig,
     *,
     dataset_id: str,
+    source_timestamps: Sequence[float] | None = None,
 ) -> dict[str, Any]:
     """Sample and normalize a video, returning the generated metadata.
+
+    ``source_timestamps`` lets a capture source (for example a live session
+    promoted to JPEG frames, or a variable-rate phone recording) supply the
+    authoritative per-frame clock. Timestamps are normalised to start at zero
+    and recorded with ``timebase='capture'``. When omitted, the video timebase
+    is used exactly as before.
 
     The function intentionally contains no local fallback or model execution;
     callers run it from a Modal CPU worker so the weak development machine only
@@ -103,6 +115,17 @@ def preprocess_video(
         raise FileNotFoundError(
             f"input video does not exist in the mounted data Volume: {input_path}"
         )
+
+    provided_timestamps: list[float] | None = None
+    if source_timestamps is not None:
+        provided_timestamps = [float(value) for value in source_timestamps]
+        if not provided_timestamps:
+            raise ValueError("source_timestamps must not be empty")
+        if any(later < earlier for earlier, later in pairwise(provided_timestamps)):
+            raise ValueError("source_timestamps must be non-decreasing")
+    timestamp_origin = (
+        provided_timestamps[0] if provided_timestamps is not None else 0.0
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     if calibration_output.exists():
@@ -133,7 +156,12 @@ def preprocess_video(
             ok, frame = capture.read()
             if not ok:
                 break
-            timestamp = source_index / source_fps
+            if provided_timestamps is not None and source_index < len(
+                provided_timestamps
+            ):
+                timestamp = provided_timestamps[source_index] - timestamp_origin
+            else:
+                timestamp = source_index / source_fps
             if timestamp + 1e-9 >= next_sample_time:
                 normalized = cv2.resize(
                     frame,
@@ -178,9 +206,10 @@ def preprocess_video(
         )
 
     metadata: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": NORMALIZED_DATASET_SCHEMA_VERSION,
         "dataset_id": dataset_id,
         "source_video": str(input_path),
+        "preprocess_source": "source_video",
         "source_fps": source_fps,
         "source_frame_count": source_frame_count,
         "source_resolution": [source_width, source_height],
@@ -188,6 +217,8 @@ def preprocess_video(
         "resolution": [video.width, video.height],
         "frame_count": len(frames),
         "duration_sec": frames[-1]["timestamp"],
+        "timebase": "capture" if provided_timestamps is not None else "source_video",
+        "authoritative_timestamp_field": "timestamp",
         "frames": frames,
         "intrinsics": normalized_calibration[:4]
         if normalized_calibration is not None
@@ -198,6 +229,7 @@ def preprocess_video(
         if normalized_calibration is not None
         else None,
     }
+    validate_normalized_metadata(metadata)
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"
