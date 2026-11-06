@@ -28,7 +28,12 @@ from aegis.core.config import RuntimeConfig, config_to_dict, load_config
 from aegis.ingestion.download import (
     EGOCENTRIC_PRESETS,
     ingest_video,
+    upload_dataset_to_modal_volume,
     upload_to_modal_volume,
+)
+from aegis.ingestion.live_handoff import (
+    find_latest_live_session,
+    promote_live_session,
 )
 from aegis.remote.modal_app import (
     DATA_MOUNT,
@@ -43,6 +48,7 @@ from aegis.remote.modal_app import (
 )
 
 Stage = Literal[
+    "live",
     "preprocess",
     "vggt",
     "dust3r",
@@ -145,6 +151,7 @@ def main(
     config_path: str = "config/demo.yaml",
     dataset_id: str = "demo01",
     video: str | None = None,
+    live_session: str | None = None,
     classes: str | None = None,
     sample_fps: int | None = None,
     keyframe_stride: int | None = None,
@@ -161,6 +168,8 @@ def main(
         Dataset identifier (e.g. demo01, demo03, my_kitchen).
     video : str | None
         Input video file path, URL, or egocentric preset (e.g. 'sort_clothes', 'make_coffee').
+    live_session : str | None
+        Local ``captures/<session_id>`` directory, or ``latest``.
     classes : str | None
         Comma-separated open-vocabulary target object classes.
     sample_fps : int | None
@@ -168,13 +177,49 @@ def main(
     keyframe_stride : int | None
         Optional keyframe stride override for 3D reconstruction.
     stage : Stage
-        Pipeline stage to run ('all', 'preprocess', 'vggt', 'detect', 'rerun').
+        Pipeline stage to run ('all', 'live', 'preprocess', 'vggt', 'detect', 'rerun').
     upload : bool
-        Whether to ensure input video is uploaded to the Modal volume.
+        Whether to ensure input video / promoted dataset is uploaded.
     """
     config = load_config(config_path)
     _validate_modal_mounts(config)
     serialized_config = config_to_dict(config)
+
+    if video and live_session:
+        raise ValueError("choose either --video or --live-session, not both")
+
+    # 0. Promote a live capture session into the canonical dataset layout.
+    live_path: Path | None = None
+    if live_session or stage == "live":
+        if live_session and live_session != "latest":
+            live_path = Path(live_session)
+        else:
+            live_path = find_latest_live_session(Path("captures"))
+        if live_path is None or not live_path.is_dir():
+            raise FileNotFoundError(
+                "no live session found; pass --live-session captures/<session_id> "
+                "or run aegis-ingest first"
+            )
+        if dataset_id == "demo01":
+            inferred = f"live_{live_path.name}".lower()
+            dataset_id = "".join(
+                c if (c.isalnum() or c in "._-") else "_" for c in inferred
+            )
+        promotion = promote_live_session(
+            live_path,
+            dataset_id=dataset_id,
+            video=config.video,
+            camera=config.camera,
+        )
+        print(
+            f"Promoted live session {promotion.session_id} -> "
+            f"{promotion.dataset_dir} ({promotion.frame_count} frames, "
+            f"{promotion.duration_sec:.1f}s, {promotion.gap_count} gaps)"
+        )
+        if upload:
+            upload_dataset_to_modal_volume(
+                promotion.dataset_dir, dataset_id, DATA_VOLUME_NAME
+            )
 
     # 1. Ingest input video if provided
     if video:
@@ -189,7 +234,7 @@ def main(
             modal_volume=DATA_VOLUME_NAME,
         )
         dataset_id = ingest_res["dataset_id"]
-    elif upload:
+    elif upload and live_path is None:
         # Check if local video exists in data/<dataset_id>/video.mp4 and sync
         local_video = Path("data") / dataset_id / "video.mp4"
         if local_video.exists():
@@ -245,6 +290,7 @@ def main(
         serialized_config["hf_token"] = token
 
     valid_stages = {
+        "live",
         "preprocess",
         "vggt",
         "dust3r",
@@ -272,8 +318,8 @@ def main(
 
     results: list[dict[str, Any]] = []
 
-    # Step 1: Preprocess video frames
-    if stage in {"preprocess", "all"}:
+    # Step 1: Preprocess video frames or a promoted live dataset
+    if stage in {"live", "preprocess", "all"}:
         results.append(preprocess_video_remote.remote(dataset_id, serialized_config))
 
     # Step 2: 3D Scene Reconstruction (VGGT-Ω)
@@ -430,6 +476,12 @@ if __name__ == "__main__":
         help="Input video file path, URL, or preset key",
     )
     parser.add_argument(
+        "--live-session",
+        type=str,
+        default=None,
+        help="Captured session directory (captures/<id>) or 'latest'",
+    )
+    parser.add_argument(
         "--dataset-id",
         type=str,
         default="demo01",
@@ -454,7 +506,7 @@ if __name__ == "__main__":
         "--stage",
         type=str,
         default="all",
-        help="Pipeline stage (all, preprocess, vggt, detect, rerun)",
+        help="Pipeline stage (all, live, preprocess, vggt, detect, rerun)",
     )
     parser.add_argument(
         "--config-path",
@@ -480,6 +532,8 @@ if __name__ == "__main__":
     ]
     if args.video:
         cli_cmd.extend(["--video", args.video])
+    if args.live_session:
+        cli_cmd.extend(["--live-session", args.live_session])
     if args.classes:
         cli_cmd.extend(["--classes", args.classes])
     if args.sample_fps:
