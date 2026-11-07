@@ -1,4 +1,5 @@
 class PatientSearchRecord {
+  final String? datasetId;
   final String query;
   final bool found;
   final String locationSummary;
@@ -9,6 +10,7 @@ class PatientSearchRecord {
   final bool isPersistentMemory;
 
   const PatientSearchRecord({
+    this.datasetId,
     required this.query,
     required this.found,
     required this.locationSummary,
@@ -20,6 +22,7 @@ class PatientSearchRecord {
   });
 
   Map<String, dynamic> toJson() => {
+    'dataset_id': datasetId,
     'query': query,
     'found': found,
     'location_summary': locationSummary,
@@ -31,6 +34,7 @@ class PatientSearchRecord {
   };
 
   factory PatientSearchRecord.fromJson(Map<String, dynamic> json) => PatientSearchRecord(
+    datasetId: json['dataset_id'] as String?,
     query: json['query'] as String,
     found: json['found'] as bool? ?? false,
     locationSummary: json['location_summary'] as String? ?? '',

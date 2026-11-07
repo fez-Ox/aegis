@@ -5,8 +5,13 @@ import '../../theme/app_theme.dart';
 
 class CaregiverView extends StatefulWidget {
   final ApiService apiService;
+  final VoidCallback? onSwitchDataset;
 
-  const CaregiverView({super.key, required this.apiService});
+  const CaregiverView({
+    super.key,
+    required this.apiService,
+    this.onSwitchDataset,
+  });
 
   @override
   State<CaregiverView> createState() => _CaregiverViewState();
@@ -20,6 +25,14 @@ class _CaregiverViewState extends State<CaregiverView> {
   void initState() {
     super.initState();
     _loadTimeline();
+  }
+
+  @override
+  void didUpdateWidget(covariant CaregiverView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.apiService.activeDatasetId != widget.apiService.activeDatasetId) {
+      _loadTimeline();
+    }
   }
 
   Future<void> _loadTimeline() async {
@@ -60,15 +73,47 @@ class _CaregiverViewState extends State<CaregiverView> {
                         child: const Icon(Icons.shield_outlined, color: AppTheme.primaryTeal, size: 20),
                       ),
                       const SizedBox(width: 10),
-                      const Text(
-                        "Caregiver Spatial Audit",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
-                          color: AppTheme.textHighContrast,
+                      const Expanded(
+                        child: Text(
+                          "Caregiver Spatial Audit",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                            color: AppTheme.textHighContrast,
+                          ),
                         ),
                       ),
+                      GestureDetector(
+                        onTap: widget.onSwitchDataset,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.royalAmethyst.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.royalAmethyst.withOpacity(0.3), width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                widget.apiService.activeDatasetId ?? 'demo01',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFC084FC),
+                                ),
+                              ),
+                              if (widget.onSwitchDataset != null) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.swap_horiz_rounded, size: 14, color: Color(0xFFC084FC)),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+
                     ],
                   ),
                   const SizedBox(height: 10),

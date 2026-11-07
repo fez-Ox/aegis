@@ -14,6 +14,7 @@ import uvicorn
 
 from aegis.remote.api import (
     find_latest_objects_state,
+    list_available_datasets,
     load_scene_graph_data,
     set_active_dataset,
 )
@@ -33,13 +34,33 @@ def get_local_ip() -> str:
     return ip
 
 
+def setup_adb_reverse(port: int = 8000) -> bool:
+    """If an Android device is attached via ADB over USB, reverse port so localhost works seamlessly."""
+    import shutil
+    import subprocess
+
+    if shutil.which("adb"):
+        try:
+            res = subprocess.run(
+                ["adb", "reverse", f"tcp:{port}", f"tcp:{port}"],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=2,
+            )
+            return res.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+    return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aegis Spatio-Temporal Memory Server")
     parser.add_argument(
         "--dataset-id",
         type=str,
-        default=os.getenv("AEGIS_DATASET_ID", "Demo06-Self"),
-        help="Dataset identifier to load as primary scene graph (e.g. Demo06-Self, demo01)",
+        default=os.getenv("AEGIS_DATASET_ID", "demo01"),
+        help="Dataset identifier to load as primary scene graph (e.g. Demo06-Self, demo01, demo03)",
     )
     parser.add_argument("--port", type=int, default=8000, help="Port to bind server")
     args = parser.parse_args()
@@ -52,20 +73,32 @@ def main() -> None:
     sg = load_scene_graph_data(dataset_id)
     anchors = [a.get("label", "") for a in sg.get("anchors", [])]
     latest = find_latest_objects_state(sg)
-    objects = [obj.get("label", "") for obj in latest.values() if obj.get("label")]
+    objects = sorted(
+        {obj.get("label", "") for obj in latest.values() if obj.get("label")}
+    )
+    available_datasets = list_available_datasets()
 
     host_ip = get_local_ip()
     port = args.port
+    adb_reversed = setup_adb_reverse(port)
 
     print("=" * 68)
     print("  🛡️  AEGIS SPATIO-TEMPORAL MEMORY SYSTEM — SERVER RUNNER")
     print("=" * 68)
-    print(f"  • Primary Dataset:    {dataset_id}")
-    print(f"  • Grounded Anchors:   {', '.join(anchors) if anchors else 'None'}")
-    print(f"  • Tracked Objects:    {', '.join(objects) if objects else 'None'}")
-    print(f"  • Localhost URL:      http://127.0.0.1:{port}")
-    print(f"  • LAN Mobile URL:     http://{host_ip}:{port}")
-    print(f"  • Swagger Docs:       http://{host_ip}:{port}/docs")
+    print(f"  • Primary Dataset:     {dataset_id}")
+    print(f"  • Available Datasets:  {', '.join(available_datasets)}")
+    print(f"  • Grounded Anchors:    {', '.join(anchors) if anchors else 'None'}")
+    print(f"  • Tracked Objects:     {', '.join(objects) if objects else 'None'}")
+    print(f"  • Localhost URL:       http://127.0.0.1:{port}")
+    if adb_reversed:
+        print(
+            f"  • ADB USB Reverse:     http://127.0.0.1:{port} (Active for USB Android Phone)"
+        )
+    print(f"  • LAN Mobile URL:      http://{host_ip}:{port}")
+    print(f"  • Swagger Docs:        http://{host_ip}:{port}/docs")
+    print(
+        f"  • Dataset Switch API:  POST http://{host_ip}:{port}/api/v1/dataset/select?dataset_id=<id>"
+    )
     print("-" * 68)
     print(f"  PRESETS FOR [{dataset_id.upper()}]:")
     if dataset_id == "Demo06-Self":

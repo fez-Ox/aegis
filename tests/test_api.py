@@ -96,8 +96,8 @@ def test_query_latency_performance_claim() -> None:
 
 
 def test_query_bottle_occlusion_endpoint() -> None:
-    """Test memory query for bottle returns Demo06 3D location and occlusion status."""
-    response = client.get("/api/v1/query?item=water bottle")
+    """Test a dataset-scoped bottle query returns Demo06 3D location."""
+    response = client.get("/api/v1/query?item=water bottle&dataset_id=Demo06-Self")
     assert response.status_code == 200
     res = response.json()
     assert res["found"] is True
@@ -121,6 +121,13 @@ def test_simulate_bottle_occlusion() -> None:
     assert q_res["found"] is True
     assert q_res["is_persistent_memory"] is True
     assert "remembers" in q_res["location_summary"].lower()
+
+
+def test_unprocessed_demo04_has_no_foreign_memories() -> None:
+    """An input-only video must not inherit the demo01 fixture or another graph."""
+    res = client.get("/api/v1/query?item=shoes&dataset_id=demo04").json()
+    assert res["found"] is False
+    assert "demo04" in res["location_summary"]
 
 
 def test_demo06_scene_graph_isolation() -> None:
@@ -167,3 +174,140 @@ def test_scene_graph_full_endpoint() -> None:
     assert len(data["anchors"]) == 2
     assert len(data["latest_objects"]) >= 1
     assert data["latest_objects"][0]["label"] == "Bottle #1"
+
+
+def test_datasets_discovery_endpoint() -> None:
+    """Verify /api/v1/datasets discovers all datasets and returns summaries."""
+    res = client.get("/api/v1/datasets")
+    assert res.status_code == 200
+    data = res.json()
+    assert "active_dataset" in data
+    assert "available_datasets" in data
+    assert data["total_datasets"] >= 2
+    dataset_ids = [d["dataset_id"] for d in data["available_datasets"]]
+    assert "demo01" in dataset_ids
+    assert "Demo06-Self" in dataset_ids
+
+
+def test_query_generic_demo03_dataset() -> None:
+    """Verify querying demo03 dataset returns kitchen objects and anchors accurately."""
+    res = client.get("/api/v1/query?item=cooking pot&dataset_id=demo03")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["found"] is True
+    assert "Cooking Pot" in data["instance_label"]
+    assert "Sink" in data["anchor_label"] or "Refrigerator" in data["anchor_label"]
+
+
+def test_demo04_scene_graph_queries_and_timeline() -> None:
+    """Verify demo04 accurately queries garbage bags and returns pipeline timeline events."""
+    # 1. Query garbage bag in demo04
+    res = client.get("/api/v1/query?item=garbage bag&dataset_id=demo04").json()
+    assert res["found"] is True
+    assert "Garbage Bag" in res["instance_label"]
+    assert "Storage Cabinet #1" in res["anchor_label"]
+
+    # 2. Query food container in demo04
+    food_res = client.get("/api/v1/query?item=food container&dataset_id=demo04").json()
+    assert food_res["found"] is True
+    assert "Food Container #2" in food_res["instance_label"]
+    assert "Storage Cabinet #1" in food_res["anchor_label"]
+
+    # 3. Timeline events
+    tl_res = client.get("/api/v1/timeline?dataset_id=demo04")
+    assert tl_res.status_code == 200
+    events = tl_res.json()
+    assert len(events) >= 1
+    assert any("Garbage Bag" in e["object"] for e in events)
+
+
+def test_query_response_includes_room_grounding() -> None:
+    """Memory queries surface the room alongside anchor and relation."""
+    res = client.get("/api/v1/query?item=shoes").json()
+    assert res["found"] is True
+    assert res["room_id"] == 1
+    assert res["room_label"] == "Room #1"
+    assert "in Room #1" in res["location_summary"]
+
+    # demo03 was room-typed "Kitchen" from refrigerator landmark evidence.
+    res_kitchen = client.get("/api/v1/query?item=cooking pot&dataset_id=demo03").json()
+    assert res_kitchen["found"] is True
+    assert res_kitchen["room_label"] == "Kitchen"
+    assert "in the Kitchen" in res_kitchen["location_summary"]
+
+
+def test_query_with_room_constraint() -> None:
+    """Room-constrained queries narrow candidates and report miss locations."""
+    # Right room: found.
+    res = client.get("/api/v1/query?item=shoes in room 1").json()
+    assert res["found"] is True
+    assert res["room_label"] == "Room #1"
+
+    # Wrong room: not found, but the memory layer explains where it lives.
+    res_wrong = client.get("/api/v1/query?item=shoes in the kitchen").json()
+    assert res_wrong["found"] is False
+    assert "kitchen" in res_wrong["location_summary"].lower()
+    assert "Room #1" in res_wrong["location_summary"]
+
+
+def test_rooms_endpoint() -> None:
+    """Rooms endpoint lists room regions with their anchors and tracked objects."""
+    res = client.get("/api/v1/rooms?dataset_id=demo03").json()
+    assert isinstance(res, list)
+    assert len(res) == 1
+    room = res[0]
+    assert room["label"] == "Kitchen"
+    assert room["room_type"] == "Kitchen"
+    assert "Refrigerator #1" in room["anchors"]
+    assert any("Cooking Pot" in obj for obj in room["objects"])
+    assert room["keyframe_count"] >= 1
+
+    neutral = client.get("/api/v1/rooms?dataset_id=demo01").json()
+    assert neutral[0]["label"] == "Room #1"
+
+
+def test_rename_room_endpoint_persists(tmp_path, monkeypatch) -> None:
+    """Caregiver room renames persist to the scene graph artifact."""
+    import json as json_module
+
+    import aegis.remote.api as api_module
+
+    source = (
+        __import__("pathlib").Path(__file__).parent
+        / "fixtures"
+        / "demo01"
+        / "objects"
+        / "r4d_scene_graph.json"
+    )
+    target_dir = tmp_path / "demo01" / "objects"
+    target_dir.mkdir(parents=True)
+    target = target_dir / "r4d_scene_graph.json"
+    target.write_text(source.read_text())
+
+    api_module._GRAPH_CACHE.pop("demo01", None)
+    monkeypatch.setattr(
+        api_module, "get_search_paths", lambda ds: [target_dir / "r4d_scene_graph.json"]
+    )
+
+    response = client.post(
+        "/api/v1/rooms/rename?room_id=1&label=Hallway&dataset_id=demo01"
+    )
+    assert response.status_code == 200
+    assert response.json()["label"] == "Hallway"
+
+    saved = json_module.loads(target.read_text())
+    assert saved["rooms"][0]["label"] == "Hallway"
+    assert saved["anchors"][0]["room_label"] == "Hallway"
+    first_entry = next(iter(saved["timeline"].values()))[0]
+    assert first_entry["room_label"] == "Hallway"
+    assert saved["events"][0]["destination_room"] == "Hallway"
+
+    # The renamed room is visible in queries and room listings.
+    query = client.get("/api/v1/query?item=shoes&dataset_id=demo01").json()
+    assert query["room_label"] == "Hallway"
+    rooms = client.get("/api/v1/rooms?dataset_id=demo01").json()
+    assert rooms[0]["label"] == "Hallway"
+
+    # Unknown rooms return a clean 404.
+    missing = client.post("/api/v1/rooms/rename?room_id=99&label=X&dataset_id=demo01")
+    assert missing.status_code == 404

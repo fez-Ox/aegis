@@ -69,7 +69,9 @@ sam2:
   multimask_output: false
 
 perception:
-  detector_model: yolov8m-worldv2.pt
+  # YOLOE-seg provides open-vocabulary masks; SAM 2 refines them from the box.
+  detector_backend: yoloe
+  detector_model: yoloe-11l-seg.pt
   target_classes:
     - shoes
     - shoe
@@ -78,11 +80,24 @@ perception:
     - shelf
     - hand
     - human hand
+    # Room-defining landmarks: room-level evidence for the memory layer.
+    # They are never stored as personal-object memories.
+    - door
+    - sofa
+    - bed
+    - television
+    - toilet
+    - kitchen counter
+    - dining table
+    - stairs
+    - window
   confidence_threshold: 0.45
   iou_threshold: 0.45
   min_points_in_box: 25
   # Keep identities alive across short detector misses between keyframes.
   track_max_gap: 3
+  reid_max_gap: 30
+  reid_appearance_threshold: 0.35
   track_smoothing: 0.65
   hand_contact_iou_threshold: 0.10
   hand_contact_max_distance: 0.35
@@ -97,6 +112,37 @@ geometry:
   # monocular/arbitrary-scale; tune these values only for visualization.
   depth_scale: 1.0
   pose_scale: 1.0
+
+memory:
+  rooms:
+    # Room-level spatial memory (Rooms -> Anchors -> Objects hierarchy).
+    enabled: true
+    # Floor-plane radius (meters, VGGT-Ω scale) at which two camera keyframes
+    # belong to the same room zone; doorway crossings split beyond this.
+    zone_link_radius: 1.5
+    # Minimum keyframes observed in a zone before it becomes a room region.
+    min_zone_keyframes: 3
+
+live:
+  # Local FR1/FR2 capture defaults for `aegis-ingest` and the `live` stage.
+  sample_fps: 2
+  # One hour is the NFR-R1 soak target; raise for longer sessions.
+  max_duration_seconds: 3600
+  reconnect_interval_seconds: 3
+  reconnect_timeout_seconds: 30
+  # Bounded outbound queue for short storage stalls (FR2.4 / AC-29).
+  buffer_capacity: 30
+  # Persist a crash-recovery checkpoint every N accepted frames.
+  checkpoint_every: 5
+  keyframe:
+    # Keep sharp, exposed, visually novel frames (FR2.1 / TC3).
+    enabled: true
+    min_sharpness: 15.0
+    min_brightness: 20.0
+    max_brightness: 245.0
+    min_visual_change: 0.008
+    # Force a keyframe during a static scene.
+    max_interval_seconds: 2.0
 
 visualization:
   log_video: true

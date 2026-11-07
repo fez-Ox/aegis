@@ -62,7 +62,8 @@ sam2:
   multimask_output: false
 
 perception:
-  detector_model: yolov8m-worldv2.pt
+  detector_backend: yoloe
+  detector_model: yoloe-11l-seg.pt
   target_classes:
     - water bottle
     - bottle
@@ -77,6 +78,8 @@ perception:
   iou_threshold: 0.45
   min_points_in_box: 20
   track_max_gap: 3
+  reid_max_gap: 30
+  reid_appearance_threshold: 0.35
   track_smoothing: 0.65
 
 geometry:

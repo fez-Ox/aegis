@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -62,6 +62,7 @@ class HealthResponse(BaseModel):
     version: str = "0.1.0"
     dataset_loaded: str
     num_anchors: int
+    num_rooms: int
     num_events: int
     total_timeline_frames: int
 
@@ -71,7 +72,19 @@ class AnchorModel(BaseModel):
     label: str
     center: list[float]
     size: list[float]
+    room_id: int | None = None
+    room_label: str | None = None
     contained_objects: list[str] = Field(default_factory=list)
+
+
+class RoomModel(BaseModel):
+    room_id: int
+    label: str
+    room_type: str = "Room"
+    centroid: list[float] = Field(default_factory=list)
+    anchors: list[str] = Field(default_factory=list)
+    objects: list[str] = Field(default_factory=list)
+    keyframe_count: int = 0
 
 
 class MemoryQueryResponse(BaseModel):
@@ -82,9 +95,12 @@ class MemoryQueryResponse(BaseModel):
     instance_id: int | None = None
     anchor_id: int | None = None
     anchor_label: str | None = None
+    room_id: int | None = None
+    room_label: str | None = None
     relation: str | None = None
     relative_distance_m: float | None = None
     location_summary: str
+    explanation: str | None = None
     last_seen_timestamp_s: float | None = None
     last_seen_time_ago: str = "Just now"
     is_persistent_memory: bool = False
@@ -101,6 +117,8 @@ class TimelineEventModel(BaseModel):
     destination_relation: str | None = None
     source_anchor: str | None = None
     destination_anchor: str | None = None
+    source_room: str | None = None
+    destination_room: str | None = None
     start_time: float
     end_time: float
     summary: str
@@ -141,17 +159,68 @@ _GRAPH_CACHE: dict[str, dict[str, Any]] = {}
 
 def get_search_paths(dataset_id: str) -> list[Path]:
     """Return priority paths to locate r4d_scene_graph.json strictly for the given dataset."""
-    return [
-        Path(
-            f"/data/{dataset_id}/objects/r4d_scene_graph.json"
-        ),  # Modal persistent volume
-        Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),  # Local output
-        Path(f"data/{dataset_id}/objects/r4d_scene_graph.json"),
-    ]
+    fixture_root = os.getenv("AEGIS_TEST_FIXTURE_ROOT")
+    paths: list[Path] = []
+    # CI (and local test runs) use small tracked scene-graph fixtures instead
+    # of large downloaded video artifacts. This is opt-in via the environment
+    # variable and never affects production deployments.
+    if fixture_root:
+        paths.append(
+            Path(fixture_root) / dataset_id / "objects" / "r4d_scene_graph.json"
+        )
+    paths.extend(
+        [
+            Path(
+                f"/data/{dataset_id}/objects/r4d_scene_graph.json"
+            ),  # Modal persistent volume
+            Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),  # Local output
+            Path(f"data/{dataset_id}/objects/r4d_scene_graph.json"),
+            Path(f"outputs/{dataset_id}/r4d_scene_graph.json"),
+            Path(f"data/{dataset_id}/r4d_scene_graph.json"),
+        ]
+    )
+    return paths
+
+
+def list_available_datasets() -> list[str]:
+    """Discover input videos as well as processed scene graphs.
+
+    Unprocessed datasets remain selectable so the client can report that a
+    graph is pending, but their queries are still isolated and return no data.
+    """
+    discovered: set[str] = set()
+    roots = [Path("outputs"), Path("data"), Path("/data")]
+    fixture_root = os.getenv("AEGIS_TEST_FIXTURE_ROOT")
+    if fixture_root:
+        roots.append(Path(fixture_root))
+    for root_dir in roots:
+        if not root_dir.is_dir():
+            continue
+        for item in root_dir.iterdir():
+            if not item.is_dir():
+                continue
+            has_graph = any(
+                p.is_file()
+                for p in (
+                    item / "objects" / "r4d_scene_graph.json",
+                    item / "r4d_scene_graph.json",
+                )
+            )
+            has_video = any(
+                p.is_file() for p in (item / "video.mp4", item / f"{item.name}.mp4")
+            )
+            if has_graph or has_video or (item / "source_metadata.json").is_file():
+                discovered.add(item.name)
+    return sorted(discovered) if discovered else ["demo01", "Demo06-Self"]
 
 
 def load_scene_graph_data(dataset_id: str | None = None) -> dict[str, Any]:
-    """Load the scene graph JSON with in-memory caching and graceful fallback."""
+    """Load only the graph belonging to ``dataset_id``.
+
+    A missing graph is represented by an empty graph.  It must never fall back
+    to the demo01 shoes fixture: doing so makes an unprocessed video appear to
+    contain objects from another video.
+    """
     import copy
 
     ds = get_active_dataset(dataset_id)
@@ -159,62 +228,39 @@ def load_scene_graph_data(dataset_id: str | None = None) -> dict[str, Any]:
     if ds in _GRAPH_CACHE:
         return _GRAPH_CACHE[ds]
 
-    loaded_data: dict[str, Any] | None = None
     for path in get_search_paths(ds):
-        if path.is_file():
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    loaded_data = json.load(f)
-                    break
-            except (OSError, json.JSONDecodeError) as e:
-                logger.warning(f"Failed to parse {path}: {e}")
+        if not path.is_file():
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                loaded_data = json.load(f)
+            graph_dataset = loaded_data.get("dataset_id")
+            if graph_dataset and graph_dataset != ds:
+                logger.warning(
+                    "Ignoring scene graph for %s at %s (graph belongs to %s)",
+                    ds,
+                    path,
+                    graph_dataset,
+                )
+                continue
+            loaded_data.setdefault("dataset_id", ds)
+            _GRAPH_CACHE[ds] = copy.deepcopy(loaded_data)
+            return _GRAPH_CACHE[ds]
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Failed to parse %s: %s", path, exc)
 
-    if loaded_data is not None:
-        _GRAPH_CACHE[ds] = copy.deepcopy(loaded_data)
-        return _GRAPH_CACHE[ds]
-
-    # Fallback fixture if running before any pipeline execution
-    fallback_data = {
-        "anchors": [
-            {
-                "anchor_id": 1,
-                "label": "Storage Cabinet #1",
-                "center": [-0.055, 0.134, 0.793],
-                "size": [0.88, 0.53, 0.506],
-            }
-        ],
-        "events": [
-            {
-                "event_id": "event_0001",
-                "event_type": "state_change",
-                "instance_id": 1,
-                "object": "Shoes #1 [Active Pair]",
-                "source_relation": "on_floor",
-                "destination_relation": "inside",
-                "source_anchor": "Storage Cabinet #1",
-                "destination_anchor": "Storage Cabinet #1",
-                "start_time": 8.0,
-                "end_time": 35.6,
-            }
-        ],
-        "timeline": {
-            "642": [
-                {
-                    "anchor_id": 1,
-                    "anchor_label": "Storage Cabinet #1",
-                    "instance_id": 1,
-                    "label": "Shoes #1 [Active Pair]",
-                    "relation": "inside",
-                    "relative_distance": 0.095,
-                    "last_seen_timestamp": 35.60,
-                    "timestamp": 42.81,
-                    "is_active_view": False,
-                }
-            ]
-        },
+    # Do not fabricate memories for a video which has not been processed yet.
+    empty_graph = {
+        "dataset_id": ds,
+        "anchors": [],
+        "rooms": [],
+        "events": [],
+        "timeline": {},
+        "scene_graph_ready": False,
     }
-    _GRAPH_CACHE[dataset_id] = copy.deepcopy(fallback_data)
-    return _GRAPH_CACHE[dataset_id]
+    # Do not cache the empty marker: a scene graph can be generated while the
+    # API process remains alive, and the next request should see it.
+    return empty_graph
 
 
 def find_latest_objects_state(data: dict[str, Any]) -> dict[int, dict[str, Any]]:
@@ -238,6 +284,16 @@ def find_latest_objects_state(data: dict[str, Any]) -> dict[int, dict[str, Any]]
     return latest_by_instance
 
 
+def room_summary_clause(room: str | None) -> str:
+    """Grammar-aware room suffix for timeline summaries (" in the Kitchen")."""
+
+    if not room:
+        return ""
+    if room.lower().startswith("room "):
+        return f" in {room}"
+    return f" in the {room}"
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -250,6 +306,7 @@ def health(dataset_id: str | None = None) -> HealthResponse:
     data = load_scene_graph_data(ds)
     anchors = data.get("anchors", [])
     events = data.get("events", [])
+    rooms = data.get("rooms", [])
     timeline = data.get("timeline", {})
 
     return HealthResponse(
@@ -257,6 +314,7 @@ def health(dataset_id: str | None = None) -> HealthResponse:
         version="0.1.0",
         dataset_loaded=ds,
         num_anchors=len(anchors),
+        num_rooms=len(rooms),
         num_events=len(events),
         total_timeline_frames=len(timeline),
     )
@@ -271,9 +329,105 @@ def get_full_scene_graph(dataset_id: str | None = None) -> dict[str, Any]:
     return {
         "dataset_id": ds,
         "anchors": data.get("anchors", []),
+        "rooms": data.get("rooms", []),
         "events": data.get("events", []),
         "latest_objects": list(latest_states.values()),
         "total_timeline_frames": len(data.get("timeline", {})),
+    }
+
+
+def _matches_query(state: dict[str, Any], canonical_item: str, raw_query: str) -> bool:
+    """Robust cognitive matching supporting multi-word phrases, synonyms, and plurals."""
+    from aegis.memory.reasoning import QueryReasoningEngine
+
+    label = state.get("label", "").lower()
+    raw = raw_query.lower().strip()
+    canon = canonical_item.lower().strip()
+
+    if canon in label or raw in label:
+        return True
+
+    base_label = label.split("#")[0].split("[")[0].strip()
+    if base_label and (base_label in canon or base_label in raw):
+        return True
+
+    syns = QueryReasoningEngine.ITEM_SYNONYMS.get(canon, [])
+    if any(syn in label for syn in syns):
+        return True
+
+    for c_key, c_syns in QueryReasoningEngine.ITEM_SYNONYMS.items():
+        if (c_key in base_label or any(s in base_label for s in c_syns)) and (
+            c_key in canon or any(s in canon for s in c_syns)
+        ):
+            return True
+
+    if canon.endswith("s") and len(canon) > 3 and canon[:-1] in label:
+        return True
+    return (canon + "s") in label
+
+
+@app.get("/api/v1/datasets")
+def get_datasets() -> dict[str, Any]:
+    """Return all available datasets, active dataset, and summary of their anchors and tracked objects."""
+    available = list_available_datasets()
+    summaries = []
+    for d in available:
+        sg = load_scene_graph_data(d)
+        anchors = [a.get("label", "") for a in sg.get("anchors", [])]
+        rooms = [r.get("label", "") for r in sg.get("rooms", [])]
+        latest = find_latest_objects_state(sg)
+        objects = sorted(
+            {obj.get("label", "") for obj in latest.values() if obj.get("label")}
+        )
+        events = sg.get("events", [])
+        timeline = sg.get("timeline", {})
+        graph_ready = bool(
+            sg.get("anchors")
+            or sg.get("events")
+            or sg.get("timeline")
+            or sg.get("rooms")
+        )
+
+        meta_task = ""
+        for meta_p in [
+            Path("data") / d / "source_metadata.json",
+            Path("outputs") / d / "source_metadata.json",
+        ]:
+            if meta_p.is_file():
+                try:
+                    with open(meta_p, "r", encoding="utf-8") as mf:
+                        meta_task = json.load(mf).get("task", "")
+                except (OSError, json.JSONDecodeError) as exc:
+                    logger.debug("Failed to read metadata %s: %s", meta_p, exc)
+        if not meta_task:
+            if d == "demo01":
+                meta_task = "Put Shoes Into Storage Cabinet"
+            elif d == "demo03":
+                meta_task = "Put Food Into Fridge & Sink Pots"
+            elif d == "Demo06-Self":
+                meta_task = "Bottle Relocation Between Desks"
+            else:
+                meta_task = f"Egocentric Scene: {d}"
+
+        summaries.append(
+            {
+                "dataset_id": d,
+                "title": meta_task,
+                "anchors": anchors,
+                "rooms": rooms,
+                "num_rooms": len(rooms),
+                "tracked_objects": objects,
+                "num_events": len(events),
+                "num_timeline_frames": len(timeline),
+                "scene_graph_ready": graph_ready,
+                "is_active": d == ACTIVE_DATASET_ID,
+            }
+        )
+    return {
+        "active_dataset": ACTIVE_DATASET_ID,
+        "total_datasets": len(summaries),
+        "available_datasets": summaries,
+        "datasets": summaries,
     }
 
 
@@ -285,6 +439,9 @@ def select_dataset(
 ) -> dict[str, Any]:
     """Switch the server's globally active dataset."""
     set_active_dataset(dataset_id)
+    # Refresh on an explicit switch so a graph generated since the previous
+    # selection is not hidden by the in-process cache.
+    _GRAPH_CACHE.pop(dataset_id.strip(), None)
     data = load_scene_graph_data(dataset_id)
     return {
         "status": "ok",
@@ -320,11 +477,125 @@ def get_anchors(dataset_id: str | None = None) -> list[AnchorModel]:
                 label=label,
                 center=anc.get("center", [0.0, 0.0, 0.0]),
                 size=anc.get("size", [1.0, 1.0, 1.0]),
+                room_id=anc.get("room_id"),
+                room_label=anc.get("room_label"),
                 contained_objects=contained,
             )
         )
 
     return results
+
+
+@app.get("/api/v1/rooms", response_model=list[RoomModel])
+def get_rooms(dataset_id: str | None = None) -> list[RoomModel]:
+    """Return all room-level spatial regions with their contained anchors and objects."""
+    ds = get_active_dataset(dataset_id)
+    data = load_scene_graph_data(ds)
+    raw_rooms = data.get("rooms", [])
+    raw_anchors = data.get("anchors", [])
+    latest_states = find_latest_objects_state(data)
+
+    results: list[RoomModel] = []
+    for room in raw_rooms:
+        room_id = room.get("room_id", 0)
+        results.append(
+            RoomModel(
+                room_id=room_id,
+                label=room.get("label", f"Room #{room_id}"),
+                room_type=room.get("room_type", "Room"),
+                centroid=room.get("centroid", [0.0, 0.0, 0.0]),
+                anchors=[
+                    anchor.get("label", f"Anchor #{anchor.get('anchor_id', 0)}")
+                    for anchor in raw_anchors
+                    if anchor.get("room_id") == room_id
+                ],
+                objects=[
+                    obj.get("label", f"Instance #{oid}")
+                    for oid, obj in latest_states.items()
+                    if obj.get("room_id") == room_id
+                ],
+                keyframe_count=int(room.get("keyframe_count", 0)),
+            )
+        )
+
+    return results
+
+
+@app.post("/api/v1/rooms/rename")
+def rename_room(
+    room_id: int = Query(..., description="Room to rename"),
+    label: str = Query(..., min_length=1, description="New human-readable room name"),
+    dataset_id: str | None = None,
+) -> dict[str, Any]:
+    """Rename a room in the persisted scene graph (caregiver house calibration).
+
+    Persists the new label into the r4d_scene_graph.json artifact so the name
+    survives server restarts, and updates every anchor / timeline entry bound
+    to the room. The Flutter client will surface this in a later phase.
+    """
+
+    import json as json_module
+
+    ds = get_active_dataset(dataset_id)
+    source_path = next((path for path in get_search_paths(ds) if path.is_file()), None)
+    if source_path is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No scene graph found for dataset '{ds}'.",
+        )
+
+    with source_path.open("r", encoding="utf-8") as handle:
+        graph_data = json_module.load(handle)
+    if graph_data.get("dataset_id") and graph_data["dataset_id"] != ds:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Scene graph at {source_path} belongs to another dataset.",
+        )
+
+    rooms = graph_data.get("rooms", [])
+    room = next((r for r in rooms if r.get("room_id") == room_id), None)
+    if room is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Room #{room_id} was not found in dataset '{ds}'.",
+        )
+
+    new_label = label.strip()
+    room["label"] = new_label
+    for anchor in graph_data.get("anchors", []):
+        if anchor.get("room_id") == room_id:
+            anchor["room_label"] = new_label
+    for entries in graph_data.get("timeline", {}).values():
+        for entry in entries:
+            if entry.get("room_id") == room_id:
+                entry["room_label"] = new_label
+    for event in graph_data.get("events", []):
+        if event.get("source_room") and event.get("source_room", "").lower().startswith(
+            "room #"
+        ):
+            event["source_room"] = new_label
+        if event.get("destination_room") and event.get(
+            "destination_room", ""
+        ).lower().startswith("room #"):
+            event["destination_room"] = new_label
+
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = source_path.with_suffix(".json.tmp")
+    temporary.write_text(
+        json_module.dumps(graph_data, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(source_path)
+
+    _GRAPH_CACHE[ds] = graph_data
+
+    return {
+        "status": "ok",
+        "dataset_id": ds,
+        "room_id": room_id,
+        "label": new_label,
+        "message": f"Room #{room_id} renamed to '{new_label}'.",
+    }
 
 
 @app.get("/api/v1/query", response_model=MemoryQueryResponse)
@@ -343,52 +614,76 @@ def query_memory(
 
     events = data.get("events", [])
     canonical_item = QueryReasoningEngine.extract_target_item(item)
+    room_filter = QueryReasoningEngine.extract_room_filter(item)
 
     # Find matching instances strictly within this dataset
-    matches: list[dict[str, Any]] = []
-    for state in latest_states.values():
-        label = state.get("label", "").lower()
-        if canonical_item in label or (canonical_item == "shoes" and "shoe" in label):
-            matches.append(state)
-
-    # Cross-dataset fallback only if dataset was unspecified and no match found in primary
-    if not matches and dataset_id is None:
-        alt_dataset = "Demo06-Self" if ds == "demo01" else "demo01"
-        alt_data = load_scene_graph_data(alt_dataset)
-        alt_states = find_latest_objects_state(alt_data)
-        alt_matches = [
-            s
-            for s in alt_states.values()
-            if canonical_item in s.get("label", "").lower()
-            or (canonical_item == "shoes" and "shoe" in s.get("label", "").lower())
-        ]
-        if alt_matches:
-            ds = alt_dataset
-            data = alt_data
-            latest_states = alt_states
-            matches = alt_matches
-            events = data.get("events", [])
+    matches: list[dict[str, Any]] = [
+        state
+        for state in latest_states.values()
+        if _matches_query(state, canonical_item, item)
+    ]
 
     if not matches:
         available_labels = list(
             {s.get("label", "") for s in latest_states.values() if s.get("label")}
         )
-        hint = (
-            f" Available items in {ds}: {', '.join(available_labels)}."
-            if available_labels
-            else ""
-        )
+        if not data.get("scene_graph_ready", True) and not available_labels:
+            reason = f"The scene graph for {ds} has not been generated yet."
+        else:
+            hint = (
+                f" Available items in {ds}: {', '.join(available_labels)}."
+                if available_labels
+                else ""
+            )
+            reason = f"I couldn't locate any '{item}' in {ds}.{hint}"
         return MemoryQueryResponse(
             query=item,
             found=False,
-            location_summary=f"I couldn't locate any '{item}' in {ds}.{hint}",
+            location_summary=reason,
+            explanation=reason,
         )
 
+    # Room-constrained queries ("keys in the kitchen") narrow the candidates.
+    if room_filter:
+        room_filter_clean = " ".join(room_filter.split())
+        room_matches = [
+            m
+            for m in matches
+            if room_filter_clean in str(m.get("room_label", "")).lower()
+        ]
+        if not room_matches:
+            known_rooms = sorted(
+                {str(m.get("room_label")) for m in matches if m.get("room_label")}
+            )
+            from aegis.memory.reasoning import room_phrase
+
+            where = (
+                f" It was last seen in {', '.join(known_rooms)}." if known_rooms else ""
+            )
+            reason = (
+                f"I couldn't find any '{canonical_item}'"
+                f"{room_phrase(room_filter_clean.title())}.{where}"
+            )
+            return MemoryQueryResponse(
+                query=item,
+                found=False,
+                item=item,
+                location_summary=reason,
+                explanation=reason,
+            )
+        matches = room_matches
+
     # Sort matches: active instance first, then by recency
-    def sort_key(obj: dict[str, Any]) -> tuple[int, float]:
-        is_active = 1 if "active" in obj.get("label", "").lower() else 0
+    def sort_key(obj: dict[str, Any]) -> tuple[int, int, float]:
+        label = obj.get("label", "").lower()
+        # Prefer an exact lexical match (e.g. "rubbish" -> Rubbish #7)
+        # before choosing the most recent instance among synonyms.
+        exact_match = int(
+            canonical_item.lower() in label or item.lower().strip() in label
+        )
+        is_active = 1 if "active" in label else 0
         timestamp = float(obj.get("last_seen_timestamp", 0.0))
-        return (is_active, timestamp)
+        return (exact_match, is_active, timestamp)
 
     matches.sort(key=sort_key, reverse=True)
     primary = matches[0]
@@ -421,9 +716,12 @@ def query_memory(
         instance_id=primary.get("instance_id"),
         anchor_id=primary.get("anchor_id"),
         anchor_label=anchor_label,
+        room_id=primary.get("room_id"),
+        room_label=primary.get("room_label"),
         relation=relation,
         relative_distance_m=round(dist_val, 2),
         location_summary=summary,
+        explanation=summary,
         last_seen_timestamp_s=primary.get("last_seen_timestamp"),
         last_seen_time_ago="Recorded today",
         is_persistent_memory=is_persistent,
@@ -452,17 +750,39 @@ def get_timeline(dataset_id: str | None = None) -> list[TimelineEventModel]:
         src_anc = ev.get("source_anchor")
         dest_anc = ev.get("destination_anchor") or default_anchor_name
         ev_type = ev.get("event_type", "state_change")
+        src_room = ev.get("source_room")
+        dest_room = ev.get("destination_room")
 
-        if ev_type == "anchor_change" or (src_anc and dest_anc and src_anc != dest_anc):
-            summary = f"{obj_name} was moved from {src_anc} to {dest_anc}."
+        if ev_type == "room_change":
+            summary = (
+                f"User moved from the {src_room} to the {dest_room}."
+                if src_room
+                else f"User arrived in {dest_room}."
+            )
+        elif ev_type == "anchor_change" or (
+            src_anc and dest_anc and src_anc != dest_anc
+        ):
+            summary = (
+                f"{obj_name} was moved from {src_anc} to {dest_anc}"
+                + room_summary_clause(dest_room)
+                + "."
+            )
         elif dst_rel == "inside":
-            summary = f"{obj_name} was placed inside {dest_anc}."
+            summary = f"{obj_name} was placed inside {dest_anc}{room_summary_clause(dest_room)}."
         elif dst_rel == "on_surface":
-            summary = f"{obj_name} is resting on {dest_anc}."
+            summary = (
+                f"{obj_name} is resting on {dest_anc}{room_summary_clause(dest_room)}."
+            )
         elif dst_rel == "on_floor":
-            summary = f"{obj_name} was left on the floor near {dest_anc}."
+            summary = (
+                f"{obj_name} was left on the floor near {dest_anc}"
+                + room_summary_clause(dest_room)
+                + "."
+            )
         elif dst_rel == "carried_by_user":
-            summary = f"{obj_name} is being carried by user."
+            summary = (
+                f"{obj_name} is being carried by user{room_summary_clause(dest_room)}."
+            )
         else:
             summary = f"{obj_name} transition from {src_rel} to {dst_rel}."
 
@@ -475,6 +795,8 @@ def get_timeline(dataset_id: str | None = None) -> list[TimelineEventModel]:
                 destination_relation=dst_rel,
                 source_anchor=src_anc,
                 destination_anchor=dest_anc,
+                source_room=src_room,
+                destination_room=dest_room,
                 start_time=float(ev.get("start_time", 0.0)),
                 end_time=float(ev.get("end_time", 0.0)),
                 summary=summary,

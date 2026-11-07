@@ -168,9 +168,14 @@ class Sam2Config:
 
 @dataclass(frozen=True, slots=True)
 class PerceptionConfig:
-    """2D/3D object perception and tracking settings."""
+    """2D/3D object perception and tracking settings.
 
-    detector_model: str = "yolov8m-worldv2.pt"
+    YOLOE is the default because it produces open-vocabulary masks directly;
+    YOLO-World remains available as a detector-only fallback.
+    """
+
+    detector_backend: str = "yoloe"
+    detector_model: str = "yoloe-11l-seg.pt"
     target_classes: tuple[str, ...] = (
         "shoes",
         "shoe",
@@ -190,9 +195,88 @@ class PerceptionConfig:
     iou_threshold: float = 0.45
     min_points_in_box: int = 15
     track_max_gap: int = 3
+    # Keep a lightweight appearance memory after a short-term track expires.
+    # This is deliberately bounded; it is not a global identity database.
+    reid_max_gap: int = 30
+    reid_appearance_threshold: float = 0.35
     track_smoothing: float = 0.65
     hand_contact_iou_threshold: float = 0.10
     hand_contact_max_distance: float = 0.35
+
+
+@dataclass(frozen=True, slots=True)
+class RoomMemoryConfig:
+    """Room-level spatial memory settings (top level of the memory hierarchy)."""
+
+    enabled: bool = True
+    # Floor-plane distance at which two keyframe positions join one room zone.
+    zone_link_radius: float = 1.5
+    # Minimum keyframes a trajectory zone needs before it becomes a room.
+    min_zone_keyframes: int = 3
+
+
+@dataclass(frozen=True, slots=True)
+class KeyframeConfig:
+    """Live keyframe selection criteria (FR2.1).
+
+    A frame is kept only when it is bright enough, sharp enough, and visually
+    different from the last accepted frame. ``max_interval_seconds`` forces a
+    keyframe after a quiet period so a static scene is still represented.
+    """
+
+    enabled: bool = True
+    min_sharpness: float = 15.0
+    min_brightness: float = 20.0
+    max_brightness: float = 245.0
+    min_visual_change: float = 0.008
+    max_interval_seconds: float = 2.0
+
+    def __post_init__(self) -> None:
+        if self.min_sharpness < 0:
+            raise ValueError("live.keyframe.min_sharpness must be non-negative")
+        if not 0 <= self.min_brightness < self.max_brightness <= 255:
+            raise ValueError(
+                "live.keyframe brightness bounds must satisfy "
+                "0 <= min_brightness < max_brightness <= 255"
+            )
+        if not 0 <= self.min_visual_change <= 1:
+            raise ValueError("live.keyframe.min_visual_change must be in [0, 1]")
+        if self.max_interval_seconds <= 0:
+            raise ValueError("live.keyframe.max_interval_seconds must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class LiveCaptureConfig:
+    """Live FR1/FR2 capture defaults loaded from the runtime YAML."""
+
+    sample_fps: float = 2.0
+    max_duration_seconds: float = 600.0
+    reconnect_interval_seconds: float = 3.0
+    reconnect_timeout_seconds: float = 30.0
+    buffer_capacity: int = 30
+    checkpoint_every: int = 1
+    keyframe: KeyframeConfig = field(default_factory=KeyframeConfig)
+
+    def __post_init__(self) -> None:
+        if self.sample_fps <= 0:
+            raise ValueError("live.sample_fps must be positive")
+        if self.max_duration_seconds < 0:
+            raise ValueError("live.max_duration_seconds must be non-negative")
+        if self.reconnect_interval_seconds < 0:
+            raise ValueError("live.reconnect_interval_seconds must be non-negative")
+        if self.reconnect_timeout_seconds < 0:
+            raise ValueError("live.reconnect_timeout_seconds must be non-negative")
+        if self.buffer_capacity <= 0:
+            raise ValueError("live.buffer_capacity must be positive")
+        if self.checkpoint_every <= 0:
+            raise ValueError("live.checkpoint_every must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryConfig:
+    """Spatio-temporal memory construction settings."""
+
+    rooms: RoomMemoryConfig = field(default_factory=RoomMemoryConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +292,8 @@ class RuntimeConfig:
     sam2: Sam2Config = field(default_factory=Sam2Config)
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
     geometry: GeometryConfig = field(default_factory=GeometryConfig)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
+    live: LiveCaptureConfig = field(default_factory=LiveCaptureConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
 
     @classmethod
@@ -223,6 +309,8 @@ class RuntimeConfig:
         sam2_raw = _mapping(raw.get("sam2"), "sam2")
         perception_raw = _mapping(raw.get("perception"), "perception")
         geometry_raw = _mapping(raw.get("geometry"), "geometry")
+        memory_raw = _mapping(raw.get("memory"), "memory")
+        live_raw = _mapping(raw.get("live"), "live")
         visualization_raw = _mapping(raw.get("visualization"), "visualization")
 
         storage_defaults = StorageConfig()
@@ -234,6 +322,8 @@ class RuntimeConfig:
         sam2_defaults = Sam2Config()
         perception_defaults = PerceptionConfig()
         geometry_defaults = GeometryConfig()
+        memory_defaults = MemoryConfig()
+        live_defaults = LiveCaptureConfig()
         visualization_defaults = VisualizationConfig()
 
         video = VideoConfig(
@@ -412,6 +502,11 @@ class RuntimeConfig:
             target_classes = perception_defaults.target_classes
 
         perception = PerceptionConfig(
+            detector_backend=str(
+                perception_raw.get(
+                    "detector_backend", perception_defaults.detector_backend
+                )
+            ).lower(),
             detector_model=str(
                 perception_raw.get("detector_model", perception_defaults.detector_model)
             ),
@@ -432,6 +527,15 @@ class RuntimeConfig:
             track_max_gap=int(
                 perception_raw.get("track_max_gap", perception_defaults.track_max_gap)
             ),
+            reid_max_gap=int(
+                perception_raw.get("reid_max_gap", perception_defaults.reid_max_gap)
+            ),
+            reid_appearance_threshold=float(
+                perception_raw.get(
+                    "reid_appearance_threshold",
+                    perception_defaults.reid_appearance_threshold,
+                )
+            ),
             track_smoothing=float(
                 perception_raw.get(
                     "track_smoothing", perception_defaults.track_smoothing
@@ -451,6 +555,11 @@ class RuntimeConfig:
             ),
         )
 
+        if perception.detector_backend not in {"yoloe", "yolo_world"}:
+            raise ValueError(
+                "perception.detector_backend must be 'yoloe' or 'yolo_world'"
+            )
+
         if (
             perception.confidence_threshold <= 0
             or perception.confidence_threshold > 1.0
@@ -458,6 +567,9 @@ class RuntimeConfig:
             or perception.iou_threshold > 1.0
             or perception.min_points_in_box <= 0
             or perception.track_max_gap < 0
+            or perception.reid_max_gap < perception.track_max_gap
+            or perception.reid_appearance_threshold <= 0.0
+            or perception.reid_appearance_threshold > 1.0
             or perception.track_smoothing < 0.0
             or perception.track_smoothing >= 1.0
         ):
@@ -518,6 +630,70 @@ class RuntimeConfig:
         ):
             raise ValueError("visualization values must be positive")
 
+        rooms_defaults = memory_defaults.rooms
+        rooms_raw = _mapping(memory_raw.get("rooms"), "memory.rooms")
+        rooms = RoomMemoryConfig(
+            enabled=bool(rooms_raw.get("enabled", rooms_defaults.enabled)),
+            zone_link_radius=float(
+                rooms_raw.get("zone_link_radius", rooms_defaults.zone_link_radius)
+            ),
+            min_zone_keyframes=int(
+                rooms_raw.get("min_zone_keyframes", rooms_defaults.min_zone_keyframes)
+            ),
+        )
+        if rooms.zone_link_radius <= 0 or rooms.min_zone_keyframes < 1:
+            raise ValueError("memory.rooms thresholds are outside their valid ranges")
+
+        keyframe_defaults = live_defaults.keyframe
+        keyframe_raw = _mapping(live_raw.get("keyframe"), "live.keyframe")
+        keyframe = KeyframeConfig(
+            enabled=bool(keyframe_raw.get("enabled", keyframe_defaults.enabled)),
+            min_sharpness=float(
+                keyframe_raw.get("min_sharpness", keyframe_defaults.min_sharpness)
+            ),
+            min_brightness=float(
+                keyframe_raw.get("min_brightness", keyframe_defaults.min_brightness)
+            ),
+            max_brightness=float(
+                keyframe_raw.get("max_brightness", keyframe_defaults.max_brightness)
+            ),
+            min_visual_change=float(
+                keyframe_raw.get(
+                    "min_visual_change", keyframe_defaults.min_visual_change
+                )
+            ),
+            max_interval_seconds=float(
+                keyframe_raw.get(
+                    "max_interval_seconds", keyframe_defaults.max_interval_seconds
+                )
+            ),
+        )
+        live = LiveCaptureConfig(
+            sample_fps=float(live_raw.get("sample_fps", live_defaults.sample_fps)),
+            max_duration_seconds=float(
+                live_raw.get("max_duration_seconds", live_defaults.max_duration_seconds)
+            ),
+            reconnect_interval_seconds=float(
+                live_raw.get(
+                    "reconnect_interval_seconds",
+                    live_defaults.reconnect_interval_seconds,
+                )
+            ),
+            reconnect_timeout_seconds=float(
+                live_raw.get(
+                    "reconnect_timeout_seconds",
+                    live_defaults.reconnect_timeout_seconds,
+                )
+            ),
+            buffer_capacity=int(
+                live_raw.get("buffer_capacity", live_defaults.buffer_capacity)
+            ),
+            checkpoint_every=int(
+                live_raw.get("checkpoint_every", live_defaults.checkpoint_every)
+            ),
+            keyframe=keyframe,
+        )
+
         return cls(
             storage=StorageConfig(
                 data_volume=str(
@@ -543,6 +719,8 @@ class RuntimeConfig:
             sam2=sam2,
             perception=perception,
             geometry=geometry,
+            memory=MemoryConfig(rooms=rooms),
+            live=live,
             visualization=visualization,
         )
 

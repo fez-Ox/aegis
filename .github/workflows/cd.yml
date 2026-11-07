@@ -65,9 +65,19 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Ensure Android Platform Support
+      - name: Verify Android Network Permissions
         working-directory: apps/mobile
-        run: flutter create --platforms=android --org com.aegis .
+        run: |
+          manifest="android/app/src/main/AndroidManifest.xml"
+          if ! grep -q 'android.permission.INTERNET' "$manifest"; then
+            echo "Error: Missing INTERNET permission in $manifest"
+            exit 1
+          fi
+          if ! grep -q 'usesCleartextTraffic' "$manifest"; then
+            echo "Error: Missing usesCleartextTraffic in $manifest"
+            exit 1
+          fi
+          echo "Android network permissions and cleartext traffic verified."
 
       - name: Install Flutter dependencies
         working-directory: apps/mobile
@@ -88,8 +98,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0-mid1
-          name: Aegis v0.1.0-mid1 (FYP-1 Mid Supervisory Release)
+          tag_name: v0.2.0-mid2
+          name: Aegis v0.2.0-mid2 (FYP-1 Mid Supervisory Release)
           files: apps/mobile/build/app/outputs/flutter-apk/*.apk
           generate_release_notes: true
+          overwrite_files: true
         continue-on-error: true
