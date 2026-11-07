@@ -208,5 +208,7 @@ uv run aegis-ingest --url 'http://PHONE_IP:8080/video' \
 ```
 
 Verify afterwards: `session.json.status == "time_limit"`, no unexpected gaps,
-`frame_count` close to `sample_fps × duration`, and a readable JPEG for the
-first and last sequence numbers.
+`keyframe_selection.rejected` explaining any shortfall (with keyframe selection
+enabled the frame count is the number of accepted keyframes, not
+`sample_fps × duration`; disable it with `--no-keyframe-selection` to compare),
+and a readable JPEG for the first and last sequence numbers.
