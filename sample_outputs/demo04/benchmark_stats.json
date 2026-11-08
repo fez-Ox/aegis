@@ -1,0 +1,66 @@
+{
+  "dataset_id": "demo04",
+  "schema_version": 1,
+  "stages": {
+    "detect_and_lift": {
+      "boxes_3d": 93,
+      "dataset_id": "demo04",
+      "detections_2d": 93,
+      "detector_model": "yoloe-11l-seg.pt",
+      "elapsed_seconds": 64.53,
+      "events": 6,
+      "events_file": "/data/demo04/outputs/objects/events.json",
+      "gpu_device": "NVIDIA L4",
+      "keyframe_count": 117,
+      "objects_file": "/data/demo04/outputs/objects/detected_objects_3d.json",
+      "peak_vram_gb": 1.578,
+      "r4d_scene_graph": "/data/demo04/outputs/objects/r4d_scene_graph.json",
+      "reserved_vram_gb": 2.02,
+      "sam2_masks_generated": 93,
+      "sam2_model": "facebook/sam2-hiera-large",
+      "spatial_memory_graph": "/data/demo04/outputs/objects/spatial_memory_graph.json",
+      "stage": "detect_and_lift",
+      "throughput_fps": 1.81,
+      "tracks": 10
+    },
+    "preprocess": {
+      "calibration": null,
+      "dataset_id": "demo04",
+      "elapsed_seconds": 33.52,
+      "frame_count": 701,
+      "frames": "/data/demo04/frames",
+      "metadata": "/data/demo04/metadata.json",
+      "stage": "preprocess",
+      "throughput_fps": 20.9
+    },
+    "rerun": {
+      "dataset_id": "demo04",
+      "elapsed_seconds": 10.37,
+      "frame_count": 701,
+      "keyframe_count": 117,
+      "point_count": 75243,
+      "recording": "/data/demo04/outputs/viewer/demo.rrd",
+      "recording_size_mb": 28.55,
+      "stage": "rerun",
+      "total_anchors": 1,
+      "total_events": 6,
+      "total_rooms": 2,
+      "total_tracks": 10
+    },
+    "vggt": {
+      "dataset_id": "demo04",
+      "elapsed_seconds": 234.49,
+      "gpu_device": "NVIDIA L4",
+      "keyframe_count": 117,
+      "model_id": "facebook/VGGT-Omega",
+      "peak_vram_gb": 14.79,
+      "point_count": 75243,
+      "pointcloud": "/data/demo04/outputs/geometry/pointcloud.ply",
+      "poses": "/data/demo04/outputs/geometry/poses.json",
+      "reserved_vram_gb": 18.83,
+      "stage": "vggt",
+      "throughput_fps": 0.5
+    }
+  },
+  "total_pipeline_seconds": 342.91
+}
