@@ -12,6 +12,19 @@ MODEL_CACHE_VOLUME_NAME = os.getenv("AEGIS_MODEL_CACHE_VOLUME", "aegis-model-cac
 DATA_MOUNT = "/data"
 MODEL_MOUNT = "/models"
 
+# Accelerator policy: L4 by default (the designed deployment). Set
+# AEGIS_GPU=cpu to run the same functions on CPU Modal containers, which works
+# on workspaces that cannot allocate GPUs yet (slower, but honest compute).
+GPU_TYPE = os.getenv("AEGIS_GPU", "L4").strip()
+CPU_ONLY = GPU_TYPE.lower() in {"cpu", "none", "off", ""}
+
+
+def _compute(gpu_memory_mb: int, cpu_memory_mb: int) -> dict[str, Any]:
+    if CPU_ONLY:
+        return {"cpu": 16.0, "memory": cpu_memory_mb}
+    return {"gpu": GPU_TYPE, "memory": gpu_memory_mb}
+
+
 app = modal.App("aegis-poc")
 data_volume = modal.Volume.from_name(DATA_VOLUME_NAME, create_if_missing=True)
 model_cache_volume = modal.Volume.from_name(
@@ -77,6 +90,9 @@ VGGT_IMAGE = (
         {
             "HF_HOME": f"{MODEL_MOUNT}/huggingface",
             "TORCH_HOME": f"{MODEL_MOUNT}/torch",
+            # A real run must never silently swap in the synthetic test
+            # geometry if VGGT fails (e.g. on a CPU-only container).
+            "AEGIS_VGGT_STRICT": "1",
         }
     )
     .add_local_python_source("aegis", copy=True)
@@ -125,14 +141,13 @@ def preprocess_video_remote(dataset_id: str, config: dict[str, Any]) -> dict[str
 
 @app.function(
     image=VGGT_IMAGE,
-    gpu="L4",
     volumes={DATA_MOUNT: data_volume, MODEL_MOUNT: model_cache_volume},
     secrets=SECRETS,
-    memory=24576,
     timeout=7200,
+    **_compute(gpu_memory_mb=24576, cpu_memory_mb=40960),
 )
 def vggt_reconstruct_remote(dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
-    """Run VGGT-Ω feed-forward 3D reconstruction remotely on an L4 GPU."""
+    """Run VGGT-Ω feed-forward 3D reconstruction remotely on an L4 GPU (or CPU)."""
 
     from aegis.remote.workers import run_vggt
 
@@ -148,14 +163,13 @@ dust3r_reconstruct_remote = vggt_reconstruct_remote
 
 @app.function(
     image=PERCEPTION_IMAGE,
-    gpu="L4",
     volumes={DATA_MOUNT: data_volume, MODEL_MOUNT: model_cache_volume},
     secrets=SECRETS,
-    memory=16384,
     timeout=7200,
+    **_compute(gpu_memory_mb=16384, cpu_memory_mb=40960),
 )
 def detect_and_lift_remote(dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
-    """Run open-vocabulary object perception, SAM 2 masking, and 3D lifting on an L4 GPU."""
+    """Run open-vocabulary perception, SAM 2 masking, and 3D lifting (GPU or CPU)."""
 
     from aegis.remote.workers import run_detect_and_lift
 
