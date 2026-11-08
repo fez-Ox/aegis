@@ -1,0 +1,318 @@
+{
+  "generated_at": "2026-11-08T08:49:38.338166+00:00",
+  "item_synonyms": {
+    "backpack": [
+      "backpack",
+      "bag",
+      "bags",
+      "handbag",
+      "purse",
+      "pack",
+      "backpacks"
+    ],
+    "bed": [
+      "beds",
+      "bed"
+    ],
+    "book": [
+      "book",
+      "books",
+      "novel",
+      "magazine"
+    ],
+    "bottle": [
+      "bottle",
+      "water bottle",
+      "flask",
+      "cup",
+      "drink",
+      "tumbler",
+      "mug",
+      "bottles"
+    ],
+    "bowl": [
+      "bowl",
+      "bowls",
+      "dish",
+      "dishes",
+      "basin"
+    ],
+    "cabinet": [
+      "cabinets",
+      "cabinet"
+    ],
+    "chair": [
+      "chairs",
+      "chair"
+    ],
+    "clothes": [
+      "clothes",
+      "clothing",
+      "shirt",
+      "shirts",
+      "pants",
+      "laundry",
+      "garment",
+      "garments"
+    ],
+    "cooking pot": [
+      "cooking pot",
+      "pot",
+      "pots",
+      "pan",
+      "pans",
+      "saucepan",
+      "cookware",
+      "cooking pots"
+    ],
+    "couch": [
+      "couchs",
+      "couch"
+    ],
+    "counter": [
+      "counters",
+      "counter"
+    ],
+    "cupboard": [
+      "cupboards",
+      "cupboard"
+    ],
+    "desk": [
+      "desks",
+      "desk"
+    ],
+    "dining table": [
+      "dining tables",
+      "dining table"
+    ],
+    "door": [
+      "doors",
+      "door"
+    ],
+    "drawer": [
+      "drawers",
+      "drawer"
+    ],
+    "floor entrance": [
+      "floor entrances",
+      "floor entrance"
+    ],
+    "food": [
+      "food",
+      "leftover",
+      "leftovers",
+      "meal",
+      "snack",
+      "groceries",
+      "foods"
+    ],
+    "food container": [
+      "food containers",
+      "food container"
+    ],
+    "fork": [
+      "forks",
+      "fork"
+    ],
+    "fridge": [
+      "fridges",
+      "fridge"
+    ],
+    "garbage bag": [
+      "garbage bags",
+      "garbage bag"
+    ],
+    "glasses": [
+      "glasses",
+      "spectacles",
+      "eyewear",
+      "sunglasses",
+      "reading glasses"
+    ],
+    "keys": [
+      "key",
+      "keys",
+      "keychain",
+      "car key",
+      "house key"
+    ],
+    "kitchen counter": [
+      "kitchen counters",
+      "kitchen counter"
+    ],
+    "knife": [
+      "knifes",
+      "knife"
+    ],
+    "laptop": [
+      "laptop",
+      "computer",
+      "notebook",
+      "laptops"
+    ],
+    "medicine": [
+      "medicine",
+      "medicines",
+      "pills",
+      "meds",
+      "prescription",
+      "vitamins"
+    ],
+    "phone": [
+      "phone",
+      "cell phone",
+      "mobile phone",
+      "smartphone",
+      "phones"
+    ],
+    "pill bottle": [
+      "pill bottles",
+      "pill bottle"
+    ],
+    "plastic bottle": [
+      "plastic bottles",
+      "plastic bottle"
+    ],
+    "plate": [
+      "plates",
+      "plate"
+    ],
+    "refrigerator": [
+      "refrigerators",
+      "refrigerator"
+    ],
+    "remote control": [
+      "remote controls",
+      "remote control"
+    ],
+    "shelf": [
+      "shelfs",
+      "shelf"
+    ],
+    "shoes": [
+      "shoe",
+      "shoes",
+      "sneaker",
+      "sneakers",
+      "boots",
+      "footwear",
+      "slippers"
+    ],
+    "sink": [
+      "sinks",
+      "sink"
+    ],
+    "sofa": [
+      "sofas",
+      "sofa"
+    ],
+    "spoon": [
+      "spoons",
+      "spoon"
+    ],
+    "stairs": [
+      "stairs"
+    ],
+    "storage cabinet": [
+      "storage cabinets",
+      "storage cabinet"
+    ],
+    "table": [
+      "tables",
+      "table"
+    ],
+    "television": [
+      "televisions",
+      "television"
+    ],
+    "toilet": [
+      "toilets",
+      "toilet"
+    ],
+    "towel": [
+      "towels",
+      "towel"
+    ],
+    "trash": [
+      "trash",
+      "garbage",
+      "rubbish",
+      "waste",
+      "trash bin",
+      "bin",
+      "wastebasket",
+      "trashs"
+    ],
+    "user hands": [
+      "user hands",
+      "user hand"
+    ],
+    "wallet": [
+      "wallets",
+      "wallet"
+    ],
+    "window": [
+      "windows",
+      "window"
+    ]
+  },
+  "room_keywords": {
+    "balcony": [
+      "balcony",
+      "terrace"
+    ],
+    "basement": [
+      "basement"
+    ],
+    "bathroom": [
+      "bathroom",
+      "washroom"
+    ],
+    "bedroom": [
+      "bedroom",
+      "bed room"
+    ],
+    "dining room": [
+      "dining room",
+      "dining"
+    ],
+    "entryway": [
+      "entryway",
+      "foyer",
+      "entrance hall"
+    ],
+    "garage": [
+      "garage"
+    ],
+    "hallway": [
+      "hallway",
+      "corridor",
+      "hall"
+    ],
+    "kitchen": [
+      "kitchen"
+    ],
+    "living room": [
+      "living room",
+      "lounge"
+    ],
+    "office": [
+      "office",
+      "study room"
+    ],
+    "stairway": [
+      "stairway",
+      "staircase"
+    ],
+    "storage room": [
+      "storage room",
+      "utility room"
+    ]
+  },
+  "schema": 1,
+  "sources": {
+    "config_classes": 14,
+    "pipeline_classes": 56,
+    "scene_graph_labels": 14
+  }
+}
