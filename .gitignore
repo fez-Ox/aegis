@@ -229,3 +229,9 @@ scratch/
 *.mp4
 BS-FYP-Handbook*.pdf
 
+# Local credentials and generated NLQ artifacts
+.keys/
+.ollama/
+NL Querying/outputs/*
+!NL Querying/outputs/README.md
+
