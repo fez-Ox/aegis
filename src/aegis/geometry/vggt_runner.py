@@ -194,8 +194,14 @@ def run_vggt_reconstruction(
         )
 
     except Exception as e:
-        if device == "cuda":
-            raise RuntimeError(f"VGGT-Ω reconstruction failed on GPU: {e}") from e
+        strict = os.environ.get("AEGIS_VGGT_STRICT", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if device == "cuda" or strict:
+            raise RuntimeError(f"VGGT-Ω reconstruction failed on {device}: {e}") from e
 
         import logging
 
