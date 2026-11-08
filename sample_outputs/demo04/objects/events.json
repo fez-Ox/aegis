@@ -1,0 +1,144 @@
+{
+  "dataset_id": "demo04",
+  "events": [
+    {
+      "destination_anchor": "Storage Cabinet #1",
+      "destination_frame": 480,
+      "destination_relation": "inside",
+      "destination_room": "Room #1",
+      "end_time": 32.010964,
+      "event_id": "event_0001",
+      "event_type": "placement",
+      "evidence_frames": [
+        0,
+        474,
+        480,
+        510
+      ],
+      "instance_id": 1,
+      "object": "Garbage Bag #1",
+      "relative_displacement": 0.43899403101136597,
+      "source_anchor": "Storage Cabinet #1",
+      "source_frame": 474,
+      "source_relation": "carried_by_user",
+      "source_room": "Room #1",
+      "stable_observations": 6,
+      "start_time": 31.609992
+    },
+    {
+      "destination_anchor": "Storage Cabinet #1",
+      "destination_frame": 480,
+      "destination_relation": "inside",
+      "destination_room": "Room #1",
+      "end_time": 32.010964,
+      "event_id": "event_0002",
+      "event_type": "placement",
+      "evidence_frames": [
+        48,
+        474,
+        480,
+        696
+      ],
+      "instance_id": 2,
+      "object": "Food Container #2",
+      "relative_displacement": 0.32679132142097445,
+      "source_anchor": "Storage Cabinet #1",
+      "source_frame": 474,
+      "source_relation": "carried_by_user",
+      "source_room": "Room #1",
+      "stable_observations": 37,
+      "start_time": 31.609992
+    },
+    {
+      "destination_anchor": "Storage Cabinet #1",
+      "destination_frame": 516,
+      "destination_relation": "on_surface",
+      "destination_room": "Room #1",
+      "end_time": 34.416798,
+      "event_id": "event_0003",
+      "event_type": "state_change",
+      "evidence_frames": [
+        480,
+        510,
+        516
+      ],
+      "instance_id": 1,
+      "object": "Garbage Bag #1",
+      "relative_displacement": 0.18514202274678912,
+      "source_anchor": "Storage Cabinet #1",
+      "source_frame": 510,
+      "source_relation": "inside",
+      "source_room": "Room #1",
+      "stable_observations": 1,
+      "start_time": 34.015826
+    },
+    {
+      "destination_anchor": "Storage Cabinet #1",
+      "destination_frame": 522,
+      "destination_relation": "moving_towards",
+      "destination_room": "Room #1",
+      "end_time": 34.817771,
+      "event_id": "event_0004",
+      "event_type": "state_change",
+      "evidence_frames": [
+        516,
+        522,
+        696
+      ],
+      "instance_id": 1,
+      "object": "Garbage Bag #1",
+      "relative_displacement": 0.13282292337566018,
+      "source_anchor": "Storage Cabinet #1",
+      "source_frame": 516,
+      "source_relation": "on_surface",
+      "source_room": "Room #1",
+      "stable_observations": 30,
+      "start_time": 34.416798
+    },
+    {
+      "destination_anchor": "Storage Cabinet #1",
+      "destination_frame": 594,
+      "destination_relation": "moving_towards",
+      "destination_room": "Room #1",
+      "end_time": 39.62944,
+      "event_id": "event_0005",
+      "event_type": "state_change",
+      "evidence_frames": [
+        582,
+        588,
+        594,
+        696
+      ],
+      "instance_id": 5,
+      "object": "Rubbish #5",
+      "relative_displacement": 0.04054027646427925,
+      "source_anchor": "Storage Cabinet #1",
+      "source_frame": 588,
+      "source_relation": "on_surface",
+      "source_room": "Room #1",
+      "stable_observations": 18,
+      "start_time": 39.228467
+    },
+    {
+      "destination_anchor": null,
+      "destination_frame": 654,
+      "destination_relation": null,
+      "destination_room": "Room #2",
+      "end_time": 43.605749,
+      "event_id": "event_0006",
+      "event_type": "room_change",
+      "evidence_frames": [
+        648,
+        654
+      ],
+      "instance_id": 0,
+      "object": "Camera Wearer",
+      "source_anchor": null,
+      "source_frame": 648,
+      "source_relation": null,
+      "source_room": "Room #1",
+      "start_time": 43.204777
+    }
+  ],
+  "schema_version": 1
+}
