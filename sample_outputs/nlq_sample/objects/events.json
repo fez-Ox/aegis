@@ -1,0 +1,53 @@
+{
+  "dataset_id": "nlq_sample",
+  "events": [
+    {
+      "destination_anchor": "Storage Cabinet #2",
+      "destination_frame": 90,
+      "destination_relation": "moving_towards",
+      "destination_room": "Bedroom",
+      "end_time": 6.007488,
+      "event_id": "event_0001",
+      "event_type": "state_change",
+      "evidence_frames": [
+        0,
+        80,
+        90,
+        190
+      ],
+      "instance_id": 2,
+      "object": "Book #2",
+      "relative_displacement": 0.05985624864041815,
+      "source_anchor": "Storage Cabinet #2",
+      "source_frame": 80,
+      "source_relation": "inside",
+      "source_room": "Bedroom",
+      "stable_observations": 11,
+      "start_time": 5.366239
+    },
+    {
+      "destination_anchor": "Storage Cabinet #3",
+      "destination_frame": 200,
+      "destination_relation": "moving_towards",
+      "destination_room": "Bedroom",
+      "end_time": 13.364972,
+      "event_id": "event_0002",
+      "event_type": "anchor_change",
+      "evidence_frames": [
+        90,
+        190,
+        200
+      ],
+      "instance_id": 2,
+      "object": "Book #2",
+      "relative_displacement": 0.15184718078923812,
+      "source_anchor": "Storage Cabinet #2",
+      "source_frame": 190,
+      "source_relation": "moving_towards",
+      "source_room": "Bedroom",
+      "stable_observations": 1,
+      "start_time": 12.689974
+    }
+  ],
+  "schema_version": 1
+}
