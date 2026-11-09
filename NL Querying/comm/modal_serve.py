@@ -8,9 +8,11 @@ large-language dependency yet.
 
 Why this works with zero changes to ``aegis.remote.api``
 --------------------------------------------------------
-``get_search_paths()`` already probes ``/data/<dataset_id>/objects/
-r4d_scene_graph.json`` first, which is exactly the volume mount path
-(``DATA_MOUNT``) used by every Modal function in this project.
+``get_search_paths()`` probes the canonical
+``/data/<dataset_id>/objects/r4d_scene_graph.json`` layout first and then the
+pipeline's ``/data/<dataset_id>/outputs/objects/r4d_scene_graph.json`` layout.
+Both live under the ``DATA_MOUNT`` (``/data``) used by every Modal function in
+this project.
 
 Deployment (needs workspace access first, from the repo root with the
 project's ``uv`` environment)::

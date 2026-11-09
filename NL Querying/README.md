@@ -97,7 +97,10 @@ uv run python "NL Querying/build_memory.py" \
     --dataset-id nlq_sample --profile i230683
 
 # CPU-only Modal workspace (no GPU payment method; much slower)
-AEGIS_GPU=cpu uv run python "NL Querying/build_memory.py"
+AEGIS_GPU=cpu uv run python "NL Querying/build_memory.py" \
+    --video "NL Querying/sample_input_video.mp4" \
+    --dataset-id nlq_sample --profile i230683 \
+    --vggt-model wincentIsMe/VGGT-Omega --keyframe-stride 10
 
 # Only re-stage artifacts already downloaded by run_pipeline.py
 uv run python "NL Querying/build_memory.py" --skip-run
@@ -200,7 +203,32 @@ real `HF_TOKEN` for anything beyond local research.
 | Transport | Status | How it connects |
 |---|---|---|
 | `local` | ✅ working | Reads `r4d_scene_graph.json` from `NL Querying/outputs`, `sample_outputs`, `outputs`, `tests/fixtures`; folds latest states exactly like the production API |
-| `modal` | 🔜 one deploy away | `AEGIS_MODAL_BASE_URL` → `comm/modal_serve.py` (`@modal.asgi_app`) serving the existing `aegis.remote.api` FastAPI over the `aegis-poc-data` volume |
+| `modal` | ✅ working | `AEGIS_MODAL_BASE_URL` → `comm/modal_serve.py` (`@modal.asgi_app`) serving the existing `aegis.remote.api` FastAPI over the `aegis-poc-data` volume. The API finds both the canonical `/data/<dataset>/objects/...` layout and the pipeline's `/data/<dataset>/outputs/objects/...` layout. |
+
+### Deployed demo
+
+The `nlq_sample` memory built from `NL Querying/sample_input_video.mp4` is
+served at:
+
+```text
+https://i230683--aegis-memory-api-serve-memory-api.us-east.modal.run
+```
+
+Query it with the `modal` transport:
+
+```bash
+export AEGIS_MODAL_BASE_URL=https://i230683--aegis-memory-api-serve-memory-api.us-east.modal.run
+uv run python "NL Querying/smoke_test.py" --transport modal \
+    --dataset nlq_sample --ask "where is my laptop" --no-llm
+# >>> Your laptop is sitting on Desk #1 in the Bedroom.
+```
+
+The API is currently unauthenticated (the room-rename endpoints are mutating).
+Stop it when the demo is over:
+
+```bash
+MODAL_PROFILE=i230683 uv run modal app stop aegis-memory-api
+```
 
 ## Invariants
 

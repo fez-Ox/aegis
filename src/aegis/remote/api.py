@@ -172,8 +172,14 @@ def get_search_paths(dataset_id: str) -> list[Path]:
         [
             Path(
                 f"/data/{dataset_id}/objects/r4d_scene_graph.json"
-            ),  # Modal persistent volume
+            ),  # Modal persistent volume (canonical)
+            Path(
+                f"/data/{dataset_id}/outputs/objects/r4d_scene_graph.json"
+            ),  # Modal pipeline artifact layout
             Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),  # Local output
+            Path(
+                f"outputs/{dataset_id}/outputs/objects/r4d_scene_graph.json"
+            ),  # Local mirror of the Modal pipeline layout
             Path(f"data/{dataset_id}/objects/r4d_scene_graph.json"),
             Path(f"outputs/{dataset_id}/r4d_scene_graph.json"),
             Path(f"data/{dataset_id}/r4d_scene_graph.json"),
@@ -203,6 +209,7 @@ def list_available_datasets() -> list[str]:
                 p.is_file()
                 for p in (
                     item / "objects" / "r4d_scene_graph.json",
+                    item / "outputs" / "objects" / "r4d_scene_graph.json",
                     item / "r4d_scene_graph.json",
                 )
             )

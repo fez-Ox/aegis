@@ -411,10 +411,33 @@ CLIENT (Flutter or HTTP)  ── input: typed text ─┐
   2. **`facebook/VGGT-Omega` weights are gated:** unauthenticated HEAD returns HTTP 401. No
      `HF_TOKEN` exists anywhere on this machine (env, `.env`, HF cache). A token with access to that
      repo must be provided; `run_pipeline.py` forwards it into the Modal job.
-  Consequently no real-video artifacts exist yet (`NL Querying/outputs/` absent) and the NLQ answers
-  have been validated only against the tracked sample scene graphs. Re-run
-  `build_memory.py` once either (a) the workspace gets a payment method + HF token (GPU), or
-  (b) an HF token is supplied and `AEGIS_GPU=cpu` is used.
+  These blockers remain for the GPU/official-weights path, but they no longer block a real run:
+  the sample run completed on `AEGIS_GPU=cpu` with the mirror (below).
+- **Real-video run completed (2026-11-09, Modal CPU + public mirror):** the sample video was
+  ingested and reconstructed end-to-end on Modal CPU with
+  `AEGIS_GPU=cpu ... build_memory.py --video "NL Querying/sample_input_video.mp4"
+  --dataset-id nlq_sample --vggt-model wincentIsMe/VGGT-Omega --keyframe-stride 10`.
+  Total pipeline time **436.75 s**: preprocess 10.23 s, VGGT-Ω 196.89 s (17,362 points),
+  detect/lift 138.25 s (29 detections / 29 SAM 2 masks / 29 3D boxes, 11 tracks, 2 events),
+  Rerun 91.38 s (12.3 MB `demo.rrd`). The resulting memory has **3 anchors**
+  (`Desk #1`, `Storage Cabinet #2`, `Storage Cabinet #3`), **1 room** (`Bedroom`),
+  **5 tracked objects** (`Chair #1`, `Book #2`, `Laptop #3`, `Cell Phone #4`, `Bottle #5`),
+  21 timeline frames, and 2 events. Artifacts were copied to
+  `NL Querying/outputs/nlq_sample/`; the Rerun file is on the Modal volume at
+  `/data/nlq_sample/outputs/viewer/demo.rrd`.
+- **Modal memory API deployed and verified (2026-11-09):**
+  `AEGIS_GPU=cpu uv run modal deploy "NL Querying/comm/modal_serve.py"` succeeded at
+  `https://i230683--aegis-memory-api-serve-memory-api.us-east.modal.run`. The first deploy
+  could not see the graph because the pipeline writes to
+  `/data/<dataset>/outputs/objects/r4d_scene_graph.json` while `get_search_paths()` only
+  probed `/data/<dataset>/objects/...`. Both `get_search_paths()` and
+  `list_available_datasets()` now recognize the `outputs/objects` layout (with tests);
+  the redeploy reports `scene_graph_ready: true` for `nlq_sample`. Remote queries over HTTPS
+  return grounded answers (`laptop` → `Desk #1`, `book` → `Storage Cabinet #3`,
+  `phone`/`bottle`/`chair` → `Storage Cabinet #2`) and honest abstentions for unobserved
+  items (`kicks`/`shoes`/`keys`). `smoke_test.py --transport modal --dataset nlq_sample`
+  works against the deployment. The API is currently **unauthenticated**; stop it with
+  `MODAL_PROFILE=i230683 uv run modal app stop aegis-memory-api` when the demo is over.
 
 ## 13. Session Log (append; newest last)
 
@@ -424,3 +447,4 @@ CLIENT (Flutter or HTTP)  ── input: typed text ─┐
 | 2026-11-07 | GLM-5.3-Flash (OpenCode) | Inspected `sample_outputs/demo04` artifact schemas (documented in §12); analyzed `remote/modal_app.py` + `run_pipeline.py`; loaded Modal skill/references; produced and recorded the Modal communication implementation plan in §12 (workspace access → volume round-trip → `@modal.asgi_app()` serve function → curl/Flutter validation → deferred NLQ/ASR/auth phases). No production code touched yet — plan pending project-owner confirmation. |
 | 2026-11-08 | GLM-5.3-Flash (OpenCode) | Decision: hybrid NLQ with very large closed-vocabulary dictionary. Created `NL Querying/` skeleton: comm layer (local fixture transport + Modal HTTPS transport + deployable Modal ASGI server), dictionary-seeded NLQ engine with grounded/abstain answering, smoke-test CLI, 11 offline tests; verified offline in sandbox; recorded in §12. Modal deploy itself not yet executed (no workspace access/token here). `HOME/uv` toolchain absent in sandbox — first real run requires `uv sync` + `uv run pytest "NL Querying/tests" -q`. |
 | 2026-11-08 | Big Pickle (OpenCode) | Implemented (a) LLM decision recorded, (b) provider-agnostic `comm/llm.py` + Modal vLLM Qwen app `comm/modal_vllm.py` + evidence-gated escape hatch in the engine, (c) `scripts/build_dictionary.py` + generated `nlq/dictionary.json` (49 items/156 synonyms). Added `NL Querying/outputs` priority root, `build_memory.py` runner, CPU mode + strict VGGT guard. Verified: 29 tests pass, ruff clean, live Ollama fallback maps "kicks"→shoes with grounded answer. Real-video run blocked: Modal GPU payment method absent; `facebook/VGGT-Omega` gated (401) and no HF token on machine. Details + exact unblock steps in §12.1. |
+| 2026-11-09 | DeepSeek V4.1 Flash (OpenCode) | Expanded NLQ to a closed but very large home vocabulary (511 curated canonical / 1,148 aliases; 525 runtime canonical / 1,631 aliases), added slang, authoritative curated aliases, and word-boundary scene matching. Defaulted the LLM to local Ollama Qwen. Added `--vggt-model` override, safe `weights_only=True` checkpoint loading, and a public unmodified VGGT-Ω mirror workaround. Ran the full sample video on Modal CPU: 436.75 s, 21 keyframes, 17,362 points, 3 anchors, 1 room, 5 tracked objects, 2 events. Deployed the Modal memory API, fixed its search paths for the pipeline's `outputs/objects` layout, and verified HTTPS queries (`laptop` → Desk #1, `book` → Storage Cabinet #3, `phone`/`bottle`/`chair` → Storage Cabinet #2; `kicks`/`shoes`/`keys` abstain). Tests: 84 repo + 44 NLQ pass; ruff clean. Six commits on `feat/NLQ`; push still blocked by missing GitHub credentials. |

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-09T10:59:42.123541+00:00",
+  "generated_at": "2026-11-09T14:47:24.347871+00:00",
   "item_synonyms": {
     "adapter": [
       "adapter",
@@ -2798,6 +2798,6 @@
     "home_rooms": 20,
     "home_vocabulary": 511,
     "pipeline_classes": 56,
-    "scene_graph_labels": 14
+    "scene_graph_labels": 18
   }
 }

@@ -311,3 +311,39 @@ def test_rename_room_endpoint_persists(tmp_path, monkeypatch) -> None:
     # Unknown rooms return a clean 404.
     missing = client.post("/api/v1/rooms/rename?room_id=99&label=X&dataset_id=demo01")
     assert missing.status_code == 404
+
+
+def test_search_paths_include_modal_pipeline_outputs() -> None:
+    """The API must find graphs written by the Modal pipeline under outputs/objects."""
+    from pathlib import Path
+
+    import aegis.remote.api as api_module
+
+    paths = [str(path) for path in api_module.get_search_paths("nlq_sample")]
+    assert "/data/nlq_sample/outputs/objects/r4d_scene_graph.json" in paths
+    assert "outputs/nlq_sample/outputs/objects/r4d_scene_graph.json" in paths
+    # The canonical volume layout still has priority.
+    assert paths.index("/data/nlq_sample/objects/r4d_scene_graph.json") < paths.index(
+        "/data/nlq_sample/outputs/objects/r4d_scene_graph.json"
+    )
+    assert Path("/data/nlq_sample/objects/r4d_scene_graph.json") in [
+        Path(path) for path in paths
+    ]
+
+
+def test_list_datasets_detects_pipeline_outputs(tmp_path, monkeypatch) -> None:
+    """Datasets whose graph lives in the Modal-style outputs tree are discovered."""
+    import aegis.remote.api as api_module
+
+    graph = (
+        tmp_path
+        / "outputs"
+        / "nlq_sample"
+        / "outputs"
+        / "objects"
+        / "r4d_scene_graph.json"
+    )
+    graph.parent.mkdir(parents=True)
+    graph.write_text("{}", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert "nlq_sample" in api_module.list_available_datasets()
