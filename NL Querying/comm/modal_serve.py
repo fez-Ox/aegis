@@ -17,11 +17,15 @@ this project.
 Deployment (needs workspace access first, from the repo root with the
 project's ``uv`` environment)::
 
-    uv run modal deploy "NL Querying/comm/modal_serve.py"
+    AEGIS_GPU=cpu uv run modal deploy "NL Querying/comm/modal_serve.py"
 
 The command prints the public base URL::
 
     https://<workspace>--aegis-memory-api-serve-memory-api.modal.run
+
+Set ``AEGIS_DATASET_ID`` at deploy time to choose the default dataset served
+by the API (for example ``AEGIS_DATASET_ID=nlq_sample``); without it the
+deployment falls back to ``demo01``.
 
 Wire it into the client::
 
@@ -45,6 +49,7 @@ Caveats (see AGENT-DOC_context.md section 12)
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import modal
@@ -62,6 +67,7 @@ app = modal.App("aegis-memory-api")
     cpu=1.0,
     memory=2048,
     timeout=600,
+    env={"AEGIS_DATASET_ID": os.getenv("AEGIS_DATASET_ID", "demo01")},
 )
 @modal.asgi_app()
 def serve_memory_api() -> Any:

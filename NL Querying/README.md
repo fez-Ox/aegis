@@ -214,6 +214,14 @@ served at:
 https://i230683--aegis-memory-api-serve-memory-api.us-east.modal.run
 ```
 
+Deploy it with the demo dataset as the default (so `/api/v1/health` reports
+the sample memory):
+
+```bash
+AEGIS_DATASET_ID=nlq_sample AEGIS_GPU=cpu uv run modal deploy \
+    "NL Querying/comm/modal_serve.py"
+```
+
 Query it with the `modal` transport:
 
 ```bash
