@@ -26,9 +26,10 @@ uv run python "NL Querying/smoke_test.py" --dataset nlq_sample \
 ## View
 
 The Rerun recording is **not** committed because the repository ignores
-`*.rrd` artifacts. It is available locally at
-`NL Querying/outputs/nlq_sample/viewer/demo.rrd` and on the Modal volume at
-`/data/nlq_sample/outputs/viewer/demo.rrd`. Download and open it with:
+`*.rrd` artifacts. After a pipeline run it is available locally at
+`NL Querying/outputs/nlq_sample/viewer/demo.rrd`; the canonical copy is on the
+Modal volume at `/data/nlq_sample/outputs/viewer/demo.rrd`. Download and open
+it with:
 
 ```bash
 MODAL_PROFILE=i230683 uv run modal volume get aegis-poc-data \
