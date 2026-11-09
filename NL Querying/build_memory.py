@@ -72,6 +72,8 @@ def run_pipeline(args: argparse.Namespace) -> int:
         command += ["--sample-fps", str(args.sample_fps)]
     if args.keyframe_stride:
         command += ["--keyframe-stride", str(args.keyframe_stride)]
+    if args.vggt_model:
+        command += ["--vggt-model", args.vggt_model]
 
     environment = dict(os.environ)
     if args.profile:
@@ -123,6 +125,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sample-fps", type=int, help="Override sample FPS.")
     parser.add_argument(
         "--keyframe-stride", type=int, help="Override VGGT keyframe stride."
+    )
+    parser.add_argument(
+        "--vggt-model",
+        help="Hugging Face repo id override for the VGGT-OMEGA checkpoint.",
     )
     parser.add_argument("--profile", help="Modal profile name (sets MODAL_PROFILE).")
     parser.add_argument(

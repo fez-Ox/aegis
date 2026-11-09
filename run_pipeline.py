@@ -148,6 +148,7 @@ def main(
     classes: str | None = None,
     sample_fps: int | None = None,
     keyframe_stride: int | None = None,
+    vggt_model: str | None = None,
     stage: Stage = "all",
     upload: bool = True,
 ) -> None:
@@ -167,6 +168,9 @@ def main(
         Optional sample FPS override.
     keyframe_stride : int | None
         Optional keyframe stride override for 3D reconstruction.
+    vggt_model : str | None
+        Optional Hugging Face repo id override for the VGGT-Ω checkpoint
+        (for example a public mirror when the official repo is gated).
     stage : Stage
         Pipeline stage to run ('all', 'preprocess', 'vggt', 'detect', 'rerun').
     upload : bool
@@ -222,6 +226,9 @@ def main(
     if keyframe_stride is not None and keyframe_stride > 0:
         serialized_config["vggt"]["keyframe_stride"] = keyframe_stride
         print(f"Keyframe stride overridden to: {keyframe_stride}")
+    if vggt_model:
+        serialized_config["vggt"]["model_id"] = vggt_model
+        print(f"VGGT model overridden to: {vggt_model}")
 
     # 4. Inject Hugging Face token for gated models
     token = (
@@ -462,6 +469,12 @@ if __name__ == "__main__":
         default="config/demo.yaml",
         help="Path to config YAML",
     )
+    parser.add_argument(
+        "--vggt-model",
+        type=str,
+        default=None,
+        help="Hugging Face repo id override for the VGGT-OMEGA checkpoint",
+    )
     args = parser.parse_args()
 
     # Dispatch to modal run
@@ -486,5 +499,7 @@ if __name__ == "__main__":
         cli_cmd.extend(["--sample-fps", str(args.sample_fps)])
     if args.keyframe_stride:
         cli_cmd.extend(["--keyframe-stride", str(args.keyframe_stride)])
+    if args.vggt_model:
+        cli_cmd.extend(["--vggt-model", args.vggt_model])
 
     sys.exit(subprocess.run(cli_cmd, check=False).returncode)

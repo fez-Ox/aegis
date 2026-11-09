@@ -98,7 +98,9 @@ def run_vggt_reconstruction(
         )
 
         model = VGGTOmega().to(device).eval()
-        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        # ``weights_only=True`` avoids executing arbitrary pickle code from a
+        # checkpoint; the official VGGT-Ω checkpoint is a plain state dict.
+        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
         if "model" in ckpt:
             ckpt = ckpt["model"]
         model.load_state_dict(ckpt)

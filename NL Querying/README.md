@@ -175,6 +175,26 @@ never matches `pants`, `cup` never matches `cupboard`, and `bed` never matches
 - `config/demo.yaml` `perception.target_classes`;
 - object/anchor labels from real scene graphs in all local artifact roots.
 
+## Gated VGGT weights and checkpoint overrides
+
+The official `facebook/VGGT-Omega` repository is gated (`gated: manual`). Provide
+a Hugging Face read token with access to that repository in `.env` as
+`HF_TOKEN=hf_...`; `run_pipeline.py` forwards it to the Modal job.
+
+For noncommercial research where the official grant is not available, the
+pipeline accepts a checkpoint-repo override:
+
+```bash
+uv run python run_pipeline.py --video my.mp4 --dataset-id my_room   --vggt-model wincentIsMe/VGGT-Omega
+# or through the NLQ wrapper
+uv run python "NL Querying/build_memory.py" --video my.mp4 --dataset-id my_room   --vggt-model wincentIsMe/VGGT-Omega
+```
+
+`wincentIsMe/VGGT-Omega` is an unmodified public mirror of
+`vggt_omega_1b_512.pt` and remains subject to the FAIR Noncommercial Research
+License (a copy is in that repository). Prefer the official repository and a
+real `HF_TOKEN` for anything beyond local research.
+
 ## Communication transports
 
 | Transport | Status | How it connects |

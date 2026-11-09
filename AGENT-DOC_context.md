@@ -348,7 +348,12 @@ CLIENT (Flutter or HTTP)  ── input: typed text ─┐
   `facebook/VGGT-Omega` is gated (`/api/models` reports `gated: manual`; `/resolve/main/config.json`
   returns 401) and neither `.env` nor `aegis-secrets` contains `HF_TOKEN`. The sample video cannot
   be reconstructed until a Hugging Face token with access to that repo is supplied. `run_pipeline.py`
-  forwards `HF_TOKEN` from the environment/`.env` into the Modal job.
+  forwards `HF_TOKEN` from the environment/`.env` into the Modal job. Temporary research
+  workaround: `run_pipeline.py --vggt-model wincentIsMe/VGGT-Omega` selects an unmodified
+  public mirror of the same `vggt_omega_1b_512.pt` checkpoint; it remains under the FAIR
+  Noncommercial Research License. The Modal L4 blocker is separate: workspace `i230683` still
+  reports "Please add a payment method" while billing shows only $0.02 of credits, so the
+  current sample run uses `AEGIS_GPU=cpu` (16 CPU cores) instead of L4.
 - **Escape-hatch contract:** LLM receives question + dataset's canonical items, tracked labels and
   rooms; must return strict JSON `{intent,item,room,confidence}`. `engine._validate_llm_decision`
   rejects any item/room not in the dictionary or actual memory; valid mappings run the same
