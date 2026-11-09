@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-09T10:49:24.438161+00:00",
+  "generated_at": "2026-11-09T10:59:42.123541+00:00",
   "item_synonyms": {
     "adapter": [
       "adapter",
@@ -1352,6 +1352,7 @@
       "laptop",
       "laptop computer",
       "notebook computer",
+      "lappy",
       "laptops"
     ],
     "laptop charger": [
@@ -2084,7 +2085,11 @@
       "slippers",
       "boot",
       "slipper",
-      "sandals"
+      "sandals",
+      "kicks",
+      "trainers",
+      "running shoes",
+      "wellies"
     ],
     "shorts": [
       "shorts"
@@ -2477,6 +2482,7 @@
     "umbrella": [
       "umbrella",
       "parasol",
+      "brolly",
       "umbrellas"
     ],
     "umbrella stand": [

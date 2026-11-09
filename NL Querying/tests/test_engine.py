@@ -146,10 +146,21 @@ def test_llm_maps_unknown_word_to_validated_item() -> None:
         pytest.skip("no offline fixture contains shoes")
     llm = FakeLLM({"intent": "locate", "item": "shoes", "room": None})
     engine = HybridNLQEngine(client=client, llm=llm)  # type: ignore[arg-type]
-    result = engine.ask("where are my kicks", dataset)
+    result = engine.ask("where are my qwicks", dataset)
     assert result.found and not result.abstained
     assert result.llm_used and result.anchor_label
     assert llm.calls
+
+
+def test_common_slang_is_in_closed_vocabulary() -> None:
+    dataset = _dataset_containing("shoe")
+    if dataset is None:  # pragma: no cover
+        pytest.skip("no offline fixture contains shoes")
+    engine = HybridNLQEngine(client=client, llm=None)
+    result = engine.ask("where are my kicks", dataset)
+    assert result.found and not result.abstained
+    assert result.item == "shoes"
+    assert not result.llm_used
 
 
 def test_llm_cannot_invent_items_or_locations() -> None:

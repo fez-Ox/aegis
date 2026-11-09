@@ -22,8 +22,8 @@ three layers so language coverage never becomes a licence to invent memory:
 
 | Layer | Source | Current size | Role |
 |---|---|---|---|
-| Understanding | `nlq/home_vocabulary.json` | 511 canonical home items, 1,142 aliases, 20 rooms | Every noun the engine may resolve. Curated by room (kitchen, bedroom, bathroom, office, pets, etc.), with regional/slang/plural aliases. |
-| Runtime dictionary | `nlq/dictionary.json` (generated) | 525 canonical, 1,625 aliases, 20 rooms | The curated layer merged with the legacy `aegis.memory.reasoning` tables, pipeline classes, config classes, and labels seen in real scene graphs. |
+| Understanding | `nlq/home_vocabulary.json` | 511 canonical home items, 1,148 aliases, 20 rooms | Every noun the engine may resolve. Curated by room (kitchen, bedroom, bathroom, office, pets, etc.), with regional/slang/plural aliases. |
+| Runtime dictionary | `nlq/dictionary.json` (generated) | 525 canonical, 1,631 aliases, 20 rooms | The curated layer merged with the legacy `aegis.memory.reasoning` tables, pipeline classes, config classes, and labels seen in real scene graphs. |
 | Perception subset | `run_pipeline.COMPREHENSIVE_INDOOR_CLASSES` + `config/demo.yaml` | 58 + config classes | Objects the open-vocabulary detector is actually prompted to find. It is deliberately smaller than the understanding vocabulary to keep detection fast and precise. |
 
 **Only `r4d_scene_graph.json` supplies locations.** A query for a valid but

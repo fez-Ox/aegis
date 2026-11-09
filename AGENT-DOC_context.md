@@ -355,11 +355,11 @@ CLIENT (Flutter or HTTP)  ── input: typed text ─┐
   LOCATE/TEMPORAL/ACTIVITY handlers. `AskResult.llm_used` audits usage. Network/parse failures
   degrade to honest abstention (`engine.last_llm_error`), never to invention.
 - **Closed home vocabulary (2026-11-09):** `nlq/home_vocabulary.json` is the curated
-  understanding vocabulary: **511 canonical items / 1,142 aliases / 20 rooms**, organised by room
+  understanding vocabulary: **511 canonical items / 1,148 aliases / 20 rooms**, organised by room
   (kitchen, food, living room, bedroom, bathroom, dining, office, laundry/utility,
   entryway/outdoor, storage/garage, health/personal, pets, kids, decor). It includes regional and
   slang aliases (`telly`, `shades`, `kicks`, `hoover`, `fridge`, `tap`) and plural forms. The
-  generated runtime dictionary is **525 canonical / 1,625 aliases / 20 rooms** after merging the
+  generated runtime dictionary is **525 canonical / 1,631 aliases / 20 rooms** after merging the
   legacy aegis tables, pipeline/config classes, and labels from real scene graphs.
 - **Authoritative merge + word boundaries:** `scripts/build_dictionary.py` applies the curated
   vocabulary last and lets it reassign legacy aliases (`cup` moves from `bottle` to `cup`, `pan`
