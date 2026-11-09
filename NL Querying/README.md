@@ -3,6 +3,11 @@
 **Natural Language Querying** for Aegis (AGENT-DOC_ToDos.md **Milestone 3**,
 design context in `AGENT-DOC_context.md`).
 
+> **Operational handoff:** see
+> [`docs/NLQ_MODAL_HANDOFF.md`](../docs/NLQ_MODAL_HANDOFF.md) for the detailed
+> Modal pipeline, deployment, communication, current sample memory, blockers,
+> and next steps.
+
 Users ask questions in **text** (typed, or speech-to-text at the client); the
 engine answers **text** grounded strictly in the spatio-temporal memory
 (R4DSG scene graph), with explicit abstention instead of invention.
