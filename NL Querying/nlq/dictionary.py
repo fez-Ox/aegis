@@ -143,14 +143,32 @@ class DictionaryIndex:
             rooms = {k: list(v) for k, v in FALLBACK_ROOM_KEYWORDS.items()}
         index = cls(item_synonyms=items, room_keywords=rooms)
         if DEFAULT_DICTIONARY_PATH.is_file():
-            index.merge(cls.load(DEFAULT_DICTIONARY_PATH))
+            # The generated file is authoritative: it is the curated closed
+            # vocabulary, and may deliberately reassign a legacy alias (for
+            # example, ``cup`` moves from ``bottle`` to ``cup``).
+            index.merge(cls.load(DEFAULT_DICTIONARY_PATH), reassign=True)
         return index
 
     # -- growth -----------------------------------------------------------
-    def add_item(self, canonical: str, synonyms: list[str]) -> None:
-        """Add or extend one item entry (the dictionary growth hook)."""
+    def add_item(
+        self, canonical: str, synonyms: list[str], *, reassign: bool = False
+    ) -> None:
+        """Add or extend one item entry (the dictionary growth hook).
+
+        With ``reassign=True`` the new entry becomes the owner of each
+        synonym: the alias is removed from any other canonical entry. This
+        lets the curated home vocabulary repair legacy aliases without
+        deleting the legacy tables. A canonical's own name is never removed
+        from itself; exact canonical names also win in ``lookup_item``.
+        """
         existing = self.item_synonyms.setdefault(canonical, [])
-        for synonym in synonyms + [canonical]:
+        for synonym in [canonical, *synonyms]:
+            if reassign:
+                for other, other_synonyms in self.item_synonyms.items():
+                    if other == canonical or synonym == other:
+                        continue
+                    while synonym in other_synonyms:
+                        other_synonyms.remove(synonym)
             if synonym not in existing:
                 existing.append(synonym)
 
@@ -160,10 +178,12 @@ class DictionaryIndex:
             if synonym not in existing:
                 existing.append(synonym)
 
-    def merge(self, other: DictionaryIndex) -> DictionaryIndex:
+    def merge(
+        self, other: DictionaryIndex, *, reassign: bool = False
+    ) -> DictionaryIndex:
         """Union another index into this one (in place) and return self."""
         for canonical, synonyms in other.item_synonyms.items():
-            self.add_item(canonical, list(synonyms))
+            self.add_item(canonical, list(synonyms), reassign=reassign)
         for canonical, synonyms in other.room_keywords.items():
             self.add_room(canonical, list(synonyms))
         return self
@@ -217,14 +237,15 @@ class DictionaryIndex:
                 clean = re.sub(r"\b" + re.escape(synonym) + r"\b", " ", clean)
         clean = " ".join(clean.split())
 
-        # Longest phrase synonyms first.
+        # Longest phrase synonyms first; at equal length an exact canonical
+        # name wins over another entry's alias.
         candidates = sorted(
             (
                 (canon, syn)
                 for canon, syns in self.item_synonyms.items()
                 for syn in [canon, *syns]
             ),
-            key=lambda pair: len(pair[1]),
+            key=lambda pair: (len(pair[1]), pair[0] == pair[1]),
             reverse=True,
         )
         for canonical, synonym in candidates:

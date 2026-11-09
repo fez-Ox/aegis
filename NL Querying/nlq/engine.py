@@ -496,7 +496,14 @@ class HybridNLQEngine:
         for obj in latest_objects:
             label = str(obj.get("label", "")).lower()
             base = label.split("#")[0].split("[")[0].strip()
-            if any(synonym == base or synonym in label for synonym in synonyms):
+            # Word-boundary matching is essential for a large vocabulary:
+            # "pan" must not match "pants", and "cup" must not match
+            # "cupboard". Multi-word synonyms still match inside an
+            # instance label such as "storage cabinet #1".
+            if any(
+                synonym == base or re.search(r"\b" + re.escape(synonym) + r"\b", label)
+                for synonym in synonyms
+            ):
                 matches.append(obj)
         return matches
 
@@ -507,7 +514,8 @@ class HybridNLQEngine:
 
         def sort_key(obj: dict[str, Any]) -> tuple[int, int, float]:
             label = str(obj.get("label", "")).lower()
-            exact = 1 if canonical_item.lower() in label else 0
+            base = label.split("#")[0].split("[")[0].strip()
+            exact = 1 if canonical_item.lower() == base else 0
             is_active = 1 if "active" in label else 0
             timestamp = float(obj.get("last_seen_timestamp", 0.0))
             return exact, is_active, timestamp

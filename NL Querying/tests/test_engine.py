@@ -37,6 +37,14 @@ def test_unknown_word_is_gated_with_suggestions() -> None:
     assert all(isinstance(s, str) for s in dictionary.suggestions_for("qwarrion"))
 
 
+def test_instance_matching_uses_word_boundaries() -> None:
+    engine = HybridNLQEngine(client=client, llm=None)
+    assert engine._match_instances("pan", [{"label": "pants #1"}]) == []
+    assert engine._match_instances("cup", [{"label": "cupboard #1"}]) == []
+    assert engine._match_instances("bed", [{"label": "bedroom #1"}]) == []
+    assert engine._match_instances("mat", [{"label": "mattress #1"}]) == []
+
+
 def test_intent_classification() -> None:
     engine = HybridNLQEngine(client=client, llm=None)
     assert engine.classify_intent("where is my shoes") is Intent.LOCATE
