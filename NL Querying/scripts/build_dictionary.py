@@ -55,6 +55,8 @@ GRAPH_ROOTS: tuple[Path, ...] = (
     REPO_ROOT / "tests" / "fixtures",
 )
 
+HOME_VOCABULARY_PATH = FOLDER_ROOT / "nlq" / "home_vocabulary.json"
+
 # Labels that describe the camera wearer or a body part, not a household item.
 SKIP_LABELS: frozenset[str] = frozenset(
     {"hand", "human hand", "camera wearer", "person", "user"}
@@ -107,6 +109,53 @@ def load_config_classes() -> list[str]:
     config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     classes = (config.get("perception") or {}).get("target_classes") or []
     return [str(entry) for entry in classes]
+
+
+def load_home_vocabulary() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Load the curated closed home vocabulary.
+
+    Categories are organisational only; the same canonical item may appear
+    in more than one room (for example ``towel`` in the bathroom and the
+    bedroom), and its synonyms are merged. The curated entries are applied
+    last with reassignment, so they own their aliases instead of inheriting
+    legacy collisions (``cup`` no longer resolves to ``bottle``).
+    """
+    if not HOME_VOCABULARY_PATH.is_file():
+        return {}, {}
+    data = json.loads(HOME_VOCABULARY_PATH.read_text(encoding="utf-8"))
+    items: dict[str, list[str]] = {}
+    categories = data.get("categories") or {}
+    if isinstance(categories, dict):
+        for entries in categories.values():
+            if not isinstance(entries, dict):
+                continue
+            for canonical, synonyms in entries.items():
+                canon = str(canonical).strip().lower()
+                if not canon:
+                    continue
+                bucket = items.setdefault(canon, [])
+                if not isinstance(synonyms, list):
+                    continue
+                for synonym in synonyms:
+                    clean = str(synonym).strip().lower()
+                    if clean and clean not in bucket:
+                        bucket.append(clean)
+
+    rooms: dict[str, list[str]] = {}
+    raw_rooms = data.get("rooms") or {}
+    if isinstance(raw_rooms, dict):
+        for canonical, synonyms in raw_rooms.items():
+            canon = str(canonical).strip().lower()
+            if not canon:
+                continue
+            bucket = rooms.setdefault(canon, [])
+            if not isinstance(synonyms, list):
+                continue
+            for synonym in synonyms:
+                clean = str(synonym).strip().lower()
+                if clean and clean not in bucket:
+                    bucket.append(clean)
+    return items, rooms
 
 
 def normalise_label(raw: str) -> str | None:
@@ -216,13 +265,31 @@ def build_index() -> tuple[DictionaryIndex, dict[str, int]]:
         add_phrase(index, phrase)
         counts["scene_graph_labels"] += 1
 
-    # Give every canonical entry its safe plural form as well.
+    # Curated closed vocabulary last: it is authoritative over legacy aliases
+    # such as ``cup`` -> ``bottle`` or ``pan`` -> ``cooking pot``.
+    home_items, home_rooms = load_home_vocabulary()
+    for canonical, synonyms in home_items.items():
+        index.add_item(canonical, synonyms, reassign=True)
+        counts["home_vocabulary"] += 1
+    for canonical, synonyms in home_rooms.items():
+        index.add_room(canonical, synonyms)
+        counts["home_rooms"] += 1
+
+    # Give every canonical entry its safe plural form as well, but never
+    # steal a variant that is already a canonical item or another item's
+    # alias (``glasses`` must not become a plural of ``drinking glass``).
     for canonical in list(index.item_synonyms):
+        variants: list[str] = []
         if canonical.endswith("s") and canonical not in IRREGULAR_PLURALS:
             singular = canonical[:-1]
             if singular and singular not in index.item_synonyms:
-                index.add_item(canonical, [singular])
-        index.add_item(canonical, plural_variants(canonical))
+                variants.append(singular)
+        variants.extend(plural_variants(canonical))
+        for variant in variants:
+            owner = find_canonical(index, variant)
+            if owner is not None and owner != canonical:
+                continue
+            index.add_item(canonical, [variant])
     return index, dict(counts)
 
 

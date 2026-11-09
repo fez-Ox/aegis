@@ -1,101 +1,945 @@
 {
-  "generated_at": "2026-11-08T08:49:38.338166+00:00",
+  "generated_at": "2026-11-09T10:49:24.438161+00:00",
   "item_synonyms": {
+    "adapter": [
+      "adapter",
+      "adaptor",
+      "adapters"
+    ],
+    "air conditioner": [
+      "air conditioner",
+      "air conditioning",
+      "ac",
+      "a/c",
+      "air conditioners"
+    ],
+    "air fryer": [
+      "air fryer",
+      "air fryers"
+    ],
+    "air purifier": [
+      "air purifier",
+      "air cleaner",
+      "air purifiers"
+    ],
+    "alarm clock": [
+      "alarm clock",
+      "alarm clocks"
+    ],
+    "aluminum foil": [
+      "aluminum foil",
+      "aluminium foil",
+      "foil",
+      "aluminum foils"
+    ],
+    "antiseptic": [
+      "antiseptic",
+      "antiseptic cream",
+      "antiseptics"
+    ],
+    "apron": [
+      "apron",
+      "aprons"
+    ],
+    "aquarium": [
+      "aquarium",
+      "fish tank",
+      "aquariums"
+    ],
+    "armchair": [
+      "armchair",
+      "arm chair",
+      "recliner",
+      "armchairs"
+    ],
+    "art supply": [
+      "art supply",
+      "art supplies",
+      "craft supplies"
+    ],
+    "baby bottle": [
+      "baby bottle",
+      "feeding bottle",
+      "baby bottles"
+    ],
+    "baby gate": [
+      "baby gate",
+      "child gate",
+      "baby gates"
+    ],
+    "baby monitor": [
+      "baby monitor",
+      "baby monitors"
+    ],
+    "back door": [
+      "back door",
+      "rear door",
+      "back doors"
+    ],
     "backpack": [
       "backpack",
-      "bag",
-      "bags",
-      "handbag",
-      "purse",
       "pack",
+      "rucksack",
+      "school bag",
       "backpacks"
     ],
+    "bag": [
+      "bag",
+      "bags",
+      "tote",
+      "tote bag",
+      "shopping bag",
+      "reusable bag"
+    ],
+    "baking dish": [
+      "baking dish",
+      "baking dishs"
+    ],
+    "baking sheet": [
+      "baking sheet",
+      "baking tray",
+      "cookie sheet",
+      "baking sheets"
+    ],
+    "bandage": [
+      "bandage",
+      "plaster",
+      "band-aid",
+      "bandages"
+    ],
+    "basket": [
+      "basket",
+      "storage basket",
+      "woven basket",
+      "baskets"
+    ],
+    "bath mat": [
+      "bath mat",
+      "bathmat",
+      "bath mats"
+    ],
+    "bathrobe": [
+      "bathrobe",
+      "dressing gown",
+      "bathrobes"
+    ],
+    "bathtub": [
+      "bathtub",
+      "bath tub",
+      "tub",
+      "bathtubs"
+    ],
+    "battery": [
+      "battery",
+      "batteries"
+    ],
+    "bbq grill": [
+      "bbq grill",
+      "barbecue grill",
+      "bbq grills"
+    ],
     "bed": [
-      "beds",
-      "bed"
+      "bed",
+      "beds"
+    ],
+    "bed frame": [
+      "bed frame",
+      "bedframe",
+      "bed frames"
+    ],
+    "bedsheet": [
+      "bedsheet",
+      "bed sheet",
+      "sheet",
+      "sheets",
+      "bedsheets"
+    ],
+    "belt": [
+      "belt",
+      "belts"
+    ],
+    "bicycle": [
+      "bicycle",
+      "bike",
+      "cycle",
+      "bicycles"
+    ],
+    "bicycle pump": [
+      "bicycle pump",
+      "bike pump",
+      "bicycle pumps"
+    ],
+    "binder": [
+      "binder",
+      "ring binder",
+      "binders"
+    ],
+    "bird cage": [
+      "bird cage",
+      "birdcage",
+      "bird cages"
+    ],
+    "blanket": [
+      "blanket",
+      "throw blanket",
+      "throw",
+      "blankets"
+    ],
+    "bleach": [
+      "bleach",
+      "bleachs"
+    ],
+    "blender": [
+      "blender",
+      "smoothie maker",
+      "blenders"
+    ],
+    "blinds": [
+      "blinds",
+      "blind",
+      "window blind"
+    ],
+    "blood pressure monitor": [
+      "blood pressure monitor",
+      "blood pressure cuff",
+      "blood pressure monitors"
+    ],
+    "board game": [
+      "board game",
+      "boardgame",
+      "board games"
+    ],
+    "body wash": [
+      "body wash",
+      "shower gel",
+      "body washs"
     ],
     "book": [
       "book",
       "books",
-      "novel",
-      "magazine"
+      "novel"
+    ],
+    "bookend": [
+      "bookend",
+      "bookends"
+    ],
+    "bookshelf": [
+      "bookshelf",
+      "bookcase",
+      "book shelf",
+      "bookshelfs"
     ],
     "bottle": [
       "bottle",
-      "water bottle",
-      "flask",
-      "cup",
       "drink",
-      "tumbler",
-      "mug",
       "bottles"
+    ],
+    "bottle opener": [
+      "bottle opener",
+      "bottle openers"
     ],
     "bowl": [
       "bowl",
       "bowls",
-      "dish",
-      "dishes",
-      "basin"
+      "cereal bowl",
+      "soup bowl"
+    ],
+    "brace": [
+      "brace",
+      "support brace",
+      "braces"
+    ],
+    "bread": [
+      "bread",
+      "loaf",
+      "loaf of bread",
+      "breads"
+    ],
+    "bread knife": [
+      "bread knife",
+      "bread knifes"
+    ],
+    "breast pump": [
+      "breast pump",
+      "breast pumps"
+    ],
+    "broom": [
+      "broom",
+      "brooms"
+    ],
+    "bucket": [
+      "bucket",
+      "pail",
+      "buckets"
+    ],
+    "buffet": [
+      "buffet",
+      "sideboard",
+      "buffets"
+    ],
+    "building block": [
+      "building block",
+      "building blocks",
+      "blocks",
+      "lego"
+    ],
+    "butter": [
+      "butter",
+      "butters"
+    ],
+    "button": [
+      "button",
+      "buttons"
     ],
     "cabinet": [
+      "cabinet",
       "cabinets",
-      "cabinet"
+      "cupboard",
+      "cupboards"
+    ],
+    "cable": [
+      "cable",
+      "cord",
+      "wire",
+      "cables"
+    ],
+    "cake pan": [
+      "cake pan",
+      "cake tin",
+      "cake pans"
+    ],
+    "calculator": [
+      "calculator",
+      "calculators"
+    ],
+    "calendar": [
+      "calendar",
+      "calendars"
+    ],
+    "camera": [
+      "camera",
+      "digital camera",
+      "cameras"
+    ],
+    "camping gear": [
+      "camping gear",
+      "camping equipment",
+      "camping gears"
+    ],
+    "can opener": [
+      "can opener",
+      "tin opener",
+      "can openers"
+    ],
+    "candle": [
+      "candle",
+      "candles"
+    ],
+    "candle holder": [
+      "candle holder",
+      "candlestick",
+      "candle holders"
+    ],
+    "cane": [
+      "cane",
+      "walking cane",
+      "canes"
+    ],
+    "canned food": [
+      "canned food",
+      "tin",
+      "can",
+      "canned foods"
+    ],
+    "car": [
+      "car",
+      "automobile",
+      "vehicle",
+      "cars"
+    ],
+    "car jack": [
+      "car jack",
+      "jack",
+      "car jacks"
+    ],
+    "carbon monoxide detector": [
+      "carbon monoxide detector",
+      "co detector",
+      "carbon monoxide detectors"
+    ],
+    "cardboard box": [
+      "cardboard box",
+      "cardboard boxes",
+      "box",
+      "cardboard boxs"
+    ],
+    "carpet cleaner": [
+      "carpet cleaner",
+      "carpet shampoo",
+      "carpet cleaners"
+    ],
+    "casserole dish": [
+      "casserole dish",
+      "casserole",
+      "casserole dishs"
+    ],
+    "cat food": [
+      "cat food",
+      "cat foods"
+    ],
+    "cat litter": [
+      "cat litter",
+      "kitty litter",
+      "cat litters"
+    ],
+    "cat tree": [
+      "cat tree",
+      "cat tower",
+      "cat trees"
+    ],
+    "ceiling fan": [
+      "ceiling fan",
+      "ceiling fans"
+    ],
+    "ceiling light": [
+      "ceiling light",
+      "ceiling lamp",
+      "ceiling lights"
+    ],
+    "cereal": [
+      "cereal",
+      "breakfast cereal",
+      "cereals"
     ],
     "chair": [
+      "chair",
       "chairs",
-      "chair"
+      "seat"
+    ],
+    "changing table": [
+      "changing table",
+      "baby changing table",
+      "changing tables"
+    ],
+    "charger": [
+      "charger",
+      "phone charger",
+      "power adapter",
+      "chargers"
+    ],
+    "cheese": [
+      "cheese",
+      "cheeses"
+    ],
+    "chef's knife": [
+      "chef's knife",
+      "chef knife",
+      "kitchen knife",
+      "chef's knifes"
+    ],
+    "chicken": [
+      "chicken",
+      "chickens"
+    ],
+    "children's book": [
+      "children's book",
+      "kids book",
+      "picture book",
+      "children's books"
+    ],
+    "china cabinet": [
+      "china cabinet",
+      "display cabinet",
+      "china cabinets"
+    ],
+    "chopsticks": [
+      "chopsticks",
+      "chopstick"
+    ],
+    "christmas tree": [
+      "christmas tree",
+      "xmas tree",
+      "christmas trees"
+    ],
+    "circuit breaker": [
+      "circuit breaker",
+      "breaker box",
+      "fuse box",
+      "circuit breakers"
+    ],
+    "cleaning cloth": [
+      "cleaning cloth",
+      "rag",
+      "cleaning rag",
+      "cleaning cloths"
+    ],
+    "cleaning spray": [
+      "cleaning spray",
+      "all-purpose cleaner",
+      "cleaning spraies"
     ],
     "clothes": [
       "clothes",
       "clothing",
-      "shirt",
-      "shirts",
-      "pants",
-      "laundry",
       "garment",
       "garments"
+    ],
+    "clothes hanger": [
+      "clothes hanger",
+      "hanger",
+      "hangers",
+      "clothes hangers"
+    ],
+    "clothespin": [
+      "clothespin",
+      "clothes peg",
+      "peg",
+      "clothespins"
+    ],
+    "coaster": [
+      "coaster",
+      "coasters"
+    ],
+    "coat": [
+      "coat",
+      "overcoat",
+      "coats"
+    ],
+    "coat hook": [
+      "coat hook",
+      "coat hooks"
+    ],
+    "coat rack": [
+      "coat rack",
+      "coat stand",
+      "coat racks"
+    ],
+    "coffee": [
+      "coffee",
+      "coffee beans",
+      "ground coffee",
+      "coffees"
+    ],
+    "coffee maker": [
+      "coffee maker",
+      "coffee machine",
+      "coffee makers"
+    ],
+    "coffee table": [
+      "coffee table",
+      "cocktail table",
+      "coffee tables"
+    ],
+    "colander": [
+      "colander",
+      "colanders"
+    ],
+    "collar": [
+      "collar",
+      "dog collar",
+      "cat collar",
+      "collars"
+    ],
+    "colored pencil": [
+      "colored pencil",
+      "coloured pencil",
+      "coloring pencil",
+      "colored pencils"
+    ],
+    "comb": [
+      "comb",
+      "combs"
+    ],
+    "comforter": [
+      "comforter",
+      "comforters"
+    ],
+    "compost bin": [
+      "compost bin",
+      "compost bucket",
+      "compost bins"
+    ],
+    "computer": [
+      "computer",
+      "desktop computer",
+      "pc",
+      "desktop",
+      "computers"
+    ],
+    "conditioner": [
+      "conditioner",
+      "hair conditioner",
+      "conditioners"
+    ],
+    "console table": [
+      "console table",
+      "hall table",
+      "console tables"
+    ],
+    "contact lens": [
+      "contact lens",
+      "contact lenses",
+      "contacts",
+      "contact len"
+    ],
+    "contact lens solution": [
+      "contact lens solution",
+      "contact solution",
+      "contact lens solutions"
     ],
     "cooking pot": [
       "cooking pot",
       "pot",
       "pots",
-      "pan",
       "pans",
-      "saucepan",
       "cookware",
       "cooking pots"
     ],
+    "cooler": [
+      "cooler",
+      "ice chest",
+      "cool box",
+      "coolers"
+    ],
+    "corkboard": [
+      "corkboard",
+      "cork board",
+      "bulletin board",
+      "corkboards"
+    ],
+    "corkscrew": [
+      "corkscrew",
+      "wine opener",
+      "corkscrews"
+    ],
     "couch": [
-      "couchs",
-      "couch"
+      "couch",
+      "couchs"
     ],
     "counter": [
+      "counter",
       "counters",
-      "counter"
+      "countertop",
+      "worktop"
+    ],
+    "crate": [
+      "crate",
+      "dog crate",
+      "crates"
+    ],
+    "crayon": [
+      "crayon",
+      "crayons"
+    ],
+    "crib": [
+      "crib",
+      "cot",
+      "baby crib",
+      "cribs"
+    ],
+    "crutch": [
+      "crutch",
+      "crutches",
+      "crutchs"
+    ],
+    "cup": [
+      "cup",
+      "cups",
+      "mug",
+      "mugs",
+      "teacup",
+      "tumbler"
     ],
     "cupboard": [
-      "cupboards",
       "cupboard"
     ],
+    "curling iron": [
+      "curling iron",
+      "curling tong",
+      "curling irons"
+    ],
+    "curtain": [
+      "curtain",
+      "curtains",
+      "drape",
+      "drapes"
+    ],
+    "cushion": [
+      "cushion",
+      "throw pillow",
+      "cushions"
+    ],
+    "cutlery": [
+      "cutlery",
+      "silverware",
+      "flatware",
+      "cutleries"
+    ],
+    "cutting board": [
+      "cutting board",
+      "chopping board",
+      "cutting boards"
+    ],
+    "dehumidifier": [
+      "dehumidifier",
+      "dehumidifiers"
+    ],
+    "dental floss": [
+      "dental floss",
+      "floss",
+      "dental flos"
+    ],
+    "denture": [
+      "denture",
+      "dentures"
+    ],
     "desk": [
+      "desk",
       "desks",
-      "desk"
+      "writing desk",
+      "work desk"
+    ],
+    "diaper": [
+      "diaper",
+      "nappy",
+      "diapers"
+    ],
+    "diffuser": [
+      "diffuser",
+      "reed diffuser",
+      "diffusers"
+    ],
+    "dining chair": [
+      "dining chair",
+      "kitchen chair",
+      "dining chairs"
     ],
     "dining table": [
+      "dining table",
       "dining tables",
-      "dining table"
+      "kitchen table"
+    ],
+    "dish rack": [
+      "dish rack",
+      "dish drainer",
+      "dish racks"
+    ],
+    "dish soap": [
+      "dish soap",
+      "washing-up liquid",
+      "dish detergent",
+      "dish soaps"
+    ],
+    "dish towel": [
+      "dish towel",
+      "tea towel",
+      "kitchen towel",
+      "dish towels"
+    ],
+    "dishwasher": [
+      "dishwasher",
+      "dishwashers"
+    ],
+    "disinfectant": [
+      "disinfectant",
+      "disinfecting wipe",
+      "disinfectants"
+    ],
+    "dog food": [
+      "dog food",
+      "dog foods"
+    ],
+    "doll": [
+      "doll",
+      "dolls"
     ],
     "door": [
+      "door",
       "doors",
-      "door"
+      "doorway"
+    ],
+    "doormat": [
+      "doormat",
+      "door mat",
+      "welcome mat",
+      "doormats"
     ],
     "drawer": [
-      "drawers",
       "drawer"
     ],
+    "dress": [
+      "dress",
+      "gown",
+      "dres"
+    ],
+    "dresser": [
+      "dresser",
+      "chest of drawers",
+      "drawers",
+      "dressers"
+    ],
+    "drill": [
+      "drill",
+      "power drill",
+      "drills"
+    ],
+    "drinking glass": [
+      "drinking glass",
+      "water glass",
+      "glass",
+      "drinking glas"
+    ],
+    "dryer": [
+      "dryer",
+      "clothes dryer",
+      "tumble dryer",
+      "dryers"
+    ],
+    "drying rack": [
+      "drying rack",
+      "clothes rack",
+      "drying racks"
+    ],
+    "duster": [
+      "duster",
+      "feather duster",
+      "dusters"
+    ],
+    "dustpan": [
+      "dustpan",
+      "dust pan",
+      "dustpans"
+    ],
+    "duvet": [
+      "duvet",
+      "duvet cover",
+      "duvets"
+    ],
+    "e-reader": [
+      "e-reader",
+      "ereader",
+      "kindle",
+      "e-readers"
+    ],
+    "earbuds": [
+      "earbuds",
+      "earphones",
+      "ear buds",
+      "earbud"
+    ],
+    "egg": [
+      "egg",
+      "eggs"
+    ],
+    "envelope": [
+      "envelope",
+      "envelopes"
+    ],
+    "eraser": [
+      "eraser",
+      "rubber",
+      "erasers"
+    ],
+    "espresso machine": [
+      "espresso machine",
+      "espresso maker",
+      "espresso machines"
+    ],
+    "essential oil": [
+      "essential oil",
+      "essential oils"
+    ],
+    "extension cord": [
+      "extension cord",
+      "extension lead",
+      "extension cords"
+    ],
+    "external hard drive": [
+      "external hard drive",
+      "hard drive",
+      "hard disk",
+      "external hard drives"
+    ],
+    "fabric softener": [
+      "fabric softener",
+      "fabric conditioner",
+      "fabric softeners"
+    ],
+    "face mask": [
+      "face mask",
+      "mask",
+      "face masks"
+    ],
+    "fan": [
+      "fan",
+      "electric fan",
+      "fans"
+    ],
+    "faucet": [
+      "faucet",
+      "tap",
+      "faucets"
+    ],
+    "figurine": [
+      "figurine",
+      "figurines"
+    ],
+    "filing cabinet": [
+      "filing cabinet",
+      "file cabinet",
+      "filing cabinets"
+    ],
+    "fire extinguisher": [
+      "fire extinguisher",
+      "fire extinguishers"
+    ],
+    "fireplace": [
+      "fireplace",
+      "hearth",
+      "fireplaces"
+    ],
+    "first aid kit": [
+      "first aid kit",
+      "first-aid kit",
+      "first aid kits"
+    ],
+    "fish": [
+      "fish",
+      "fishs"
+    ],
+    "flashlight": [
+      "flashlight",
+      "torch",
+      "flashlights"
+    ],
+    "floor cleaner": [
+      "floor cleaner",
+      "floor detergent",
+      "floor cleaners"
+    ],
     "floor entrance": [
-      "floor entrances",
-      "floor entrance"
+      "floor entrance",
+      "floor entrances"
+    ],
+    "floor lamp": [
+      "floor lamp",
+      "standing lamp",
+      "floor lamps"
+    ],
+    "flour": [
+      "flour",
+      "flours"
+    ],
+    "flower pot": [
+      "flower pot",
+      "plant pot",
+      "planter",
+      "flower pots"
+    ],
+    "folder": [
+      "folder",
+      "file folder",
+      "folders"
     ],
     "food": [
       "food",
@@ -103,91 +947,1132 @@
       "leftovers",
       "meal",
       "snack",
-      "groceries",
       "foods"
     ],
+    "food bowl": [
+      "food bowl",
+      "pet bowl",
+      "food bowls"
+    ],
     "food container": [
+      "food container",
       "food containers",
-      "food container"
+      "food storage container",
+      "tupperware"
+    ],
+    "food processor": [
+      "food processor",
+      "processor",
+      "food processors"
     ],
     "fork": [
-      "forks",
-      "fork"
+      "fork",
+      "forks"
+    ],
+    "freezer": [
+      "freezer",
+      "deep freeze",
+      "freezers"
     ],
     "fridge": [
-      "fridges",
-      "fridge"
+      "fridge",
+      "fridges"
+    ],
+    "front door": [
+      "front door",
+      "main door",
+      "front doors"
+    ],
+    "fruit": [
+      "fruit",
+      "fruits"
+    ],
+    "frying pan": [
+      "frying pan",
+      "pan",
+      "skillet",
+      "fry pan",
+      "frying pans"
+    ],
+    "fuel can": [
+      "fuel can",
+      "gas can",
+      "petrol can",
+      "fuel cans"
+    ],
+    "funnel": [
+      "funnel",
+      "funnels"
+    ],
+    "furnace": [
+      "furnace",
+      "furnaces"
+    ],
+    "game console": [
+      "game console",
+      "games console",
+      "playstation",
+      "xbox",
+      "game consoles"
+    ],
+    "game controller": [
+      "game controller",
+      "controller",
+      "gamepad",
+      "game controllers"
     ],
     "garbage bag": [
+      "garbage bag",
       "garbage bags",
-      "garbage bag"
+      "trash bag",
+      "bin liner"
+    ],
+    "garden glove": [
+      "garden glove",
+      "gardening gloves",
+      "garden gloves"
+    ],
+    "garden hose": [
+      "garden hose",
+      "hose",
+      "hosepipe",
+      "garden hoses"
+    ],
+    "gauze": [
+      "gauze",
+      "gauze pad",
+      "gauzes"
+    ],
+    "generator": [
+      "generator",
+      "generators"
+    ],
+    "glass cleaner": [
+      "glass cleaner",
+      "window cleaner",
+      "glass cleaners"
     ],
     "glasses": [
       "glasses",
       "spectacles",
       "eyewear",
-      "sunglasses",
-      "reading glasses"
+      "reading glasses",
+      "eyeglasses",
+      "specs"
+    ],
+    "glasses case": [
+      "glasses case",
+      "eyeglasses case",
+      "glasses cases"
+    ],
+    "gloves": [
+      "gloves",
+      "glove",
+      "mittens"
+    ],
+    "glucose monitor": [
+      "glucose monitor",
+      "blood sugar monitor",
+      "glucose monitors"
+    ],
+    "glue": [
+      "glue",
+      "glue stick",
+      "glues"
+    ],
+    "grater": [
+      "grater",
+      "cheese grater",
+      "graters"
+    ],
+    "griddle": [
+      "griddle",
+      "griddles"
+    ],
+    "grill": [
+      "grill",
+      "barbecue",
+      "bbq",
+      "grills"
+    ],
+    "groceries": [
+      "groceries",
+      "grocery",
+      "shopping",
+      "grocerie"
+    ],
+    "grooming brush": [
+      "grooming brush",
+      "pet brush",
+      "grooming brushs"
+    ],
+    "hair dryer": [
+      "hair dryer",
+      "hairdryer",
+      "blow dryer",
+      "hair dryers"
+    ],
+    "hair straightener": [
+      "hair straightener",
+      "flat iron",
+      "hair straighteners"
+    ],
+    "hairbrush": [
+      "hairbrush",
+      "hair brush",
+      "brush",
+      "hairbrushs"
+    ],
+    "hammer": [
+      "hammer",
+      "hammers"
+    ],
+    "hamster cage": [
+      "hamster cage",
+      "hamster cages"
+    ],
+    "hand sanitizer": [
+      "hand sanitizer",
+      "sanitizer",
+      "hand gel",
+      "hand sanitizers"
+    ],
+    "handbag": [
+      "handbag",
+      "purse",
+      "pocketbook",
+      "handbags"
+    ],
+    "harness": [
+      "harness",
+      "pet harness",
+      "harnes"
+    ],
+    "hat": [
+      "hat",
+      "cap",
+      "beanie",
+      "hats"
+    ],
+    "headboard": [
+      "headboard",
+      "headboards"
+    ],
+    "headphones": [
+      "headphones",
+      "headphone"
+    ],
+    "headset": [
+      "headset",
+      "headsets"
+    ],
+    "hearing aid": [
+      "hearing aid",
+      "hearing aids"
+    ],
+    "heater": [
+      "heater",
+      "space heater",
+      "heaters"
+    ],
+    "heating pad": [
+      "heating pad",
+      "heat pad",
+      "heating pads"
+    ],
+    "helmet": [
+      "helmet",
+      "bike helmet",
+      "helmets"
+    ],
+    "high chair": [
+      "high chair",
+      "feeding chair",
+      "high chairs"
+    ],
+    "highlighter": [
+      "highlighter",
+      "highlighters"
+    ],
+    "holiday decoration": [
+      "holiday decoration",
+      "holiday decorations",
+      "decorations"
+    ],
+    "honey": [
+      "honey",
+      "honeies"
+    ],
+    "hoodie": [
+      "hoodie",
+      "hooded sweatshirt",
+      "hoodies"
+    ],
+    "houseplant": [
+      "houseplant",
+      "house plant",
+      "plant",
+      "potted plant",
+      "houseplants"
+    ],
+    "humidifier": [
+      "humidifier",
+      "humidifiers"
+    ],
+    "ice pack": [
+      "ice pack",
+      "cold pack",
+      "ice packs"
+    ],
+    "incense": [
+      "incense",
+      "incense stick",
+      "incenses"
+    ],
+    "inhaler": [
+      "inhaler",
+      "inhalers"
+    ],
+    "iron": [
+      "iron",
+      "clothes iron",
+      "irons"
+    ],
+    "ironing board": [
+      "ironing board",
+      "ironing boards"
+    ],
+    "jacket": [
+      "jacket",
+      "jackets"
+    ],
+    "jam": [
+      "jam",
+      "jelly",
+      "preserve",
+      "jams"
+    ],
+    "jewelry": [
+      "jewelry",
+      "jewellery",
+      "necklace",
+      "bracelet",
+      "ring",
+      "jewelries"
+    ],
+    "jewelry box": [
+      "jewelry box",
+      "jewellery box",
+      "jewelry boxs"
+    ],
+    "juice": [
+      "juice",
+      "juices"
+    ],
+    "juicer": [
+      "juicer",
+      "juice extractor",
+      "juicers"
+    ],
+    "jumper cable": [
+      "jumper cable",
+      "jump leads",
+      "jumper cables"
+    ],
+    "kettle": [
+      "kettle",
+      "electric kettle",
+      "tea kettle",
+      "kettles"
+    ],
+    "keyboard": [
+      "keyboard",
+      "computer keyboard",
+      "keyboards"
     ],
     "keys": [
       "key",
       "keys",
       "keychain",
       "car key",
-      "house key"
+      "house key",
+      "key ring"
     ],
     "kitchen counter": [
-      "kitchen counters",
-      "kitchen counter"
+      "kitchen counter",
+      "kitchen counters"
+    ],
+    "kitchen island": [
+      "kitchen island",
+      "island",
+      "kitchen islands"
+    ],
+    "kitchen scale": [
+      "kitchen scale",
+      "food scale",
+      "kitchen scales"
+    ],
+    "kitchen timer": [
+      "kitchen timer",
+      "timer",
+      "kitchen timers"
     ],
     "knife": [
+      "knife",
       "knifes",
-      "knife"
+      "knives",
+      "table knife",
+      "butter knife"
+    ],
+    "knife block": [
+      "knife block",
+      "knife blocks"
+    ],
+    "ladder": [
+      "ladder",
+      "step ladder",
+      "stepladder",
+      "ladders"
+    ],
+    "ladle": [
+      "ladle",
+      "soup ladle",
+      "ladles"
+    ],
+    "lamp": [
+      "lamp",
+      "light",
+      "lamps"
+    ],
+    "lantern": [
+      "lantern",
+      "lanterns"
     ],
     "laptop": [
       "laptop",
-      "computer",
-      "notebook",
+      "laptop computer",
+      "notebook computer",
       "laptops"
+    ],
+    "laptop charger": [
+      "laptop charger",
+      "power cord",
+      "laptop chargers"
+    ],
+    "laundry": [
+      "laundry",
+      "washing",
+      "dirty clothes",
+      "laundries"
+    ],
+    "laundry basket": [
+      "laundry basket",
+      "hamper",
+      "laundry baskets"
+    ],
+    "laundry detergent": [
+      "laundry detergent",
+      "detergent",
+      "washing powder",
+      "laundry detergents"
+    ],
+    "lawn mower": [
+      "lawn mower",
+      "mower",
+      "lawn mowers"
+    ],
+    "leash": [
+      "leash",
+      "dog leash",
+      "lead",
+      "leashs"
+    ],
+    "light bulb": [
+      "light bulb",
+      "bulb",
+      "lightbulb",
+      "light bulbs"
+    ],
+    "lint roller": [
+      "lint roller",
+      "lint rollers"
+    ],
+    "litter box": [
+      "litter box",
+      "litter tray",
+      "cat litter box",
+      "litter boxs"
+    ],
+    "litter scoop": [
+      "litter scoop",
+      "litter scoops"
+    ],
+    "loaf pan": [
+      "loaf pan",
+      "bread pan",
+      "loaf pans"
+    ],
+    "lotion": [
+      "lotion",
+      "moisturizer",
+      "moisturiser",
+      "lotions"
+    ],
+    "lunch box": [
+      "lunch box",
+      "lunchbox",
+      "lunch boxs"
+    ],
+    "magazine": [
+      "magazine",
+      "magazines"
+    ],
+    "mail": [
+      "mail",
+      "letter",
+      "letters",
+      "mailbox",
+      "mails"
+    ],
+    "makeup": [
+      "makeup",
+      "cosmetics",
+      "cosmetic",
+      "makeups"
+    ],
+    "mantel": [
+      "mantel",
+      "mantelpiece",
+      "mantels"
+    ],
+    "marker": [
+      "marker",
+      "markers",
+      "felt pen"
+    ],
+    "mattress": [
+      "mattress",
+      "mattres"
+    ],
+    "measuring cup": [
+      "measuring cup",
+      "measuring jug",
+      "measuring cups"
+    ],
+    "measuring spoon": [
+      "measuring spoon",
+      "measuring spoons"
+    ],
+    "meat": [
+      "meat",
+      "meats"
     ],
     "medicine": [
       "medicine",
       "medicines",
-      "pills",
       "meds",
       "prescription",
-      "vitamins"
+      "medication",
+      "script"
+    ],
+    "medicine cabinet": [
+      "medicine cabinet",
+      "bathroom cabinet",
+      "medicine cabinets"
+    ],
+    "microphone": [
+      "microphone",
+      "mic",
+      "microphones"
+    ],
+    "microwave": [
+      "microwave",
+      "microwave oven",
+      "microwaves"
+    ],
+    "milk": [
+      "milk",
+      "milks"
+    ],
+    "mirror": [
+      "mirror",
+      "mirrors"
+    ],
+    "mixer": [
+      "mixer",
+      "stand mixer",
+      "hand mixer",
+      "mixers"
+    ],
+    "mixing bowl": [
+      "mixing bowl",
+      "mixing bowls"
+    ],
+    "modem": [
+      "modem",
+      "modems"
+    ],
+    "monitor": [
+      "monitor",
+      "computer monitor",
+      "screen",
+      "monitors"
+    ],
+    "mop": [
+      "mop",
+      "mops"
+    ],
+    "motor oil": [
+      "motor oil",
+      "engine oil",
+      "motor oils"
+    ],
+    "mouse": [
+      "mouse",
+      "computer mouse",
+      "mouses"
+    ],
+    "mousepad": [
+      "mousepad",
+      "mouse pad",
+      "mousepads"
+    ],
+    "mouthwash": [
+      "mouthwash",
+      "mouthwashs"
+    ],
+    "muffin tin": [
+      "muffin tin",
+      "muffin pan",
+      "muffin tins"
+    ],
+    "nail": [
+      "nail",
+      "nails"
+    ],
+    "nail clipper": [
+      "nail clipper",
+      "pet nail clipper",
+      "nail clippers"
+    ],
+    "napkin": [
+      "napkin",
+      "serviette",
+      "napkins"
+    ],
+    "needle": [
+      "needle",
+      "sewing needle",
+      "needles"
+    ],
+    "newspaper": [
+      "newspaper",
+      "news paper",
+      "newspapers"
+    ],
+    "night light": [
+      "night light",
+      "nightlight",
+      "night lights"
+    ],
+    "nightstand": [
+      "nightstand",
+      "bedside table",
+      "night stand",
+      "nightstands"
+    ],
+    "notebook": [
+      "notebook",
+      "writing notebook",
+      "journal",
+      "notebooks"
+    ],
+    "notepad": [
+      "notepad",
+      "note pad",
+      "notepads"
+    ],
+    "office chair": [
+      "office chair",
+      "desk chair",
+      "office chairs"
+    ],
+    "oil": [
+      "oil",
+      "cooking oil",
+      "olive oil",
+      "oils"
+    ],
+    "ornament": [
+      "ornament",
+      "bauble",
+      "ornaments"
+    ],
+    "ottoman": [
+      "ottoman",
+      "footstool",
+      "ottomans"
+    ],
+    "oven": [
+      "oven",
+      "wall oven",
+      "ovens"
+    ],
+    "oven mitt": [
+      "oven mitt",
+      "oven glove",
+      "oven mitts"
+    ],
+    "pacifier": [
+      "pacifier",
+      "dummy",
+      "binky",
+      "pacifiers"
+    ],
+    "package": [
+      "package",
+      "parcel",
+      "delivery",
+      "packages"
+    ],
+    "paint": [
+      "paint",
+      "paint can",
+      "paints"
+    ],
+    "paint brush": [
+      "paint brush",
+      "paintbrush",
+      "paint brushs"
+    ],
+    "paint roller": [
+      "paint roller",
+      "paint rollers"
+    ],
+    "painting": [
+      "painting",
+      "picture",
+      "artwork",
+      "paintings"
+    ],
+    "pantry": [
+      "pantry",
+      "food cupboard",
+      "pantries"
+    ],
+    "pants": [
+      "pants",
+      "trousers",
+      "jeans",
+      "slacks"
+    ],
+    "paper": [
+      "paper",
+      "papers",
+      "drawing paper"
+    ],
+    "paper clip": [
+      "paper clip",
+      "paperclip",
+      "paper clips"
+    ],
+    "paper towel": [
+      "paper towel",
+      "kitchen roll",
+      "paper towels"
+    ],
+    "parchment paper": [
+      "parchment paper",
+      "baking paper",
+      "parchment papers"
+    ],
+    "pasta": [
+      "pasta",
+      "spaghetti",
+      "noodles",
+      "pastas"
+    ],
+    "patio chair": [
+      "patio chair",
+      "garden chair",
+      "outdoor chair",
+      "patio chairs"
+    ],
+    "patio table": [
+      "patio table",
+      "garden table",
+      "outdoor table",
+      "patio tables"
+    ],
+    "peeler": [
+      "peeler",
+      "vegetable peeler",
+      "peelers"
+    ],
+    "pen": [
+      "pen",
+      "pens",
+      "ballpoint"
+    ],
+    "pencil": [
+      "pencil",
+      "pencils"
+    ],
+    "pepper": [
+      "pepper",
+      "peppers"
+    ],
+    "pet bed": [
+      "pet bed",
+      "dog bed",
+      "cat bed",
+      "pet beds"
+    ],
+    "pet carrier": [
+      "pet carrier",
+      "cat carrier",
+      "dog carrier",
+      "pet carriers"
+    ],
+    "pet food": [
+      "pet food",
+      "animal food",
+      "pet foods"
+    ],
+    "pet shampoo": [
+      "pet shampoo",
+      "dog shampoo",
+      "pet shampoos"
+    ],
+    "pet toy": [
+      "pet toy",
+      "dog toy",
+      "cat toy",
+      "pet toies"
     ],
     "phone": [
       "phone",
       "cell phone",
       "mobile phone",
       "smartphone",
+      "mobile",
       "phones"
     ],
+    "picture frame": [
+      "picture frame",
+      "photo frame",
+      "frame",
+      "picture frames"
+    ],
+    "pie pan": [
+      "pie pan",
+      "pie dish",
+      "pie pans"
+    ],
+    "pill": [
+      "pill",
+      "pills"
+    ],
     "pill bottle": [
+      "pill bottle",
       "pill bottles",
-      "pill bottle"
+      "medicine bottle",
+      "prescription bottle"
+    ],
+    "pillow": [
+      "pillow",
+      "pillows"
+    ],
+    "pillowcase": [
+      "pillowcase",
+      "pillow case",
+      "pillow slip",
+      "pillowcases"
+    ],
+    "pitcher": [
+      "pitcher",
+      "water pitcher",
+      "jug",
+      "pitchers"
+    ],
+    "placemat": [
+      "placemat",
+      "place mat",
+      "placemats"
+    ],
+    "planner": [
+      "planner",
+      "diary",
+      "planners"
     ],
     "plastic bottle": [
-      "plastic bottles",
-      "plastic bottle"
+      "plastic bottle",
+      "plastic bottles"
+    ],
+    "plastic wrap": [
+      "plastic wrap",
+      "cling film",
+      "saran wrap",
+      "plastic wraps"
     ],
     "plate": [
+      "plate",
       "plates",
-      "plate"
+      "dinner plate",
+      "dish",
+      "dishes"
+    ],
+    "playpen": [
+      "playpen",
+      "play pen",
+      "playpens"
+    ],
+    "pliers": [
+      "pliers",
+      "plier"
+    ],
+    "plunger": [
+      "plunger",
+      "toilet plunger",
+      "plungers"
+    ],
+    "poop bag": [
+      "poop bag",
+      "dog bag",
+      "pet waste bag",
+      "poop bags"
+    ],
+    "poster": [
+      "poster",
+      "posters"
+    ],
+    "pot holder": [
+      "pot holder",
+      "potholder",
+      "pot holders"
+    ],
+    "pot lid": [
+      "pot lid",
+      "lid",
+      "pot lids"
+    ],
+    "power strip": [
+      "power strip",
+      "surge protector",
+      "power strips"
+    ],
+    "pressure cooker": [
+      "pressure cooker",
+      "instant pot",
+      "pressure cookers"
+    ],
+    "printer": [
+      "printer",
+      "printers"
+    ],
+    "puzzle": [
+      "puzzle",
+      "jigsaw",
+      "puzzles"
+    ],
+    "quilt": [
+      "quilt",
+      "quilts"
+    ],
+    "radiator": [
+      "radiator",
+      "radiators"
+    ],
+    "raincoat": [
+      "raincoat",
+      "rain jacket",
+      "raincoats"
+    ],
+    "rake": [
+      "rake",
+      "rakes"
+    ],
+    "range hood": [
+      "range hood",
+      "extractor hood",
+      "vent hood",
+      "range hoods"
+    ],
+    "razor": [
+      "razor",
+      "shaving razor",
+      "razors"
+    ],
+    "recycling bin": [
+      "recycling bin",
+      "recycle bin",
+      "recycling bins"
     ],
     "refrigerator": [
+      "refrigerator",
       "refrigerators",
-      "refrigerator"
+      "fridge",
+      "icebox",
+      "refrigerater"
     ],
     "remote control": [
+      "remote control",
       "remote controls",
-      "remote control"
+      "remote",
+      "clicker"
+    ],
+    "rice": [
+      "rice",
+      "rices"
+    ],
+    "rice cooker": [
+      "rice cooker",
+      "rice cookers"
+    ],
+    "robot vacuum": [
+      "robot vacuum",
+      "roomba",
+      "robot vacuums"
+    ],
+    "rolling pin": [
+      "rolling pin",
+      "rolling pins"
+    ],
+    "router": [
+      "router",
+      "wifi router",
+      "wi-fi router",
+      "routers"
+    ],
+    "rug": [
+      "rug",
+      "carpet",
+      "rugs"
+    ],
+    "ruler": [
+      "ruler",
+      "rulers"
+    ],
+    "safe": [
+      "safe",
+      "lockbox",
+      "safes"
+    ],
+    "salt": [
+      "salt",
+      "salts"
+    ],
+    "sanitary pad": [
+      "sanitary pad",
+      "sanitary towel",
+      "pad",
+      "sanitary pads"
+    ],
+    "sauce": [
+      "sauce",
+      "ketchup",
+      "condiment",
+      "sauces"
+    ],
+    "saucepan": [
+      "saucepan",
+      "sauce pan",
+      "saucepans"
+    ],
+    "saucer": [
+      "saucer",
+      "saucers"
+    ],
+    "scale": [
+      "scale",
+      "bathroom scale",
+      "weighing scale",
+      "scales"
+    ],
+    "scanner": [
+      "scanner",
+      "scanners"
+    ],
+    "scarf": [
+      "scarf",
+      "scarves",
+      "scarfs"
+    ],
+    "scissors": [
+      "scissors",
+      "scissor"
+    ],
+    "scooter": [
+      "scooter",
+      "scooters"
+    ],
+    "scratching post": [
+      "scratching post",
+      "cat scratcher",
+      "scratching posts"
+    ],
+    "screw": [
+      "screw",
+      "screws"
+    ],
+    "screwdriver": [
+      "screwdriver",
+      "screwdrivers"
+    ],
+    "scrub brush": [
+      "scrub brush",
+      "scrubbing brush",
+      "scrub brushs"
+    ],
+    "sculpture": [
+      "sculpture",
+      "statue",
+      "sculptures"
+    ],
+    "seasonal decoration": [
+      "seasonal decoration",
+      "seasonal decor",
+      "seasonal decorations"
+    ],
+    "serving dish": [
+      "serving dish",
+      "serving bowl",
+      "platter",
+      "serving dishs"
+    ],
+    "sewing kit": [
+      "sewing kit",
+      "sewing kits"
+    ],
+    "shampoo": [
+      "shampoo",
+      "shampoos"
+    ],
+    "shaving cream": [
+      "shaving cream",
+      "shaving foam",
+      "shaving creams"
     ],
     "shelf": [
-      "shelfs",
-      "shelf"
+      "shelf",
+      "shelfs"
+    ],
+    "shirt": [
+      "shirt",
+      "shirts",
+      "t-shirt",
+      "tshirt",
+      "blouse"
+    ],
+    "shoe cabinet": [
+      "shoe cabinet",
+      "shoe cupboard",
+      "shoe cabinets"
+    ],
+    "shoe rack": [
+      "shoe rack",
+      "shoe shelf",
+      "shoe racks"
     ],
     "shoes": [
       "shoe",
@@ -196,122 +2081,716 @@
       "sneakers",
       "boots",
       "footwear",
-      "slippers"
+      "slippers",
+      "boot",
+      "slipper",
+      "sandals"
+    ],
+    "shorts": [
+      "shorts"
+    ],
+    "shovel": [
+      "shovel",
+      "spade",
+      "shovels"
+    ],
+    "shower": [
+      "shower",
+      "showers"
+    ],
+    "shower curtain": [
+      "shower curtain",
+      "shower curtains"
+    ],
+    "shower head": [
+      "shower head",
+      "showerhead",
+      "shower heads"
+    ],
+    "shredder": [
+      "shredder",
+      "paper shredder",
+      "shredders"
+    ],
+    "side table": [
+      "side table",
+      "end table",
+      "side tables"
     ],
     "sink": [
+      "sink",
       "sinks",
-      "sink"
+      "washbasin",
+      "basin"
+    ],
+    "skateboard": [
+      "skateboard",
+      "skateboards"
+    ],
+    "skirt": [
+      "skirt",
+      "skirts"
+    ],
+    "sleeping bag": [
+      "sleeping bag",
+      "sleeping bags"
+    ],
+    "slow cooker": [
+      "slow cooker",
+      "crockpot",
+      "crock pot",
+      "slow cookers"
+    ],
+    "smoke detector": [
+      "smoke detector",
+      "smoke alarm",
+      "smoke detectors"
+    ],
+    "soap": [
+      "soap",
+      "bar soap",
+      "soaps"
+    ],
+    "soap dish": [
+      "soap dish",
+      "soap dishs"
+    ],
+    "sock": [
+      "sock",
+      "socks"
+    ],
+    "soda": [
+      "soda",
+      "soft drink",
+      "pop",
+      "sodas"
     ],
     "sofa": [
+      "sofa",
       "sofas",
-      "sofa"
+      "couch",
+      "settee",
+      "loveseat"
+    ],
+    "soundbar": [
+      "soundbar",
+      "sound bar",
+      "soundbars"
+    ],
+    "spatula": [
+      "spatula",
+      "turner",
+      "spatulas"
+    ],
+    "speaker": [
+      "speaker",
+      "speakers",
+      "stereo"
+    ],
+    "spice": [
+      "spice",
+      "spices",
+      "seasoning"
+    ],
+    "sponge": [
+      "sponge",
+      "dish sponge",
+      "sponges"
     ],
     "spoon": [
+      "spoon",
       "spoons",
-      "spoon"
+      "teaspoon",
+      "tablespoon"
+    ],
+    "stain remover": [
+      "stain remover",
+      "stain spray",
+      "stain removers"
     ],
     "stairs": [
       "stairs"
     ],
+    "stapler": [
+      "stapler",
+      "staplers"
+    ],
+    "stockpot": [
+      "stockpot",
+      "stock pot",
+      "stockpots"
+    ],
+    "storage box": [
+      "storage box",
+      "storage bin",
+      "plastic bin",
+      "storage boxs"
+    ],
     "storage cabinet": [
-      "storage cabinets",
-      "storage cabinet"
+      "storage cabinet",
+      "storage cabinets"
+    ],
+    "storage container": [
+      "storage container",
+      "storage tub",
+      "storage containers"
+    ],
+    "stove": [
+      "stove",
+      "cooker",
+      "range",
+      "hob",
+      "stoves"
+    ],
+    "strainer": [
+      "strainer",
+      "sieve",
+      "strainers"
+    ],
+    "stroller": [
+      "stroller",
+      "pushchair",
+      "pram",
+      "strollers"
+    ],
+    "sugar": [
+      "sugar",
+      "sugars"
+    ],
+    "suitcase": [
+      "suitcase",
+      "luggage",
+      "travel bag",
+      "suitcases"
+    ],
+    "sunglasses": [
+      "sunglasses",
+      "shades",
+      "sunnies",
+      "sunglasse"
+    ],
+    "sunscreen": [
+      "sunscreen",
+      "sunblock",
+      "sunscreens"
+    ],
+    "sweater": [
+      "sweater",
+      "jumper",
+      "pullover",
+      "sweaters"
+    ],
+    "syringe": [
+      "syringe",
+      "syringes"
     ],
     "table": [
-      "tables",
-      "table"
+      "table",
+      "tables"
+    ],
+    "table lamp": [
+      "table lamp",
+      "desk lamp",
+      "table lamps"
+    ],
+    "table runner": [
+      "table runner",
+      "table runners"
+    ],
+    "tablecloth": [
+      "tablecloth",
+      "table cloth",
+      "tablecloths"
+    ],
+    "tablet": [
+      "tablet",
+      "ipad",
+      "tablets"
+    ],
+    "tampon": [
+      "tampon",
+      "tampons"
+    ],
+    "tape": [
+      "tape",
+      "adhesive tape",
+      "sticky tape",
+      "tapes"
+    ],
+    "tape measure": [
+      "tape measure",
+      "measuring tape",
+      "tape measures"
+    ],
+    "tea": [
+      "tea",
+      "tea bag",
+      "tea bags",
+      "teas"
+    ],
+    "teapot": [
+      "teapot",
+      "tea pot",
+      "teapots"
+    ],
+    "teddy bear": [
+      "teddy bear",
+      "teddy",
+      "teddy bears"
     ],
     "television": [
+      "television",
       "televisions",
-      "television"
+      "tv",
+      "telly",
+      "flat screen"
+    ],
+    "tent": [
+      "tent",
+      "tents"
+    ],
+    "thermometer": [
+      "thermometer",
+      "kitchen thermometer",
+      "thermometers"
+    ],
+    "thermos": [
+      "thermos",
+      "vacuum flask",
+      "thermo"
+    ],
+    "thermostat": [
+      "thermostat",
+      "thermostats"
+    ],
+    "thread": [
+      "thread",
+      "sewing thread",
+      "threads"
+    ],
+    "tie": [
+      "tie",
+      "necktie",
+      "ties"
+    ],
+    "tire": [
+      "tire",
+      "tyre",
+      "wheel",
+      "tires"
+    ],
+    "tissue": [
+      "tissue",
+      "tissues",
+      "kleenex"
+    ],
+    "tissue box": [
+      "tissue box",
+      "tissue boxs"
+    ],
+    "toaster": [
+      "toaster",
+      "toasters"
     ],
     "toilet": [
+      "toilet",
       "toilets",
-      "toilet"
+      "loo",
+      "wc"
+    ],
+    "toilet brush": [
+      "toilet brush",
+      "toilet brushs"
+    ],
+    "toilet paper": [
+      "toilet paper",
+      "toilet roll",
+      "toilet tissue",
+      "toilet papers"
+    ],
+    "toilet paper holder": [
+      "toilet paper holder",
+      "toilet roll holder",
+      "toilet paper holders"
+    ],
+    "tongs": [
+      "tongs",
+      "tong"
+    ],
+    "toolbox": [
+      "toolbox",
+      "tool box",
+      "tool kit",
+      "toolboxs"
+    ],
+    "toothbrush": [
+      "toothbrush",
+      "tooth brush",
+      "toothbrushs"
+    ],
+    "toothpaste": [
+      "toothpaste",
+      "toothpastes"
     ],
     "towel": [
+      "towel",
       "towels",
-      "towel"
+      "bath towel",
+      "hand towel"
+    ],
+    "towel rack": [
+      "towel rack",
+      "towel rail",
+      "towel racks"
+    ],
+    "toy": [
+      "toy",
+      "toys",
+      "toies"
+    ],
+    "toy box": [
+      "toy box",
+      "toy chest",
+      "toy boxs"
     ],
     "trash": [
       "trash",
       "garbage",
       "rubbish",
       "waste",
+      "trashs"
+    ],
+    "trash bin": [
       "trash bin",
+      "trash can",
+      "garbage can",
+      "rubbish bin",
       "bin",
       "wastebasket",
-      "trashs"
+      "waste bin",
+      "trash bins"
+    ],
+    "trowel": [
+      "trowel",
+      "trowels"
+    ],
+    "umbrella": [
+      "umbrella",
+      "parasol",
+      "umbrellas"
+    ],
+    "umbrella stand": [
+      "umbrella stand",
+      "umbrella stands"
+    ],
+    "underwear": [
+      "underwear",
+      "boxers",
+      "briefs",
+      "panties",
+      "underwears"
+    ],
+    "usb drive": [
+      "usb drive",
+      "flash drive",
+      "thumb drive",
+      "usb stick",
+      "usb drives"
     ],
     "user hands": [
       "user hands",
       "user hand"
     ],
+    "vacuum cleaner": [
+      "vacuum cleaner",
+      "vacuum",
+      "hoover",
+      "vacuum cleaners"
+    ],
+    "vanity": [
+      "vanity",
+      "dressing table",
+      "vanities"
+    ],
+    "vase": [
+      "vase",
+      "flower vase",
+      "vases"
+    ],
+    "vegetable": [
+      "vegetable",
+      "vegetables",
+      "veg"
+    ],
+    "vinegar": [
+      "vinegar",
+      "vinegars"
+    ],
+    "vitamin": [
+      "vitamin",
+      "vitamins",
+      "supplement"
+    ],
+    "waffle maker": [
+      "waffle maker",
+      "waffle iron",
+      "waffle makers"
+    ],
+    "walker": [
+      "walker",
+      "walking frame",
+      "rollator",
+      "walkers"
+    ],
+    "wall art": [
+      "wall art",
+      "wall decor",
+      "wall arts"
+    ],
+    "wall clock": [
+      "wall clock",
+      "clock",
+      "wall clocks"
+    ],
     "wallet": [
+      "wallet",
       "wallets",
-      "wallet"
+      "billfold"
+    ],
+    "wardrobe": [
+      "wardrobe",
+      "armoire",
+      "closet",
+      "wardrobes"
+    ],
+    "washcloth": [
+      "washcloth",
+      "face cloth",
+      "flannel",
+      "washcloths"
+    ],
+    "washing machine": [
+      "washing machine",
+      "washer",
+      "washing machines"
+    ],
+    "watch": [
+      "watch",
+      "wristwatch",
+      "watchs"
+    ],
+    "water": [
+      "water",
+      "drinking water",
+      "waters"
+    ],
+    "water bottle": [
+      "water bottle",
+      "reusable bottle",
+      "flask",
+      "water bottles"
+    ],
+    "water bowl": [
+      "water bowl",
+      "pet water bowl",
+      "water bowls"
+    ],
+    "water heater": [
+      "water heater",
+      "boiler",
+      "water heaters"
+    ],
+    "watering can": [
+      "watering can",
+      "watering cans"
+    ],
+    "webcam": [
+      "webcam",
+      "web camera",
+      "webcams"
+    ],
+    "wheelchair": [
+      "wheelchair",
+      "wheelchairs"
+    ],
+    "whisk": [
+      "whisk",
+      "egg whisk",
+      "whisks"
+    ],
+    "whiteboard": [
+      "whiteboard",
+      "white board",
+      "whiteboards"
+    ],
+    "wifi extender": [
+      "wifi extender",
+      "wi-fi extender",
+      "repeater",
+      "wifi extenders"
     ],
     "window": [
-      "windows",
-      "window"
+      "window",
+      "windows"
+    ],
+    "wine glass": [
+      "wine glass",
+      "wineglass",
+      "goblet",
+      "wine glas"
+    ],
+    "wine rack": [
+      "wine rack",
+      "wine racks"
+    ],
+    "wipe": [
+      "wipe",
+      "wipes",
+      "baby wipe"
+    ],
+    "wok": [
+      "wok",
+      "woks"
+    ],
+    "wreath": [
+      "wreath",
+      "wreaths"
+    ],
+    "wrench": [
+      "wrench",
+      "spanner",
+      "wrenchs"
+    ],
+    "yogurt": [
+      "yogurt",
+      "yoghurt",
+      "yogurts"
+    ],
+    "ziplock bag": [
+      "ziplock bag",
+      "ziploc bag",
+      "sandwich bag",
+      "ziplock bags"
+    ],
+    "zipper": [
+      "zipper",
+      "zip",
+      "zippers"
     ]
   },
   "room_keywords": {
+    "attic": [
+      "attic",
+      "loft"
+    ],
     "balcony": [
       "balcony",
-      "terrace"
+      "terrace",
+      "patio",
+      "deck"
     ],
     "basement": [
-      "basement"
+      "basement",
+      "cellar"
     ],
     "bathroom": [
       "bathroom",
-      "washroom"
+      "washroom",
+      "restroom",
+      "toilet",
+      "loo"
     ],
     "bedroom": [
       "bedroom",
-      "bed room"
+      "bed room",
+      "master bedroom",
+      "guest bedroom"
+    ],
+    "closet": [
+      "closet",
+      "wardrobe room",
+      "walk-in closet"
     ],
     "dining room": [
       "dining room",
-      "dining"
+      "dining",
+      "dining area"
     ],
     "entryway": [
       "entryway",
       "foyer",
-      "entrance hall"
+      "entrance hall",
+      "entrance",
+      "porch"
     ],
     "garage": [
-      "garage"
+      "garage",
+      "carport"
+    ],
+    "garden": [
+      "garden",
+      "yard",
+      "backyard",
+      "front yard"
+    ],
+    "guest room": [
+      "guest room",
+      "spare room"
     ],
     "hallway": [
       "hallway",
       "corridor",
-      "hall"
+      "hall",
+      "landing"
     ],
     "kitchen": [
-      "kitchen"
+      "kitchen",
+      "cookhouse"
     ],
     "living room": [
       "living room",
-      "lounge"
+      "lounge",
+      "sitting room",
+      "family room"
+    ],
+    "nursery": [
+      "nursery",
+      "baby room",
+      "child's room"
     ],
     "office": [
       "office",
-      "study room"
+      "study room",
+      "study",
+      "home office"
+    ],
+    "pantry": [
+      "pantry",
+      "larder"
     ],
     "stairway": [
       "stairway",
-      "staircase"
+      "staircase",
+      "stairs",
+      "stairwell"
     ],
     "storage room": [
       "storage room",
-      "utility room"
+      "utility room",
+      "laundry room",
+      "pantry"
+    ],
+    "toilet": [
+      "toilet",
+      "wc",
+      "lavatory"
     ]
   },
   "schema": 1,
   "sources": {
     "config_classes": 14,
+    "home_rooms": 20,
+    "home_vocabulary": 511,
     "pipeline_classes": 56,
     "scene_graph_labels": 14
   }
