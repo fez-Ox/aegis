@@ -323,36 +323,55 @@ CLIENT (Flutter or HTTP)  ── input: typed text ─┐
   modal upgraded `1.5.4 -> 1.6.3` (old client rejected image-builder `2026.10`). Modal profile
   `i230683` authenticates. `aegis-secrets` created with a harmless placeholder key (empty secrets
   are rejected by the CLI). Volumes `aegis-poc-data` / `aegis-model-cache` auto-create on first use.
-- **LLM decision (open decision #3): Qwen served by vLLM on Modal.** `comm/modal_vllm.py` is a
-  standalone `modal.App("aegis-llm")` (`@modal.web_server`, L4, model volume, default
-  `Qwen/Qwen3-8B-AWQ`, deploy with `uv run modal deploy "NL Querying/comm/modal_vllm.py"`).
-  `comm/llm.py` is a provider-agnostic OpenAI-compatible client (`AEGIS_LLM_BASE_URL`,
-  `AEGIS_LLM_MODEL`, `AEGIS_LLM_API_KEY` or `AEGIS_LLM_KEY_FILE` default `.keys/openai.txt`,
-  `AEGIS_LLM_TIMEOUT`). The `.keys/` directory is gitignored and must never be committed. Keys are
-  never logged/serialised.
+- **LLM decision (open decision #3): Qwen served by vLLM on Modal, local Qwen for now.**
+  `comm/modal_vllm.py` is a standalone `modal.App("aegis-llm")` (`@modal.web_server`, L4, model
+  volume, default `Qwen/Qwen3-8B-AWQ`, deploy with
+  `uv run modal deploy "NL Querying/comm/modal_vllm.py"`). `comm/llm.py` is a provider-agnostic
+  OpenAI-compatible client with `AEGIS_LLM_PROVIDER` presets: `local` (default, Ollama
+  `qwen2.5:1.5b` at `http://localhost:11434/v1`), `openai` (`.keys/openai.txt`), `ollama`
+  (`.keys/ollama.txt`), or `custom` (explicit base/model/key). Explicit `AEGIS_LLM_BASE_URL`,
+  `AEGIS_LLM_MODEL`, `AEGIS_LLM_API_KEY` / `AEGIS_LLM_KEY_FILE`, and `AEGIS_LLM_TIMEOUT` override
+  the preset. `.keys/` is gitignored; keys are never logged/serialised.
 - **OpenAI reality (verified live 2026-11-08):** `.keys/openai.txt` authenticates at
   `https://api.openai.com/v1` and `/v1/models` returns **96 models** (`gpt-4o-mini`,
   `gpt-4.1-mini`, `gpt-5-mini`, ...). Chat completions fail with HTTP **429
-  `insufficient_quota`**: "You have no credits remaining." The client now defaults to OpenAI
-  (`gpt-4o-mini`) but surfaces this provider message instead of a generic HTTP error; the engine
-  still degrades to honest abstention. Add billing credits to use OpenAI, or override to local
-  Ollama/Qwen or Ollama Cloud.
-- **Ollama Cloud reality (verified live):** the key in `.keys/ollama.txt` works at
-  `https://ollama.com/v1`, but its 26-model catalog contains **no qwen**. Live fallback verification
-  therefore used `gpt-oss:20b` and passed: "where are my kicks" → mapped to `shoes` → grounded
-  answer "Your shoes are inside Storage Cabinet #1 in Room #1." Unknown "grapefruit peeler" still
-  abstains. The qwen path remains: Modal vLLM (blocked by GPU payment) or local
-  `qwen2.5:1.5b` + `AEGIS_LLM_BASE_URL=http://localhost:11434/v1`.
+  `insufficient_quota`**: "You have no credits remaining." OpenAI is available with
+  `AEGIS_LLM_PROVIDER=openai` after billing credits are added; the client surfaces the provider
+  message instead of a generic HTTP error and the engine degrades to honest abstention.
+- **Local Qwen reality (verified live):** `qwen2.5:1.5b` via Ollama answers the escape-hatch case
+  "where are my kicks" → `shoes` → grounded answer in ~30 s; the default provider is now `local`
+  so no cloud credits are needed for development. Ollama Cloud remains available with
+  `AEGIS_LLM_PROVIDER=ollama`; its key works at `https://ollama.com/v1`, but its catalog contains
+  no qwen, so live cloud verification uses `gpt-oss:20b`. Modal vLLM is next once the real-video
+  memory is built.
+- **Real-video run blocker (2026-11-09):** the Modal workspace is paid, but
+  `facebook/VGGT-Omega` is gated (`/api/models` reports `gated: manual`; `/resolve/main/config.json`
+  returns 401) and neither `.env` nor `aegis-secrets` contains `HF_TOKEN`. The sample video cannot
+  be reconstructed until a Hugging Face token with access to that repo is supplied. `run_pipeline.py`
+  forwards `HF_TOKEN` from the environment/`.env` into the Modal job.
 - **Escape-hatch contract:** LLM receives question + dataset's canonical items, tracked labels and
   rooms; must return strict JSON `{intent,item,room,confidence}`. `engine._validate_llm_decision`
   rejects any item/room not in the dictionary or actual memory; valid mappings run the same
   LOCATE/TEMPORAL/ACTIVITY handlers. `AskResult.llm_used` audits usage. Network/parse failures
   degrade to honest abstention (`engine.last_llm_error`), never to invention.
-- **Dictionary bootstrap:** `scripts/build_dictionary.py` generates `nlq/dictionary.json` from
-  (1) `QueryReasoningEngine` tables, (2) `run_pipeline.COMPREHENSIVE_INDOOR_CLASSES` via `ast`,
-  (3) `config/demo.yaml` target classes, (4) labels in all local scene graphs. Current output:
-  **49 canonical items / 156 synonyms / 13 room keywords**. `DictionaryIndex.seeded()` merges the
-  file on top of the live tables; `save/load/add_item/add_room/merge` are the growth hooks.
+- **Closed home vocabulary (2026-11-09):** `nlq/home_vocabulary.json` is the curated
+  understanding vocabulary: **511 canonical items / 1,142 aliases / 20 rooms**, organised by room
+  (kitchen, food, living room, bedroom, bathroom, dining, office, laundry/utility,
+  entryway/outdoor, storage/garage, health/personal, pets, kids, decor). It includes regional and
+  slang aliases (`telly`, `shades`, `kicks`, `hoover`, `fridge`, `tap`) and plural forms. The
+  generated runtime dictionary is **525 canonical / 1,625 aliases / 20 rooms** after merging the
+  legacy aegis tables, pipeline/config classes, and labels from real scene graphs.
+- **Authoritative merge + word boundaries:** `scripts/build_dictionary.py` applies the curated
+  vocabulary last and lets it reassign legacy aliases (`cup` moves from `bottle` to `cup`, `pan`
+  from `cooking pot` to `frying pan`). `DictionaryIndex.seeded()` merges the generated file with
+  reassignment; `lookup_item` prefers exact canonical names at equal length. Scene-label matching
+  now uses `\b` boundaries, so `pan` never matches `pants`, `cup` never matches `cupboard`, and
+  `bed` never matches `bedroom`.
+- **Three vocabulary layers:** understanding (`home_vocabulary.json`, 511 items), runtime
+  (`dictionary.json`, 525 items), and perception (`COMPREHENSIVE_INDOOR_CLASSES` + config, 58 + 14
+  classes). Only the scene graph supplies locations; a valid-but-unobserved item abstains with
+  `not_observed_in_memory`. The LLM may map an unknown word onto the closed vocabulary but cannot
+  invent a noun.
 - **Artifact root:** `LocalGraphSource` now searches `NL Querying/outputs/` **first**, then
   `sample_outputs/`, `outputs/`, `tests/fixtures/`. `build_memory.py` runs
   `modal run run_pipeline.py --video ... --dataset-id ... --stage all` and copies

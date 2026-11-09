@@ -15,6 +15,22 @@ vocabulary. The LLM never writes the answer: the deterministic evidence path
 always produces the final sentence, so a hallucinated location cannot reach
 the user.
 
+### Vocabulary layers
+
+The vocabulary is intentionally **closed** and **large**, but it is split into
+three layers so language coverage never becomes a licence to invent memory:
+
+| Layer | Source | Current size | Role |
+|---|---|---|---|
+| Understanding | `nlq/home_vocabulary.json` | 511 canonical home items, 1,142 aliases, 20 rooms | Every noun the engine may resolve. Curated by room (kitchen, bedroom, bathroom, office, pets, etc.), with regional/slang/plural aliases. |
+| Runtime dictionary | `nlq/dictionary.json` (generated) | 525 canonical, 1,625 aliases, 20 rooms | The curated layer merged with the legacy `aegis.memory.reasoning` tables, pipeline classes, config classes, and labels seen in real scene graphs. |
+| Perception subset | `run_pipeline.COMPREHENSIVE_INDOOR_CLASSES` + `config/demo.yaml` | 58 + config classes | Objects the open-vocabulary detector is actually prompted to find. It is deliberately smaller than the understanding vocabulary to keep detection fast and precise. |
+
+**Only `r4d_scene_graph.json` supplies locations.** A query for a valid but
+unobserved item (e.g. “kettle” in a video that never saw one) gets an honest
+`not_observed_in_memory` abstention, not a guess. The LLM is constrained to
+the canonical vocabulary and cannot add a new noun.
+
 ## Layout
 
 ```text
@@ -28,11 +44,12 @@ NL Querying/
 │   └── modal_serve.py    Modal ASGI wrapper around aegis.remote.api
 ├── nlq/
 │   ├── dictionary.py     DictionaryIndex: closed vocabulary + growth hooks
-│   ├── dictionary.json   GENERATED vocabulary (scripts/build_dictionary.py)
+│   ├── home_vocabulary.json  CURATED closed home vocabulary (authoritative)
+│   ├── dictionary.json   GENERATED runtime vocabulary (scripts/build_dictionary.py)
 │   └── engine.py         HybridNLQEngine: intent → dictionary → evidence →
 │                         grounded answer / abstention; LLM escape hatch
 ├── scripts/
-│   └── build_dictionary.py  regenerates dictionary.json from every source
+│   └── build_dictionary.py  merges curated + legacy + scene-graph vocabulary
 ├── build_memory.py       runs the Modal pipeline and stages artifacts here
 ├── tests/                offline tests (no Modal account needed)
 ├── smoke_test.py         CLI that exercises communication + answering
@@ -61,10 +78,11 @@ uv run pytest "NL Querying/tests" -q
 `smoke_test.py` prints the active transport, discovered datasets, a compact
 scene summary, and the LLM status (never the key).
 
-The default provider is OpenAI, reading the key from `.keys/openai.txt`. The
-entire `.keys/` directory is gitignored and must never be committed. If the
-OpenAI account has no credits, use `--no-llm` for dictionary-only mode or the
-local Ollama override below.
+The default LLM provider is **local Ollama** (`qwen2.5:1.5b`), which needs no
+cloud key. Use `AEGIS_LLM_PROVIDER=openai` when OpenAI billing is available;
+the key is read from `.keys/openai.txt`. The entire `.keys/` directory is
+gitignored and must never be committed. Use `--no-llm` for dictionary-only
+mode.
 
 ## Building memory from the input video
 
@@ -108,16 +126,18 @@ The same client code talks to any OpenAI-compatible endpoint:
 
 | Provider | Config | Notes |
 |---|---|---|
-| OpenAI (default) | key in `.keys/openai.txt`; `AEGIS_LLM_BASE_URL=https://api.openai.com/v1`, `AEGIS_LLM_MODEL=gpt-4o-mini` | Auth is valid (`/v1/models` returns 200 with 96 models), but the current account has **no credits**: chat completions return HTTP 429 `insufficient_quota` ("no credits remaining"). Add billing credits or use another provider. |
-| Ollama Cloud (working fallback) | `AEGIS_LLM_BASE_URL=https://ollama.com/v1`, `AEGIS_LLM_MODEL=gpt-oss:20b`, key in `AEGIS_LLM_API_KEY` or `.keys/ollama.txt` | The cloud catalog for the current key has **no qwen** model; `gpt-oss:20b` is used for live verification. |
-| Local Ollama + Qwen | `AEGIS_LLM_BASE_URL=http://localhost:11434/v1`, `AEGIS_LLM_MODEL=qwen2.5:1.5b` (or `qwen2.5:3b`), `AEGIS_LLM_API_KEY=ollama` | Non-thinking Qwen works without cloud keys. Avoid `qwen3:*` on old Ollama versions: their reasoning fills the token budget and the OpenAI endpoint returns empty content. |
-| Modal vLLM + Qwen (designed) | deploy `comm/modal_vllm.py`, then `AEGIS_LLM_BASE_URL=https://<workspace>--aegis-llm-serve.modal.run/v1`, `AEGIS_LLM_MODEL=Qwen/Qwen3-8B-AWQ`, any non-empty key | Needs a GPU-capable Modal workspace. |
+| Local Ollama + Qwen (default) | `AEGIS_LLM_PROVIDER=local`; defaults to `http://localhost:11434/v1`, `qwen2.5:1.5b`, key `ollama`, timeout 240s | Works offline. Start Ollama first (`ollama serve` / the desktop app). Non-thinking Qwen works without cloud keys. Avoid `qwen3:*` on old Ollama versions: their reasoning fills the token budget and the OpenAI endpoint returns empty content. |
+| OpenAI | `AEGIS_LLM_PROVIDER=openai`; key in `.keys/openai.txt`; defaults to `https://api.openai.com/v1`, `gpt-4o-mini` | Auth is valid (`/v1/models` returns 200 with 96 models), but the current account has **no credits**: chat completions return HTTP 429 `insufficient_quota` ("no credits remaining"). Add billing credits before using it. |
+| Ollama Cloud | `AEGIS_LLM_PROVIDER=ollama`; key in `.keys/ollama.txt`; defaults to `https://ollama.com/v1`, `gpt-oss:20b` | The cloud catalog for the current key has **no qwen** model; `gpt-oss:20b` is used for live verification. |
+| Modal vLLM + Qwen (designed) | deploy `comm/modal_vllm.py`, then `AEGIS_LLM_PROVIDER=custom`, `AEGIS_LLM_BASE_URL=https://<workspace>--aegis-llm-serve.modal.run/v1`, `AEGIS_LLM_MODEL=Qwen/Qwen3-8B-AWQ`, any non-empty key | Needs a GPU-capable Modal workspace. |
 
-Variable reference: `AEGIS_LLM_BASE_URL` (default `https://api.openai.com/v1`),
-`AEGIS_LLM_MODEL` (default `gpt-4o-mini`), `AEGIS_LLM_API_KEY`,
-`AEGIS_LLM_KEY_FILE` (default `.keys/openai.txt`), `AEGIS_LLM_TIMEOUT`,
-`AEGIS_LLM_EXTRA_BODY` (JSON merged into the request; Qwen3 on vLLM can use
-`{"chat_template_kwargs": {"enable_thinking": false}}`).
+Variable reference: `AEGIS_LLM_PROVIDER` (default `local`),
+`AEGIS_LLM_BASE_URL`, `AEGIS_LLM_MODEL`, `AEGIS_LLM_API_KEY`,
+`AEGIS_LLM_KEY_FILE`, `AEGIS_LLM_TIMEOUT`, `AEGIS_LLM_EXTRA_BODY` (JSON merged
+into the request; Qwen3 on vLLM can use
+`{"chat_template_kwargs": {"enable_thinking": false}}`). Explicit
+`AEGIS_LLM_BASE_URL` / `AEGIS_LLM_MODEL` / `AEGIS_LLM_TIMEOUT` values always
+override the provider defaults.
 
 For fallback questions the LLM receives the question plus the dataset's
 canonical items, tracked labels and rooms, and must return strict JSON
@@ -140,10 +160,16 @@ Results expose `llm_used` so callers can audit when the escape hatch fired.
 
 Dictionary growth: `DictionaryIndex.add_item()` / `save()` / `load()`. The
 generated file is merged **on top of** the live `aegis.memory.reasoning`
-tables, so growth is data-only and never removes existing synonyms.
+tables with authoritative reassignment: curated aliases win over legacy
+collisions (`cup` moves from `bottle` to `cup`, `pan` from `cooking pot` to
+`frying pan`). Lookup and scene-label matching use word boundaries, so `pan`
+never matches `pants`, `cup` never matches `cupboard`, and `bed` never matches
+`bedroom`.
 
 `scripts/build_dictionary.py` harvests:
 
+- `nlq/home_vocabulary.json` — the curated closed home vocabulary
+  (applied last and authoritative);
 - `QueryReasoningEngine.ITEM_SYNONYMS` / `ROOM_KEYWORDS`;
 - `run_pipeline.COMPREHENSIVE_INDOOR_CLASSES` (read via `ast`, no Modal import);
 - `config/demo.yaml` `perception.target_classes`;
