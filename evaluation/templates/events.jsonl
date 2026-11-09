@@ -1,0 +1,7 @@
+# One event per line. Times are seconds from the start of the video.
+# Use event_type from: pickup, placement, state_change, room_change.
+# Fields source_anchor / destination_anchor / source_room / destination_room
+# are optional for object events but required to score room_change events.
+{"event_id": "e001", "event_type": "pickup", "object": "shoes", "instance_id": 1, "start_time": 3.2, "end_time": 4.0, "source_anchor": "Floor Entrance", "destination_anchor": null}
+{"event_id": "e002", "event_type": "placement", "object": "shoes", "instance_id": 1, "start_time": 7.4, "end_time": 8.1, "source_anchor": null, "destination_anchor": "Storage Cabinet #1", "destination_room": "Room #1"}
+{"event_id": "e003", "event_type": "room_change", "start_time": 31.0, "end_time": 32.2, "source_room": "Room #1", "destination_room": "Room #2"}

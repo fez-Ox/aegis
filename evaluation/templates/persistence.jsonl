@@ -1,0 +1,5 @@
+# One occlusion / relocation case per line. check_frame is the keyframe at
+# which memory is queried. expect_persistent=true means the object is hidden
+# at that frame and must be answered from memory, not the current view.
+{"case_id": "p001", "query": "Where are my shoes?", "expected_instance_id": 1, "expected_label": "Shoes #1", "expected_anchor": "Storage Cabinet #1", "expected_room": "Room #1", "expected_relation": "inside", "check_frame": 90, "occlusion_start": 8.0, "occlusion_end": 30.0, "expect_persistent": true, "notes": "Placed in cabinet, camera walks away."}
+{"case_id": "p002", "query": "Where is the water bottle?", "expected_label": "Water Bottle #1", "expected_anchor": "Desk #1", "check_frame": 120, "expect_persistent": false, "notes": "Visible re-observation."}

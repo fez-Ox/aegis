@@ -1,0 +1,93 @@
+# Option A — held-out evaluation for demo05 ("Sort Dirty Clothes").
+#
+# Freeze this file and the pipeline config before annotating.  Do not tune
+# prompts, classes, or thresholds after looking at these held-out scores.
+#
+# The raw video is data/demo05/video.mp4.  Predictions appear under
+# outputs/demo05/ only after the pipeline has been run.
+dataset_id: demo05
+root: .
+
+annotations_dir: evaluation/annotations/demo05
+report_dir: evaluation/reports/demo05
+
+predictions:
+  scene_graph: outputs/demo05/objects/r4d_scene_graph.json
+  detections: outputs/demo05/objects/detected_objects_3d.json
+  poses: outputs/demo05/geometry/poses.json
+
+thresholds:
+  detection_iou: 0.5
+  tracking_iou: 0.5
+  mask_iou: 0.5
+  event_tolerance_s: 1.0
+  room_change_tolerance_s: 1.0
+
+targets:
+  detection_precision: 0.85
+  detection_recall: 0.75
+  detection_f1: 0.80
+  tracking_idf1: 0.75
+  event_f1: 0.75
+  room_accuracy: 0.90
+  room_change_f1: 0.70
+  persistence_state_recall: 0.90
+  persistence_query_recall: 0.90
+  query_accuracy: 0.80
+  leakage_rate: 0.0
+  latency_p95_ms: 500.0
+
+labels:
+  # Open-vocabulary detectors often emit near-synonyms.  Collapse only
+  # synonyms that denote the same physical object; keep shoe left/right
+  # instances separate through instance_id, not through label aliases.
+  aliases:
+    shoe: shoes
+    pair of shoes: shoes
+    dirty clothes: clothes
+    laundry: clothes
+    trash can: garbage bag
+    trash bin: garbage bag
+    rubbish: garbage bag
+  # Hands are interaction context, not memory targets.  Annotators may still
+  # record them, but they are excluded from object-detection scores.
+  exclude:
+    - hand
+    - human hand
+    - camera wearer
+
+events:
+  types:
+    - pickup
+    - placement
+    - state_change
+    - room_change
+  type_aliases:
+    pick_up: pickup
+    picked_up: pickup
+    put_down: placement
+    placed: placement
+    move: state_change
+
+query:
+  # Use the real FastAPI route so latency reflects the production answer path.
+  # Switch to "graph" for an offline run with no server fixture.
+  mode: api
+  latency_requests: 100
+
+leakage:
+  enabled: true
+  max_datasets: 8
+  # Items that must never leak in from another dataset.
+  extra_probes:
+    - keys
+    - wallet
+    - glasses
+    - medication
+    - phone
+
+ablations:
+  enabled: true
+
+report:
+  title: "Aegis held-out evaluation — demo05 (Sort Dirty Clothes)"

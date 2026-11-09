@@ -1,0 +1,32 @@
+# Option C readiness facts.  Set a fact to true only when it is genuinely
+# true today; the scorer is designed to say "no-go" rather than flatter the
+# project.  Effort estimates and weights live in
+# src/aegis/evaluation/option_c.py and should be frozen before the run.
+facts:
+  license_approved: false
+  credentials_valid: false
+  video_subset_downloaded: false
+  annotations_downloaded: false
+  adapter_implemented: false
+  query_mapping_defined: false
+  metric_scoring_validated: false
+  compute_budget_confirmed: false
+  ethics_review_complete: false
+  evaluation_protocol_frozen: false
+  domain_risk_mitigated: false
+
+constraints:
+  license_portal: "Ego4D (Lab22) gated access"
+  approval_lead_time: "≈48 h after signing the agreement, but do not promise a date"
+  credential_lifetime_days: 14
+  benchmark_subset_size: "order of 1 TB"
+  adapter_effort_weeks: "≈3–6 depending on task coverage"
+  domain: "general egocentric video, not assistive care"
+  existing_aegis_data: "demo01–demo05 are Hub egocentric iPhone clips, not Ego4D"
+
+notes: >
+  These facts reflect the repository state at the time this file was written.
+  Update them only with evidence (portal approval email, local dataset paths,
+  a committed adapter, a validated score on an official sample).  A benchmark
+  number may not be quoted until the decision is "go" and the official
+  evaluation code has been run on the official split.

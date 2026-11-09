@@ -1,0 +1,10 @@
+# One detection per line, or one frame per line with an "objects" array.
+# Coordinates are pixels in the source-frame coordinate system used by the
+# pipeline artifact. Masks are optional relative paths to binary PNGs.
+#
+# Frame form (preferred for CVAT-style exports):
+{"frame_id": 0, "objects": [{"label": "shoes", "bbox": [120, 240, 310, 420], "instance_id": 1, "mask_path": "masks/frame_000000_shoes_1.png", "visibility": "visible"}, {"label": "shoes", "bbox": [315, 245, 505, 425], "instance_id": 2, "visibility": "visible"}]}
+# Detection form:
+{"frame_id": 0, "label": "shoes", "bbox": [120, 240, 310, 420], "instance_id": 1, "visibility": "visible"}
+# Occluded objects should use visibility "occluded"; they still count as GT
+# boxes only if their last confirmed box is annotated on that keyframe.
