@@ -47,6 +47,7 @@ def test_config_reads_explicit_environment(monkeypatch) -> None:
 def test_config_reads_key_file(monkeypatch, tmp_path) -> None:
     key_file = tmp_path / "key.txt"
     key_file.write_text("file-key\n", encoding="utf-8")
+    monkeypatch.setenv("AEGIS_LLM_PROVIDER", "custom")
     monkeypatch.delenv("AEGIS_LLM_API_KEY", raising=False)
     monkeypatch.setenv("AEGIS_LLM_KEY_FILE", str(key_file))
     client = LLMClient.from_env_if_configured()
@@ -55,6 +56,7 @@ def test_config_reads_key_file(monkeypatch, tmp_path) -> None:
 
 
 def test_no_key_means_no_auto_client(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("AEGIS_LLM_PROVIDER", "custom")
     monkeypatch.delenv("AEGIS_LLM_API_KEY", raising=False)
     monkeypatch.setenv("AEGIS_LLM_KEY_FILE", str(tmp_path / "missing.txt"))
     assert LLMClient.from_env_if_configured() is None
@@ -107,19 +109,59 @@ def test_chat_without_key_raises_cleanly() -> None:
         raise AssertionError("expected LLMError without an API key")
 
 
-def test_defaults_target_openai(monkeypatch) -> None:
+def test_default_provider_is_local_ollama(monkeypatch) -> None:
+    for variable in (
+        "AEGIS_LLM_PROVIDER",
+        "AEGIS_LLM_API_KEY",
+        "AEGIS_LLM_BASE_URL",
+        "AEGIS_LLM_MODEL",
+        "AEGIS_LLM_KEY_FILE",
+        "AEGIS_LLM_TIMEOUT",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+    config = LLMConfig.from_env()
+    assert config.provider == "local"
+    assert config.base_url == "http://localhost:11434/v1"
+    assert config.model == "qwen2.5:1.5b"
+    assert config.api_key == "ollama"
+    assert config.timeout == 240.0
+
+
+def test_openai_provider_uses_openai_defaults(monkeypatch) -> None:
     for variable in (
         "AEGIS_LLM_API_KEY",
         "AEGIS_LLM_BASE_URL",
         "AEGIS_LLM_MODEL",
         "AEGIS_LLM_KEY_FILE",
+        "AEGIS_LLM_TIMEOUT",
     ):
         monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("AEGIS_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("AEGIS_LLM_API_KEY", "test-key")
     config = LLMConfig.from_env()
+    assert config.provider == "openai"
     assert config.base_url == "https://api.openai.com/v1"
     assert config.model == "gpt-4o-mini"
+    assert config.timeout == 45.0
     assert DEFAULT_KEY_FILE.name == "openai.txt"
     assert DEFAULT_KEY_FILE.parent.name == ".keys"
+
+
+def test_ollama_provider_uses_cloud_defaults(monkeypatch) -> None:
+    for variable in (
+        "AEGIS_LLM_API_KEY",
+        "AEGIS_LLM_BASE_URL",
+        "AEGIS_LLM_MODEL",
+        "AEGIS_LLM_KEY_FILE",
+        "AEGIS_LLM_TIMEOUT",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("AEGIS_LLM_PROVIDER", "ollama")
+    config = LLMConfig.from_env()
+    assert config.provider == "ollama"
+    assert config.base_url == "https://ollama.com/v1"
+    assert config.model == "gpt-oss:20b"
+    assert config.timeout == 45.0
 
 
 def test_chat_surfaces_provider_error_message(monkeypatch) -> None:

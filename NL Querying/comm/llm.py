@@ -10,14 +10,26 @@ Provider-agnostic by design - the *same* code talks to:
 
 Configuration (all optional; nothing is sent until ``chat`` is called)::
 
-    AEGIS_LLM_BASE_URL   default "https://api.openai.com/v1"
-    AEGIS_LLM_MODEL      default "gpt-4o-mini"
+    AEGIS_LLM_PROVIDER   default "local" ("local", "openai", "ollama",
+                         "custom"); selects the defaults below
+    AEGIS_LLM_BASE_URL   override the provider base URL
+    AEGIS_LLM_MODEL      override the provider model
     AEGIS_LLM_API_KEY    key value; if unset, read AEGIS_LLM_KEY_FILE
-    AEGIS_LLM_KEY_FILE   default "<repo>/.keys/openai.txt"
-    AEGIS_LLM_TIMEOUT    default 45 seconds
+    AEGIS_LLM_KEY_FILE   override the provider key file
+    AEGIS_LLM_TIMEOUT    override the provider timeout (local defaults to 240s)
     AEGIS_LLM_EXTRA_BODY optional JSON merged into the request body (e.g.
                          '{"chat_template_kwargs": {"enable_thinking": false}}'
                          for Qwen3 on vLLM)
+
+Provider defaults:
+
+* ``local``: ``http://localhost:11434/v1`` + ``qwen2.5:1.5b`` + key
+  ``ollama`` (no cloud key required; the current development default).
+* ``openai``: ``https://api.openai.com/v1`` + ``gpt-4o-mini`` + key file
+  ``<repo>/.keys/openai.txt``.
+* ``ollama``: ``https://ollama.com/v1`` + ``gpt-oss:20b`` + key file
+  ``<repo>/.keys/ollama.txt``.
+* ``custom``: OpenAI-compatible defaults; set base URL/model/key explicitly.
 
 The ``.keys/`` directory is local-only and must never be committed. Security:
 keys are never logged, echoed, or serialised into results.
@@ -36,10 +48,43 @@ import httpx
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-DEFAULT_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_PROVIDER = "local"
+
+PROVIDER_DEFAULTS: dict[str, dict[str, Any]] = {
+    "local": {
+        "base_url": "http://localhost:11434/v1",
+        "model": "qwen2.5:1.5b",
+        "api_key": "ollama",
+        "key_file": None,
+        "timeout": 240.0,
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+        "api_key": None,
+        "key_file": REPO_ROOT / ".keys" / "openai.txt",
+        "timeout": 45.0,
+    },
+    "ollama": {
+        "base_url": "https://ollama.com/v1",
+        "model": "gpt-oss:20b",
+        "api_key": None,
+        "key_file": REPO_ROOT / ".keys" / "ollama.txt",
+        "timeout": 45.0,
+    },
+    "custom": {
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+        "api_key": None,
+        "key_file": None,
+        "timeout": 45.0,
+    },
+}
+
+DEFAULT_BASE_URL = str(PROVIDER_DEFAULTS[DEFAULT_PROVIDER]["base_url"])
+DEFAULT_MODEL = str(PROVIDER_DEFAULTS[DEFAULT_PROVIDER]["model"])
 DEFAULT_KEY_FILE = REPO_ROOT / ".keys" / "openai.txt"
-DEFAULT_TIMEOUT = 45.0
+DEFAULT_TIMEOUT = float(PROVIDER_DEFAULTS[DEFAULT_PROVIDER]["timeout"])
 
 
 class LLMError(RuntimeError):
@@ -53,22 +98,40 @@ class LLMConfig:
     api_key: str | None
     timeout: float
     extra_body: dict[str, Any] = field(default_factory=dict)
+    provider: str = "custom"
 
     @classmethod
     def from_env(cls) -> LLMConfig:
+        requested = (
+            os.environ.get("AEGIS_LLM_PROVIDER", DEFAULT_PROVIDER).strip().lower()
+        )
+        provider = requested if requested in PROVIDER_DEFAULTS else "custom"
+        defaults = PROVIDER_DEFAULTS[provider]
+
         key = os.environ.get("AEGIS_LLM_API_KEY")
         if not key:
-            key_file = Path(
-                os.environ.get("AEGIS_LLM_KEY_FILE", DEFAULT_KEY_FILE)
-            ).expanduser()
-            if key_file.is_file():
-                key = key_file.read_text(encoding="utf-8").strip()
+            key_file_setting = os.environ.get("AEGIS_LLM_KEY_FILE")
+            key_file = (
+                Path(key_file_setting).expanduser()
+                if key_file_setting
+                else defaults.get("key_file")
+            )
+            if key_file is not None and Path(key_file).is_file():
+                key = Path(key_file).read_text(encoding="utf-8").strip()
+        if not key:
+            key = defaults.get("api_key")
+
         return cls(
-            base_url=os.environ.get("AEGIS_LLM_BASE_URL", DEFAULT_BASE_URL).rstrip("/"),
-            model=os.environ.get("AEGIS_LLM_MODEL", DEFAULT_MODEL),
-            api_key=key or None,
-            timeout=float(os.environ.get("AEGIS_LLM_TIMEOUT", DEFAULT_TIMEOUT)),
+            base_url=os.environ.get(
+                "AEGIS_LLM_BASE_URL", str(defaults["base_url"])
+            ).rstrip("/"),
+            model=os.environ.get("AEGIS_LLM_MODEL", str(defaults["model"])),
+            api_key=str(key) if key else None,
+            timeout=float(
+                os.environ.get("AEGIS_LLM_TIMEOUT", float(defaults["timeout"]))
+            ),
             extra_body=_parse_extra_body(os.environ.get("AEGIS_LLM_EXTRA_BODY", "")),
+            provider=provider,
         )
 
 
@@ -122,6 +185,7 @@ class LLMClient:
         """Safe, key-free description for smoke tests and logs."""
         return {
             "available": self.available,
+            "provider": self.config.provider,
             "base_url": self.config.base_url,
             "model": self.config.model,
         }
@@ -141,7 +205,8 @@ class LLMClient:
         """One chat completion; returns the assistant text content."""
         if not self.config.api_key:
             raise LLMError(
-                f"no LLM API key configured (AEGIS_LLM_API_KEY or {DEFAULT_KEY_FILE})"
+                "no LLM API key configured "
+                "(set AEGIS_LLM_API_KEY or AEGIS_LLM_KEY_FILE)"
             )
         payload: dict[str, Any] = {
             **self.config.extra_body,
