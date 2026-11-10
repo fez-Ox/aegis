@@ -45,7 +45,7 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
    - Objects are room-grounded: placed objects inherit their anchor's room, carried objects inherit the wearer's per-frame room; `_insert_room_clause` produces answers like "…inside Storage Cabinet #1 in Room #1."
    - `room_change` events for the camera wearer; queries support room constraints ("keys in the kitchen").
    - Caregiver room naming persists via `POST /api/v1/rooms/rename`; `home_registry.py` (`home_map.json` per `home_id`) matches sessions onto stable room identities.
-   - Room-level evaluation protocol documented in `docs/evaluation_plan.md` (Hydra region precision/recall).
+   - Room-level evaluation protocol documented in `docs/evaluation_suite.md` (Hydra region precision/recall).
 
 2. **R4DSG Relative 4D Scene Graph Memory Engine (`src/aegis/poc/memory/scene_graph.py`)**:
    - Structured 3D spatial anchors (`Storage Cabinet #1`, `Floor Entrance`) and persistent 3D object instance boxes.
