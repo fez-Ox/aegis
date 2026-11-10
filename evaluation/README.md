@@ -107,7 +107,7 @@ close to 1. Do not quote absolute metres without that support.
 
 ```bash
 uv run python -m aegis.evaluation.memory_audit \
-  --snapshot-intervals 0,10,30 \
+  --snapshot-intervals 0,1,10,30 \
   --output-dir evaluation/reports/memory_control
 ```
 

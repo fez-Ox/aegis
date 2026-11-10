@@ -571,7 +571,7 @@ def build_markdown(report: dict[str, Any]) -> str:
         "",
         "## Why Option C is a research extension, not a quick add-on",
         "",
-        "- Ego4D access is licensed and gated; approval is not instant.",
+        "- Ego4D access is gated; approval is usually fast (~48 h), but credentials expire in ~14 days.",
         "- The benchmark subset is large (order of ~1 TB), so transfer and GPU time are real costs.",
         "- Ego4D is an egocentric *general* dataset, not an assistive-care dataset. A score there supports generalisation of perception/grounding, not clinical usefulness.",
         "- The official leaderboard requires the official splits, official metrics, and no test-set tuning.",

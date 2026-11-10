@@ -133,7 +133,7 @@ production path unchanged and makes the evidence auditable.
 uv run python -m aegis.evaluation.memory_audit \
   --graphs outputs/demo04/objects/r4d_scene_graph.json \
            outputs/demo03/objects/r4d_scene_graph.json \
-  --snapshot-intervals 0,10,30 \
+  --snapshot-intervals 0,1,10,30 \
   --output-dir evaluation/reports/memory_control
 ```
 
@@ -150,11 +150,16 @@ production data.
 
 ## 7. How to read the verdict
 
-- **Feasible in principle** — at least one interval preserved full state at a
-  centre p95 ≤ 0.05 scene units, and the size ratio is reported. This is a
-  representation result, not a long-term field result.
-- **Needs attention** — no tested interval met that bar. Increase snapshot
-  density, or accept and state an approximation. Do not quietly lower the bar.
+- **Feasible in principle** — at least one tested interval preserved full
+  semantic state, every latest state exactly, and exact geometry (centre
+  p95 ≤ 0.05 scene units). A sparser interval can trade some historical
+  geometry for more compression.
+- **Feasible with a stated trade-off** — full semantic state and every latest
+  state are preserved, but no tested interval met the exact-geometry bar. The
+  report states the centre error instead of hiding it.
+- **Needs attention** — no tested interval preserved full semantic state and
+  latest state with bounded reconstruction error. Increase snapshot density,
+  or accept and state an approximation. Do not quietly lower the bar.
 
 The verdict is a statement about the representation and the measured clips. It
 is not a claim that Aegis has run for a week in a care home.

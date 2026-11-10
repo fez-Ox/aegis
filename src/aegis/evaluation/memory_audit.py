@@ -1180,6 +1180,7 @@ def build_markdown(report: dict[str, Any]) -> str:
                 "latest state are preserved, but exact geometry needs denser "
                 "snapshots than the most compressed setting."
             )
+        lines.append("")
         if recommendation.get("exact"):
             exact = recommendation["exact"]
             lines.append(
@@ -1199,6 +1200,7 @@ def build_markdown(report: dict[str, Any]) -> str:
                 f"{_pct(balanced['state_retention']['full'])}, latest-state exactness "
                 f"{_pct(balanced['latest_exact_semantic_rate'])}."
             )
+        lines.append("")
         lines.append(
             "Queries are served from the exact latest state, so answer agreement "
             "does not depend on interpolating historical geometry."

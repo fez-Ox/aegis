@@ -1,0 +1,164 @@
+{
+  "dataset_id": "demo05",
+  "generated_at": "2026-11-10T13:32:03+00:00",
+  "inputs": [
+    {
+      "description": "R4DSG memory artifact",
+      "exists": false,
+      "kind": "prediction",
+      "name": "scene_graph",
+      "path": "/home/faizan/code/aegis/outputs/demo05/objects/r4d_scene_graph.json",
+      "sha256": null,
+      "size_bytes": null
+    },
+    {
+      "description": "2D/3D detections and tracks",
+      "exists": false,
+      "kind": "prediction",
+      "name": "predictions",
+      "path": "/home/faizan/code/aegis/outputs/demo05/objects/detected_objects_3d.json",
+      "sha256": null,
+      "size_bytes": null
+    },
+    {
+      "description": "camera poses for room assignment",
+      "exists": false,
+      "kind": "prediction",
+      "name": "poses",
+      "path": "/home/faizan/code/aegis/outputs/demo05/geometry/poses.json",
+      "sha256": null,
+      "size_bytes": null
+    },
+    {
+      "description": "2D boxes/masks on frozen keyframes",
+      "exists": false,
+      "kind": "annotation",
+      "name": "annotations/detections",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/detections.jsonl",
+      "sha256": null,
+      "size_bytes": null
+    },
+    {
+      "description": "pickup/placement/state-change intervals",
+      "exists": false,
+      "kind": "annotation",
+      "name": "annotations/events",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/events.jsonl",
+      "sha256": null,
+      "size_bytes": null
+    },
+    {
+      "description": "room regions, per-keyframe rooms, room changes",
+      "exists": false,
+      "kind": "annotation",
+      "name": "annotations/rooms",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/rooms.json",
+      "sha256": null,
+      "size_bytes": null
+    },
+    {
+      "description": "held-out question bank with expected answers",
+      "exists": false,
+      "kind": "annotation",
+      "name": "annotations/queries",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/queries.jsonl",
+      "sha256": null,
+      "size_bytes": null
+    },
+    {
+      "description": "occlusion/relocation cases",
+      "exists": false,
+      "kind": "annotation",
+      "name": "annotations/persistence",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/persistence.jsonl",
+      "sha256": null,
+      "size_bytes": null
+    }
+  ],
+  "missing_inputs": [
+    {
+      "hint": "Run the pipeline for this dataset, then download the scene graph artifact.",
+      "name": "scene_graph",
+      "path": "/home/faizan/code/aegis/outputs/demo05/objects/r4d_scene_graph.json",
+      "section": "prediction"
+    },
+    {
+      "hint": "Run the pipeline detection stage and download detected_objects_3d.json.",
+      "name": "predictions",
+      "path": "/home/faizan/code/aegis/outputs/demo05/objects/detected_objects_3d.json",
+      "section": "prediction"
+    },
+    {
+      "hint": "Run the VGGT pose stage and download geometry/poses.json.",
+      "name": "poses",
+      "path": "/home/faizan/code/aegis/outputs/demo05/geometry/poses.json",
+      "section": "prediction"
+    },
+    {
+      "hint": "Annotate 2D boxes and track IDs; see evaluation/templates/detections.jsonl.",
+      "name": "annotations/detections",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/detections.jsonl",
+      "section": "annotation"
+    },
+    {
+      "hint": "Label event intervals; see evaluation/templates/events.jsonl.",
+      "name": "annotations/events",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/events.jsonl",
+      "section": "annotation"
+    },
+    {
+      "hint": "Label rooms and per-keyframe room IDs; see evaluation/templates/rooms.json.",
+      "name": "annotations/rooms",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/rooms.json",
+      "section": "annotation"
+    },
+    {
+      "hint": "Write the held-out question bank; see evaluation/templates/queries.jsonl.",
+      "name": "annotations/queries",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/queries.jsonl",
+      "section": "annotation"
+    },
+    {
+      "hint": "Label occlusion/relocation cases; see evaluation/templates/persistence.jsonl.",
+      "name": "annotations/persistence",
+      "path": "/home/faizan/code/aegis/evaluation/annotations/demo05/persistence.jsonl",
+      "section": "annotation"
+    }
+  ],
+  "provenance": {
+    "config": "evaluation/configs/demo05.yaml",
+    "dataset_id": "demo05",
+    "generated_at": "2026-11-10T13:32:03+00:00",
+    "git_branch": "feat/evaluation-suite",
+    "git_commit": "fb0b5a145a074b33da7b7298dfc5040f8db8dd5b",
+    "git_dirty": true,
+    "platform": "Linux-7.2.14-arch1-1-x86_64-with-glibc2.44",
+    "python": "3.12.11"
+  },
+  "reproduce_command": "uv run python -m aegis.evaluation.run --config evaluation/configs/demo05.yaml",
+  "scorecard": [],
+  "skipped_sections": [],
+  "status": "not_ready",
+  "targets": {
+    "detection_f1": 0.8,
+    "detection_precision": 0.85,
+    "detection_recall": 0.75,
+    "event_f1": 0.75,
+    "latency_p95_ms": 500.0,
+    "leakage_rate": 0.0,
+    "persistence_query_recall": 0.9,
+    "persistence_state_recall": 0.9,
+    "query_accuracy": 0.8,
+    "room_accuracy": 0.9,
+    "room_change_f1": 0.7,
+    "tracking_idf1": 0.75
+  },
+  "thresholds": {
+    "detection_iou": 0.5,
+    "event_tolerance_s": 1.0,
+    "mask_iou": 0.5,
+    "room_change_tolerance_s": 1.0,
+    "tracking_iou": 0.5
+  },
+  "title": "Aegis held-out evaluation \u2014 demo05 (Sort Dirty Clothes)"
+}
