@@ -786,6 +786,100 @@ def get_video(dataset_id: str) -> Response:
 
 
 # ---------------------------------------------------------------------------
+# Live capture control (FR1.3). Configured by AEGIS_CAPTURE_DIR (the
+# aegis-ingest --output-root) and AEGIS_CAPTURE_PAUSE_FILE (its --pause-file).
+# TODO(M4 4.2): protect these mutating routes with caregiver auth.
+# ---------------------------------------------------------------------------
+
+
+class CaptureStatusModel(BaseModel):
+    available: bool
+    session_id: str | None = None
+    status: str | None = None
+    paused: bool = False
+    frame_count: int | None = None
+    last_frame_at: str | None = None
+
+
+def _capture_settings() -> tuple[Path, Path] | None:
+    capture_dir = os.getenv("AEGIS_CAPTURE_DIR")
+    pause_file = os.getenv("AEGIS_CAPTURE_PAUSE_FILE")
+    if not capture_dir or not pause_file:
+        return None
+    return Path(capture_dir), Path(pause_file)
+
+
+def _capture_status() -> CaptureStatusModel:
+    settings = _capture_settings()
+    if settings is None:
+        return CaptureStatusModel(available=False)
+    capture_dir, pause_file = settings
+    from aegis.ingestion.contracts import ContractError, load_session_manifest
+    from aegis.ingestion.live_handoff import find_latest_live_session
+
+    paused = pause_file.exists()
+    session = find_latest_live_session(capture_dir)
+    if session is None:
+        return CaptureStatusModel(available=True, paused=paused)
+    try:
+        manifest = load_session_manifest(session)
+    except (ContractError, OSError, ValueError):
+        return CaptureStatusModel(
+            available=True, paused=paused, session_id=session.name
+        )
+    state_path = session / "session_state.json"
+    updated = None
+    if state_path.exists():
+        try:
+            updated = json.loads(state_path.read_text(encoding="utf-8")).get(
+                "updated_at"
+            )
+        except (OSError, json.JSONDecodeError):
+            updated = None
+    return CaptureStatusModel(
+        available=True,
+        session_id=str(manifest.get("session_id")),
+        status=str(manifest.get("status")),
+        paused=paused,
+        frame_count=manifest.get("frame_count"),
+        last_frame_at=updated or manifest.get("ended_at"),
+    )
+
+
+@app.get("/api/v1/capture/status", response_model=CaptureStatusModel)
+def capture_status() -> CaptureStatusModel:
+    return _capture_status()
+
+
+def _require_capture() -> tuple[Path, Path]:
+    settings = _capture_settings()
+    if settings is None:
+        raise HTTPException(
+            status_code=503,
+            detail="live capture control is not configured on this server "
+            "(set AEGIS_CAPTURE_DIR and AEGIS_CAPTURE_PAUSE_FILE)",
+        )
+    return settings
+
+
+@app.post("/api/v1/capture/pause", response_model=CaptureStatusModel)
+def capture_pause() -> CaptureStatusModel:
+    """Pause capture (the capture loop pauses while the pause file exists)."""
+
+    _capture_dir, pause_file = _require_capture()
+    pause_file.parent.mkdir(parents=True, exist_ok=True)
+    pause_file.touch()
+    return _capture_status()
+
+
+@app.post("/api/v1/capture/resume", response_model=CaptureStatusModel)
+def capture_resume() -> CaptureStatusModel:
+    _capture_dir, pause_file = _require_capture()
+    pause_file.unlink(missing_ok=True)
+    return _capture_status()
+
+
+# ---------------------------------------------------------------------------
 # Demo simulator (AEGIS_ENABLE_SIMULATOR=1 only; changes live in memory)
 # ---------------------------------------------------------------------------
 
