@@ -32,16 +32,39 @@ def close_stores() -> None:
         _STORES.clear()
 
 
-def rename_home_room(store: HomeStore, room_id: int, label: str) -> dict[str, Any]:
-    """Caregiver rename of a home room (runs and events reference the id)."""
+class DuplicateRoomLabelError(ValueError):
+    """Another room of the home already uses this label."""
 
+
+MAX_ROOM_LABEL = 40
+
+
+def rename_home_room(store: HomeStore, room_id: int, label: str) -> dict[str, Any]:
+    """Caregiver rename of a home room; mirrored to ``home_map.json``.
+
+    Runs, events and objects reference the room id, so nothing else changes.
+    A caregiver label is never overwritten by later ingests.
+    """
+
+    from aegis.memory.home_registry import export_registry
+
+    clean = " ".join(label.split())
+    if not clean or len(clean) > MAX_ROOM_LABEL:
+        raise ValueError(f"room label must be 1-{MAX_ROOM_LABEL} characters")
     row = store.one("SELECT * FROM room WHERE room_id = ?", (room_id,))
     if row is None:
         raise KeyError(room_id)
+    clash = store.one(
+        "SELECT room_id FROM room WHERE lower(label) = lower(?) AND room_id != ?",
+        (clean, room_id),
+    )
+    if clash is not None:
+        raise DuplicateRoomLabelError(f"another room is already called {clean!r}")
     store.update(
         "room",
         "room_id",
         room_id,
-        {"label": label, "label_source": "caregiver", "updated_at": now_iso()},
+        {"label": clean, "label_source": "caregiver", "updated_at": now_iso()},
     )
+    export_registry(store)
     return dict(store.one("SELECT * FROM room WHERE room_id = ?", (room_id,)))

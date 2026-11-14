@@ -492,7 +492,13 @@ def open_store(home_id: str, store_root: str | Path | None = None) -> HomeStore:
 
     directory = home_dir(home_id, store_root)
     directory.mkdir(parents=True, exist_ok=True)
-    return HomeStore(home_id, directory / "memory.db")
+    store = HomeStore(home_id, directory / "memory.db")
+    if not store.rooms():
+        # Restore caregiver room names when the database was lost or reset.
+        from aegis.memory.home_registry import load_registry, seed_store_from_registry
+
+        seed_store_from_registry(store, load_registry(home_id, directory.parent))
+    return store
 
 
 def dumps(value: Any) -> str:

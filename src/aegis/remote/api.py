@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from aegis.core.paths import validate_dataset_id
 from aegis.core.vocabulary import default_vocabulary
-from aegis.memory.homes import get_store
+from aegis.memory.homes import DuplicateRoomLabelError, get_store
 from aegis.memory.reasoning import QueryReasoningEngine, event_summary, room_phrase
 from aegis.memory.repository import (
     JsonGraphRepository,
@@ -486,6 +486,10 @@ def rename_room(
         raise HTTPException(
             status_code=404, detail=f"Room #{room_id} was not found in '{ds}'."
         ) from exc
+    except DuplicateRoomLabelError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "status": "ok",
         "dataset_id": ds,

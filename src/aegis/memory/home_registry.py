@@ -1,48 +1,41 @@
-"""Per-home room registry for calibration and cross-session persistence.
+"""Per-home room registry file (``home_map.json``).
 
-A patient's home is calibrated once (caregiver walks the patient through the
-rooms, then names them via ``POST /api/v1/rooms/rename``). The named rooms are
-persisted in ``home_map.json`` on the data volume per ``home_id`` so later
-sessions can match their freshly estimated ``RoomRegion`` set onto the
-patient's stable room identity instead of inventing new "Room #N" labels each
-session.
+The home store's ``room`` table is the source of truth for room identity.
+``home_map.json`` mirrors it after every room change so the calibrated room
+names are readable outside the database and can restore an empty store.
+
+Cross-session room *matching* lives in :mod:`aegis.memory.matching`; it is
+symbolic because each session has its own coordinate origin.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from aegis.core.paths import validate_dataset_id
-from aegis.memory.rooms import RoomRegion
 
 HOME_MAP_FILENAME = "home_map.json"
 
 
 @dataclass
 class HomeRoomRecord:
-    """A caregiver-named room that is stable across recording sessions."""
+    """A room that is stable across recording sessions."""
 
+    room_id: int
     label: str
     room_type: str
-    centroid: tuple[float, float, float]
-    evidence_labels: list[str] = field(default_factory=list)
+    signature: list[str] = field(default_factory=list)
+    label_source: str = "auto"
     session_count: int = 1
     last_seen_session: str = ""
 
     def as_dict(self) -> dict[str, Any]:
-        return {
-            "label": self.label,
-            "room_type": self.room_type,
-            "centroid": list(self.centroid),
-            "evidence_labels": list(self.evidence_labels),
-            "session_count": self.session_count,
-            "last_seen_session": self.last_seen_session,
-        }
+        return asdict(self)
 
 
 @dataclass
@@ -97,102 +90,85 @@ def load_registry(home_id: str, base_dir: str | Path) -> HomeRoomRegistry:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return empty_registry(safe_id)
+    if not isinstance(data, Mapping):
+        return empty_registry(safe_id)
 
-    rooms = [
-        HomeRoomRecord(
-            label=str(room.get("label", "Room")),
-            room_type=str(room.get("room_type", "Room")),
-            centroid=tuple(float(c) for c in room.get("centroid", (0.0, 0.0, 0.0))),
-            evidence_labels=[str(label) for label in room.get("evidence_labels", [])],
-            session_count=int(room.get("session_count", 1)),
-            last_seen_session=str(room.get("last_seen_session", "")),
+    rooms: list[HomeRoomRecord] = []
+    for index, room in enumerate(data.get("rooms", []), start=1):
+        if not isinstance(room, Mapping):
+            continue
+        source = str(room.get("label_source", "auto"))
+        rooms.append(
+            HomeRoomRecord(
+                room_id=int(room.get("room_id", index)),
+                label=str(room.get("label", "Room")),
+                room_type=str(room.get("room_type", "Room")),
+                signature=sorted(
+                    str(item)
+                    for item in room.get("signature", room.get("evidence_labels", []))
+                ),
+                label_source=source if source in {"auto", "caregiver"} else "auto",
+                session_count=int(room.get("session_count", 1)),
+                last_seen_session=str(room.get("last_seen_session", "")),
+            )
         )
-        for room in data.get("rooms", [])
-        if isinstance(room, Mapping)
-    ]
     return HomeRoomRegistry(
         home_id=safe_id, rooms=rooms, updated_at=str(data.get("updated_at", ""))
     )
 
 
-def _bev_distance(first: Sequence[float], second: Sequence[float]) -> float:
-    return float(((first[0] - second[0]) ** 2 + (first[2] - second[2]) ** 2) ** 0.5)
-
-
-def match_room_into_registry(
-    registry: HomeRoomRegistry,
-    room: RoomRegion,
-    *,
-    session_id: str = "",
-    distance_threshold: float = 2.5,
-) -> int:
-    """Match a freshly estimated room into the registry, or register it as new.
-
-    Matching prefers landmark-evidence overlap (the room's semantic signature)
-    and falls back to floor-plane proximity of the centroids. Returns the index
-    of the matched registry room, or -1 when a new record was appended.
-    """
-
-    best_index = -1
-    best_score = float("-inf")
-    for index, record in enumerate(registry.rooms):
-        evidence_overlap = len(set(record.evidence_labels) & set(room.evidence_labels))
-        distance = _bev_distance(record.centroid, room.centroid)
-        # Landmarks dominate; proximity only breaks ties between bare rooms.
-        score = evidence_overlap * 10.0 - distance
-        if distance <= distance_threshold and score > best_score:
-            best_score = score
-            best_index = index
-
-    centroid = tuple(float(value) for value in room.centroid)
-    if best_index >= 0:
-        record = registry.rooms[best_index]
-        record.session_count += 1
-        if session_id:
-            record.last_seen_session = session_id
-        # Slow-moving centroid keeps the map aligned with furniture moves.
-        blended = [
-            0.8 * old + 0.2 * new
-            for old, new in zip(record.centroid, centroid, strict=True)
-        ]
-        record.centroid = (blended[0], blended[1], blended[2])
-        if room.evidence_labels and not record.evidence_labels:
-            record.evidence_labels = sorted(room.evidence_labels)
-        return best_index
-
-    registry.rooms.append(
-        HomeRoomRecord(
-            label=room.label,
-            room_type=room.room_type,
-            centroid=centroid,
-            evidence_labels=list(room.evidence_labels),
-            session_count=1,
-            last_seen_session=session_id,
-        )
-    )
-    return -1
-
-
-def calibrate_from_rooms(
-    home_id: str,
-    rooms: Sequence[RoomRegion],
-    *,
-    base_dir: str | Path,
-    session_id: str = "",
-) -> HomeRoomRegistry:
-    """Register every room observed during a calibration walkthrough."""
-
-    registry = empty_registry(home_id)
-    for room in rooms:
-        match_room_into_registry(registry, room, session_id=session_id)
-    save_registry(registry, base_dir)
-    return registry
-
-
 def registry_records(registry: HomeRoomRegistry) -> list[dict[str, Any]]:
     """JSON-safe list of registry records (for API responses)."""
 
-    return [
-        asdict(record) | {"centroid": list(record.centroid)}
-        for record in registry.rooms
-    ]
+    return [record.as_dict() for record in registry.rooms]
+
+
+# ------------------------------------------------------- store integration
+def registry_from_store(store: Any) -> HomeRoomRegistry:
+    registry = empty_registry(store.home_id)
+    for row in store.rooms():
+        registry.rooms.append(
+            HomeRoomRecord(
+                room_id=int(row["room_id"]),
+                label=row["label"],
+                room_type=row["room_type"],
+                signature=sorted(json.loads(row["signature"])),
+                label_source=row["label_source"],
+                session_count=int(row["session_count"]),
+                last_seen_session=row["last_seen_session"] or "",
+            )
+        )
+    return registry
+
+
+def export_registry(store: Any) -> Path:
+    """Write ``home_map.json`` next to the store from its room table."""
+
+    return save_registry(registry_from_store(store), store.dir.parent)
+
+
+def seed_store_from_registry(store: Any, registry: HomeRoomRegistry) -> int:
+    """Restore rooms into an empty store from a registry; returns rooms added."""
+
+    if store.rooms() or not registry.rooms:
+        return 0
+    from aegis.memory.store import dumps, now_iso
+
+    stamp = now_iso()
+    with store.transaction():
+        for record in registry.rooms:
+            store.insert(
+                "room",
+                {
+                    "room_id": record.room_id,
+                    "label": record.label,
+                    "room_type": record.room_type,
+                    "label_source": record.label_source,
+                    "signature": dumps(sorted(record.signature)),
+                    "session_count": record.session_count,
+                    "last_seen_session": record.last_seen_session or None,
+                    "created_at": stamp,
+                    "updated_at": stamp,
+                },
+            )
+    return len(registry.rooms)

@@ -166,6 +166,10 @@ def ingest_session(
         for home_iid in set(instance_map.values()):
             if home_iid is not None:
                 store.recompute_last_known(home_iid)
+
+    from aegis.memory.home_registry import export_registry
+
+    export_registry(store)
     return report
 
 
