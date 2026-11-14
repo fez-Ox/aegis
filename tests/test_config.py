@@ -12,11 +12,11 @@ def test_example_config_loads() -> None:
     config = load_config(Path("config/demo.yaml"))
 
     assert config.video.sample_fps == 15
-    assert config.depth.mode == "metric"
     assert config.storage.data_mount == "/data"
     assert config.vggt.model_id == "facebook/VGGT-Omega"
+    assert config.vggt.image_size == 512
     assert config.sam2.model_id == "facebook/sam2-hiera-large"
-    assert config_to_dict(config)["pose"]["stride"] == 1
+    assert "pose" not in config_to_dict(config)
 
 
 def test_room_memory_config_defaults_and_overrides() -> None:
@@ -108,3 +108,18 @@ def test_dataset_paths_are_canonical() -> None:
 def test_dataset_id_cannot_escape_mount() -> None:
     with pytest.raises(ValueError):
         validate_dataset_id("../private")
+
+
+def test_new_sections_validate() -> None:
+    with pytest.raises(ValueError):
+        RuntimeConfig.from_mapping({"vggt": {"dtype": "int8"}})
+    with pytest.raises(ValueError):
+        RuntimeConfig.from_mapping({"memory": {"gravity": {"min_confidence": 0}}})
+    with pytest.raises(ValueError):
+        RuntimeConfig.from_mapping({"memory": {"retention": {"timezone": "Mars/Base"}}})
+    with pytest.raises(ValueError):
+        RuntimeConfig.from_mapping({"memory": {"build": {"unknown": 1}}})
+    with pytest.raises(ValueError):
+        RuntimeConfig.from_mapping({"sam2": {"mode": "sometimes"}})
+    config = RuntimeConfig.from_mapping({"live": {"segment_frames": 60}})
+    assert config.live.segment_frames == 60

@@ -15,15 +15,8 @@ video:
 
 camera:
   calibration_filename: calib.txt
-  calibration_mode: self_calibrated
+  calibration_mode: provided
   allow_approximate: false
-  self_calibration_weights_filename: droidcalib.pth
-  self_calibration_weights_url: https://raw.githubusercontent.com/boschresearch/DroidCalib/main/droidcalib.pth
-  self_calibration_camera_model: pinhole
-  self_calibration_stride: 1
-  self_calibration_max_frames: 0
-  self_calibration_width: 517
-  self_calibration_height: 384
 
 vggt:
   model_id: facebook/VGGT-Omega

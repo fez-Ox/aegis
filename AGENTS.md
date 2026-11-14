@@ -16,11 +16,12 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 - Use `uv` for dependency management and running scripts (`uv add`, `uv run`); avoid ad-hoc pip installs.
 - Build/test commands:
   - Lint: `uvx ruff check src tests run_pipeline.py run_server.py && uvx ruff format --check src tests run_pipeline.py run_server.py`
-  - Tests: `uv run pytest`
+  - Tests: `uv run pytest` (CI enforces a 75% coverage floor with `--cov=aegis`)
 
 ## Repository Layout
 
-- `config/demo.yaml`: Runtime configuration (15 FPS ingestion, target classes, VGGT-Ω, YOLO-World + SAM 2, visualization).
+- `config/vocabulary.yaml`: The single label ontology (detector prompts, roles: object / anchor / landmark / hand, synonyms, importance, anchor affordances). Every other label list is generated from it.
+- `config/demo.yaml`: Generic runtime configuration (prompts from the vocabulary); `config/demo01|03|04|06.yaml` keep task-scoped prompts; `config/live.yaml` processes live captures as segments.
 - `run_pipeline.py`: Modal pipeline entrypoint (`preprocess`, `reconstruct`, `detect`, `rerun`, `all`).
 - `docs/`: Design documents and implementation plans.
 - `data/demo01/`: Local input video metadata (`#05_iPhone_Put_Shoes_Into_The_Cabinet`) and extracted frames.
@@ -30,7 +31,9 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
   - `core/`: Config (`config.py`, incl. `memory.rooms`), data models (`models.py`: `BoundingBox3D` with rotation/yaw, `Detection2D` with masks), canonical volume paths (`paths.py`).
   - `geometry/`: `vggt_runner.py` (VGGT-Ω feed-forward 3D reconstruction), `lifting.py` (SAM 2 mask-grounded 2D-to-3D lifting, Z-aligned OBB fitting, containment states), `backproject.py`, `transforms.py`.
   - `perception/`: `detector.py` (open-vocab 2D object detection via YOLO-World + SAM 2 instance segmentation).
-  - `memory/`: `scene_graph.py` (R4DSG Relative 4D Scene Graph memory engine, spatial anchors, multi-instance object permanence, 3D-grounded instance association), `rooms.py` (room-level region estimation: trajectory clustering + landmark typing), `reasoning.py` (query reasoning incl. room clauses and room filters), `home_registry.py` (per-home room calibration registry, `home_map.json`).
+  - `geometry/gravity.py`: per-session up vector and floor height (RANSAC floor fit); `geometry/planar.py`: floor-plane polygon helpers.
+  - `memory/`: `scene_graph.py` (per-session R4DSG builder), `anchors.py`, `association.py`, `relations.py` (on / under / inside / above / next to / on the floor in the gravity frame), `runs.py` (debounced state runs and events), `rooms.py`, `reasoning.py` (answer templates), `repository.py` (graph v1/v2 readers), `store.py` + `ingest.py` + `matching.py` (durable per-home SQLite memory and cross-session matching), `activities.py`, `evidence.py`, `summaries.py` + `compaction.py` (3-day detail, then verified text summaries), `home_registry.py` (`home_map.json` mirror of the room table), `cli.py` (`aegis-memory`).
+  - `visualization/rerun_scene.py`: the Rerun recording (moved out of `remote/workers.py`).
   - `remote/`: `modal_app.py` (Modal GPU/CPU images on L4 GPUs with secret injection), `workers.py` (orchestration of VGGT-Ω, SAM 2 mask lifting, R4DSG memory construction, room-aware Rerun logging in raw VGGT-Ω coordinates), `api.py` (FastAPI gateway incl. `GET /api/v1/rooms`, `POST /api/v1/rooms/rename`).
   - `ingestion/`: Video normalization and frame extraction.
   - `visualization/`: Visualization utilities.
@@ -47,7 +50,7 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
    - Caregiver room naming persists via `POST /api/v1/rooms/rename`; `home_registry.py` (`home_map.json` per `home_id`) matches sessions onto stable room identities.
    - Room-level evaluation protocol documented in `docs/evaluation_plan.md` (Hydra region precision/recall).
 
-2. **R4DSG Relative 4D Scene Graph Memory Engine (`src/aegis/poc/memory/scene_graph.py`)**:
+2. **R4DSG Relative 4D Scene Graph Memory Engine (`src/aegis/memory/scene_graph.py`)**:
    - Structured 3D spatial anchors (`Storage Cabinet #1`, `Floor Entrance`) and persistent 3D object instance boxes.
    - 3D-grounded persistent instance association (`Shoes #1 [Active Pair]`, `Shoes #2 [Left Shelf]`, `Shoes #3 [Middle Shelf]`, `Shoes #4 [Right Shelf]`).
    - Dynamic anchor-relative vectors ($O \rightarrow A$) with metric distance readouts.
@@ -85,9 +88,10 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 
 4. **Raw VGGT-Ω Coordinates**:
    - Never reintroduce manual scale or axis permutations; VGGT-Ω is the single source of truth for coordinates and scale.
+   - Derived quantities (up vector, floor height, scale unit) live in `outputs/geometry/gravity.json` beside the raw coordinates and are never baked into them.
 
 5. **Juxtaposed Visualization Standards in Rerun**:
-   - High ingestion framerate (15 FPS, 648 frames) for fluid video playback.
+   - Batch videos are sampled at `video.sample_fps` and reconstructed every `vggt.keyframe_stride` frames; live captures reconstruct every keyframe, in segments of `live.segment_frames`.
    - Pristine egocentric video on the left, synchronized 3D spatial memory on the right, without 2D overlay clutter.
 
 ---

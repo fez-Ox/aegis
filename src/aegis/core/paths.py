@@ -24,8 +24,6 @@ class DatasetPaths:
     source_metadata: Path
     live_timestamps: Path
     live_session: Path
-    depth: Path
-    depth_manifest: Path
     poses: Path
     pointcloud_npz: Path
     pointcloud_ply: Path
@@ -78,8 +76,6 @@ def dataset_paths(config: RuntimeConfig, dataset_id: str) -> DatasetPaths:
         source_metadata=root / "source_metadata.json",
         live_timestamps=root / "live_timestamps.json",
         live_session=root / "live_session.json",
-        depth=outputs / "depth",
-        depth_manifest=outputs / "depth_manifest.json",
         poses=geometry / "poses.json",
         pointcloud_npz=geometry / "pointcloud.npz",
         pointcloud_ply=geometry / "pointcloud.ply",
@@ -93,29 +89,4 @@ def dataset_paths(config: RuntimeConfig, dataset_id: str) -> DatasetPaths:
         rerun_recording=viewer / "demo.rrd",
         viewer_manifest=viewer / "manifest.json",
         benchmark_stats=outputs / "benchmark_stats.json",
-    )
-
-
-def model_paths(config: RuntimeConfig) -> tuple[Path, Path, Path]:
-    """Return model-cache root, Hugging Face cache, and DROID weight paths."""
-
-    root = Path(config.storage.model_mount)
-    hf_cache = root / "huggingface"
-    droid_weights = root / "droid" / config.pose.weights_filename
-    return root, hf_cache, droid_weights
-
-
-def dust3r_model_path(config: RuntimeConfig) -> Path:
-    """Return the DUSt3R checkpoint path in the model Volume."""
-
-    return Path(config.storage.model_mount) / "dust3r" / config.dust3r.weights_filename
-
-
-def calibration_model_path(config: RuntimeConfig) -> Path:
-    """Return the self-calibration checkpoint path in the model Volume."""
-
-    return (
-        Path(config.storage.model_mount)
-        / "droid-calib"
-        / config.camera.self_calibration_weights_filename
     )

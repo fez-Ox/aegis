@@ -50,3 +50,21 @@ def test_invalid_depth_mask_is_rejected() -> None:
             [1.0, 1.0, 0.0, 0.0],
             mask=np.ones((2, 2), dtype=np.uint8),
         )
+
+
+def test_binary_ply_layout(tmp_path) -> None:
+    from aegis.remote.workers import _write_ply
+
+    points = np.array([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]], dtype=np.float32)
+    colors = np.array([[255, 0, 0], [0, 255, 0]], dtype=np.uint8)
+    path = tmp_path / "cloud.ply"
+    _write_ply(path, points, colors)
+    raw = path.read_bytes()
+    header_end = raw.index(b"end_header\n") + len(b"end_header\n")
+    header = raw[:header_end].decode()
+    assert "format binary_little_endian 1.0" in header
+    assert "element vertex 2" in header
+    assert len(raw) == header_end + 15 * 2
+    body = np.frombuffer(raw[header_end:], dtype=[("p", "<f4", 3), ("c", "u1", 3)])
+    np.testing.assert_allclose(body["p"], points)
+    np.testing.assert_array_equal(body["c"], colors)

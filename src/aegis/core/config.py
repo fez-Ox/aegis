@@ -12,13 +12,6 @@ import yaml
 
 from aegis.core.vocabulary import Vocabulary, default_vocabulary
 
-DEFAULT_DROID_WEIGHTS_URL = (
-    "https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh"
-)
-DEFAULT_DROID_CALIB_WEIGHTS_URL = (
-    "https://raw.githubusercontent.com/boschresearch/DroidCalib/main/droidcalib.pth"
-)
-
 
 @lru_cache(maxsize=8)
 def _vocabulary_from_key(key: str) -> Vocabulary:
@@ -134,7 +127,11 @@ class VideoConfig:
 
 @dataclass(frozen=True, slots=True)
 class CameraConfig:
-    """Camera calibration settings used by DROID-SLAM and lifting.
+    """Camera calibration settings for batch-video preprocessing.
+
+    VGGT-Ω estimates intrinsics itself; these settings only decide which
+    intrinsics are written to the dataset metadata. ``self_calibrated`` is
+    accepted for older configs and behaves like ``provided``.
 
     ``calibration_mode`` controls how missing intrinsics are handled. The
     default requires a supplied calibration file or configured intrinsics;
@@ -146,55 +143,6 @@ class CameraConfig:
     intrinsics_resolution: tuple[int, int] | None = None
     calibration_mode: str = "provided"
     allow_approximate: bool = False
-    self_calibration_weights_filename: str = "droidcalib.pth"
-    self_calibration_weights_url: str = DEFAULT_DROID_CALIB_WEIGHTS_URL
-    self_calibration_camera_model: str = "pinhole"
-    self_calibration_stride: int = 1
-    self_calibration_max_frames: int = 0
-    self_calibration_width: int = 517
-    self_calibration_height: int = 384
-
-
-@dataclass(frozen=True, slots=True)
-class DepthConfig:
-    """Depth Anything V2 inference settings."""
-
-    model_id: str = "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf"
-    mode: str = "metric"
-    batch_size: int = 2
-    fp16: bool = True
-
-
-@dataclass(frozen=True, slots=True)
-class PoseConfig:
-    """DROID-SLAM inference settings."""
-
-    weights_filename: str = "droid.pth"
-    weights_url: str = DEFAULT_DROID_WEIGHTS_URL
-    stride: int = 1
-    buffer: int = 512
-    filter_thresh: float = 2.4
-    beta: float = 0.3
-    frontend_thresh: float = 16.0
-    frontend_window: int = 25
-    frontend_radius: int = 2
-    frontend_nms: int = 1
-    backend_thresh: float = 22.0
-    backend_radius: int = 2
-    backend_nms: int = 3
-    asynchronous: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class GeometryConfig:
-    """Point-cloud construction settings."""
-
-    max_points_per_frame: int = 5000
-    max_total_points: int = 150000
-    depth_min: float = 0.1
-    depth_max: float = 20.0
-    depth_scale: float = 1.0
-    pose_scale: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -480,12 +428,9 @@ class RuntimeConfig:
     storage: StorageConfig = field(default_factory=StorageConfig)
     video: VideoConfig = field(default_factory=VideoConfig)
     camera: CameraConfig = field(default_factory=CameraConfig)
-    depth: DepthConfig = field(default_factory=DepthConfig)
-    pose: PoseConfig = field(default_factory=PoseConfig)
     vggt: VggtConfig = field(default_factory=VggtConfig)
     sam2: Sam2Config = field(default_factory=Sam2Config)
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
-    geometry: GeometryConfig = field(default_factory=GeometryConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     live: LiveCaptureConfig = field(default_factory=LiveCaptureConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
@@ -505,12 +450,9 @@ class RuntimeConfig:
         storage_raw = _mapping(raw.get("storage"), "storage")
         video_raw = _mapping(raw.get("video"), "video")
         camera_raw = _mapping(raw.get("camera"), "camera")
-        depth_raw = _mapping(raw.get("depth"), "depth")
-        pose_raw = _mapping(raw.get("pose"), "pose")
         vggt_raw = _mapping(raw.get("vggt"), "vggt")
         sam2_raw = _mapping(raw.get("sam2"), "sam2")
         perception_raw = _mapping(raw.get("perception"), "perception")
-        geometry_raw = _mapping(raw.get("geometry"), "geometry")
         memory_raw = _mapping(raw.get("memory"), "memory")
         live_raw = _mapping(raw.get("live"), "live")
         visualization_raw = _mapping(raw.get("visualization"), "visualization")
@@ -518,12 +460,9 @@ class RuntimeConfig:
         storage_defaults = StorageConfig()
         video_defaults = VideoConfig()
         camera_defaults = CameraConfig()
-        depth_defaults = DepthConfig()
-        pose_defaults = PoseConfig()
         vggt_defaults = VggtConfig()
         sam2_defaults = Sam2Config()
         perception_defaults = PerceptionConfig()
-        geometry_defaults = GeometryConfig()
         memory_defaults = MemoryConfig()
         live_defaults = LiveCaptureConfig()
         visualization_defaults = VisualizationConfig()
@@ -569,103 +508,7 @@ class RuntimeConfig:
             ),
             calibration_mode=calibration_mode,
             allow_approximate=calibration_mode == "approximate",
-            self_calibration_weights_filename=str(
-                camera_raw.get(
-                    "self_calibration_weights_filename",
-                    camera_defaults.self_calibration_weights_filename,
-                )
-            ),
-            self_calibration_weights_url=str(
-                camera_raw.get(
-                    "self_calibration_weights_url",
-                    camera_defaults.self_calibration_weights_url,
-                )
-            ),
-            self_calibration_camera_model=str(
-                camera_raw.get(
-                    "self_calibration_camera_model",
-                    camera_defaults.self_calibration_camera_model,
-                )
-            ).lower(),
-            self_calibration_stride=int(
-                camera_raw.get(
-                    "self_calibration_stride", camera_defaults.self_calibration_stride
-                )
-            ),
-            self_calibration_max_frames=int(
-                camera_raw.get(
-                    "self_calibration_max_frames",
-                    camera_defaults.self_calibration_max_frames,
-                )
-            ),
-            self_calibration_width=int(
-                camera_raw.get(
-                    "self_calibration_width", camera_defaults.self_calibration_width
-                )
-            ),
-            self_calibration_height=int(
-                camera_raw.get(
-                    "self_calibration_height", camera_defaults.self_calibration_height
-                )
-            ),
         )
-        if camera.self_calibration_camera_model not in {"pinhole", "focal", "mei"}:
-            raise ValueError(
-                "camera.self_calibration_camera_model must be 'pinhole', 'focal', "
-                "or 'mei'"
-            )
-        if (
-            camera.self_calibration_stride <= 0
-            or camera.self_calibration_max_frames < 0
-            or camera.self_calibration_width <= 0
-            or camera.self_calibration_height <= 0
-        ):
-            raise ValueError("self-calibration settings are outside their valid ranges")
-
-        depth = DepthConfig(
-            model_id=str(depth_raw.get("model_id", depth_defaults.model_id)),
-            mode=str(depth_raw.get("mode", depth_defaults.mode)).lower(),
-            batch_size=int(depth_raw.get("batch_size", depth_defaults.batch_size)),
-            fp16=bool(depth_raw.get("fp16", depth_defaults.fp16)),
-        )
-        if depth.mode not in {"metric", "relative"}:
-            raise ValueError("depth.mode must be either 'metric' or 'relative'")
-        if depth.batch_size <= 0:
-            raise ValueError("depth.batch_size must be positive")
-
-        pose = PoseConfig(
-            weights_filename=str(
-                pose_raw.get("weights_filename", pose_defaults.weights_filename)
-            ),
-            weights_url=str(pose_raw.get("weights_url", pose_defaults.weights_url)),
-            stride=int(pose_raw.get("stride", pose_defaults.stride)),
-            buffer=int(pose_raw.get("buffer", pose_defaults.buffer)),
-            filter_thresh=float(
-                pose_raw.get("filter_thresh", pose_defaults.filter_thresh)
-            ),
-            beta=float(pose_raw.get("beta", pose_defaults.beta)),
-            frontend_thresh=float(
-                pose_raw.get("frontend_thresh", pose_defaults.frontend_thresh)
-            ),
-            frontend_window=int(
-                pose_raw.get("frontend_window", pose_defaults.frontend_window)
-            ),
-            frontend_radius=int(
-                pose_raw.get("frontend_radius", pose_defaults.frontend_radius)
-            ),
-            frontend_nms=int(pose_raw.get("frontend_nms", pose_defaults.frontend_nms)),
-            backend_thresh=float(
-                pose_raw.get("backend_thresh", pose_defaults.backend_thresh)
-            ),
-            backend_radius=int(
-                pose_raw.get("backend_radius", pose_defaults.backend_radius)
-            ),
-            backend_nms=int(pose_raw.get("backend_nms", pose_defaults.backend_nms)),
-            asynchronous=bool(pose_raw.get("asynchronous", pose_defaults.asynchronous)),
-        )
-        if pose.stride <= 0 or pose.buffer <= 0:
-            raise ValueError("pose stride and buffer must be positive")
-
         vggt = VggtConfig(
             model_id=str(vggt_raw.get("model_id", vggt_defaults.model_id)),
             image_size=int(vggt_raw.get("image_size", vggt_defaults.image_size)),
@@ -833,34 +676,6 @@ class RuntimeConfig:
         ):
             raise ValueError("perception parameters are out of valid range")
 
-        geometry = GeometryConfig(
-            max_points_per_frame=int(
-                geometry_raw.get(
-                    "max_points_per_frame", geometry_defaults.max_points_per_frame
-                )
-            ),
-            max_total_points=int(
-                geometry_raw.get("max_total_points", geometry_defaults.max_total_points)
-            ),
-            depth_min=float(geometry_raw.get("depth_min", geometry_defaults.depth_min)),
-            depth_max=float(geometry_raw.get("depth_max", geometry_defaults.depth_max)),
-            depth_scale=float(
-                geometry_raw.get("depth_scale", geometry_defaults.depth_scale)
-            ),
-            pose_scale=float(
-                geometry_raw.get("pose_scale", geometry_defaults.pose_scale)
-            ),
-        )
-        if (
-            geometry.max_points_per_frame <= 0
-            or geometry.max_total_points <= 0
-            or geometry.depth_min <= 0
-            or geometry.depth_max <= geometry.depth_min
-            or geometry.depth_scale <= 0
-            or geometry.pose_scale <= 0
-        ):
-            raise ValueError("geometry values are outside their valid ranges")
-
         visualization = VisualizationConfig(
             log_video=bool(
                 visualization_raw.get("log_video", visualization_defaults.log_video)
@@ -974,12 +789,9 @@ class RuntimeConfig:
             ),
             video=video,
             camera=camera,
-            depth=depth,
-            pose=pose,
             vggt=vggt,
             sam2=sam2,
             perception=perception,
-            geometry=geometry,
             memory=MemoryConfig(
                 rooms=rooms,
                 gravity=_section(
