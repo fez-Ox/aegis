@@ -2,6 +2,7 @@
 
 **Sources:** `fyp_report/main.pdf` (FYP-1 mid-report: scope, FR/NFR, AC-01…AC-31, SC1–SC9) and `context/specification.md`.
 **Baseline verified:** 2026-11-12 on `develop` @ `940a09e` — `uv run pytest` → **129 passed**; `ruff check` and `ruff format --check` clean.
+**Implementation pass:** 2026-11-15 on `feat/memory-plan` (work packages WP01–WP15 of `context/plan.md`) — **326 passed**, Ruff clean, coverage 80%. Items below are ticked only where a test or artifact exists; physical measurements are still open.
 **Milestones (proposal):** M1 Ingestion · M2 Graph & History · M3 Voice Agent · M4 Portal & Testing.
 **Companion document:** `context/answer.md` (retention/memory budget, elevation fix, vocabulary).
 
@@ -67,11 +68,11 @@ Legend: `[x]` done and evidenced · `[~]` partly done / simulated only · `[ ]` 
 - [~] **NFR-R1 / AC-01:** one-hour session is proven only with a simulated clock (`test_simulated_one_hour_session`). Run a physical phone soak and record frame count, gaps, disk use and device model.
 - [~] **AC-03:** 10 s disconnect → resume ≤ 15 s is simulated only. Repeat on the real phone stream.
 - [~] **AC-02:** keyframe tests are unit-level. Record a scripted clip with 5 known scene changes and report how many are selected (target ≥ 80%).
-- [ ] **AC-29 / NFR-P2 (H/M):** measure backlog over a real 10-minute run with the memory engine paused for 10 s.
-- [ ] **FR1.3 in the app (M):** pause/resume control in Flutter plus a server-side session-control endpoint (belongs with the M4 capture/delete screen).
-- [ ] Stop re-encoding promoted frames to PNG (§6 C12) — it is the largest avoidable disk cost in the live path.
-- [ ] Micro-batch the live path (promote and process every N minutes) instead of one whole-session run (§6 A5, A10); required before a one-hour session can pass through VGGT at all.
-- [ ] Carry wall-clock capture time into the scene graph (§6 A8); M3 temporal queries depend on it.
+- [ ] **AC-29 / NFR-P2 (H/M):** measure backlog over a real 10-minute run with the memory engine paused for 10 s. *Tooling ready:* `aegis-ingest --inject-stall-at 300 --inject-stall-for 10`, `scripts/summarise_live_session.py` (`test_injected_stall_is_buffered_and_reported`).
+- [x] **FR1.3 in the app (M):** `/api/v1/capture/status|pause|resume` (`tests/test_capture_control.py`) and a Recording/Paused switch in the app (`views/capture_control.dart`; Flutter tests run in CI only). Not yet behind auth (4.2).
+- [x] Stop re-encoding promoted frames to PNG (§6 C12): JPEG copied byte for byte (`test_promotion_copies_bytes_when_no_resize`).
+- [x] Micro-batch the live path: segments of `live.segment_frames`, resumable, `--follow` (`tests/test_live_segments.py`). `--stage live` previously stopped after preprocessing; it now runs the full chain per segment. The real segment size still needs `scripts/measure_vggt_window.py`.
+- [x] Carry wall-clock capture time into the scene graph (§6 A8): live `capture_timestamp`, batch `--recorded-at` (`tests/test_wallclock.py`, `test_wallclock_is_carried_into_runs_and_events`).
 
 ---
 
@@ -96,49 +97,49 @@ Legend: `[x]` done and evidenced · `[~]` partly done / simulated only · `[ ]` 
 - [x] Room evaluation protocol written (`docs/evaluation_plan.md`).
 
 ### 2.3 Per-home room identity — FR3.6 / FR3.7 (H) — not wired
-- [ ] Add `home_id` to config / dataset metadata, distinct from `dataset_id`.
-- [ ] Load the registry before building the graph and apply matched labels (`match_room_into_registry` / `calibrate_from_rooms` from `run_detect_and_lift`).
-- [ ] Make `POST /api/v1/rooms/rename` write `home_map.json` (today it edits only `r4d_scene_graph.json`).
-- [ ] Fix the rename bug that relabels the events of *every* neutral room (§6 C3).
-- [ ] Decide how cross-session matching works when each session has its own coordinate origin (§6 A3): landmark-type matching is valid today, proximity matching is not.
-- [ ] Tests: rename → restart → rebuild → label survives (AC-31); unknown room ID rejected; corrupt registry falls back at the API level.
+- [x] `memory.home_id` / `--home-id`, distinct from `dataset_id`.
+- [x] Rooms are matched onto the home at ingest (`memory/matching.py`, `tests/test_matching.py`); labels live in the store's room table, mirrored to `home_map.json`.
+- [x] `POST /api/v1/rooms/rename?home_id=` writes the store and `home_map.json` (`test_rename_writes_home_map_json`).
+- [x] Fix the rename bug (§6 C3) (`test_rename_only_touches_the_renamed_room`).
+- [x] Cross-session matching is symbolic (signatures, continuity, unique-by-type, 2D similarity from unambiguous anchors, residents); proximity matching removed. Limits in `context/plan.md` Appendix B.
+- [x] Tests: AC-31 (`test_rename_survives_restart_and_new_session`), 404/409, corrupt `home_map.json` (`tests/test_room_identity.py`).
 
 ### 2.4 Compaction and tiered retention — FR4 (H) — missing entirely
 Design and size budget are in `context/answer.md` §1.
-- [ ] Decide persistence technology (decision #6) and summary format/trigger (decision #7).
-- [ ] Replace the per-keyframe timeline with change-only state runs (§6 A2) — prerequisite for any sub-linear growth claim.
-- [ ] Hot tier: full detail for a configurable window, default 3 days (FR4.1).
-- [ ] Background compaction job on a time/size trigger, never on the query path.
-- [ ] Summaries retain object identity, last known location, room identity, event type (FR4.2); keep each object's last-known state forever.
-- [ ] Room IDs/labels survive compaction; add a survival check.
-- [ ] Mark summary-derived answers as `summarised` (FR4.3, AC-23).
-- [ ] Flag a compaction failure and keep source detail when context cannot be preserved (UC-12 A1).
-- [ ] Record the storage growth curve after retention (FR4.4, NFR-P3, AC-07).
-- [ ] Before/after query accuracy on the same query set (AC-08, SC3).
-- [ ] Tests: retention boundary, summary content, room-label survival, summarised flag, growth bound, failure flag.
+- [x] SQLite per home (`memory/store.py`); template summaries + JSON sidecar, run after each ingest and by `aegis-memory compact`.
+- [x] State runs instead of the per-keyframe timeline (`test_graph_size_is_independent_of_keyframe_count`, `test_store_rows_grow_with_changes_not_keyframes`).
+- [x] Hot tier `memory.retention.hot_days` = 3 (`test_rows_inside_hot_window_are_untouched`).
+- [x] Compaction after ingest commits and via CLI; never on the query path.
+- [x] Summaries keep identity, last location, room, event types (`test_summary_content_has_identity_location_room_event_types`); last-known state never compacted (`test_last_known_state_survives_compaction`).
+- [x] Room ids survive and are verified before deletion (`test_room_labels_survive_compaction`).
+- [x] Timeline returns `tier: "summarised"` items (`test_summarised_items_are_flagged`).
+- [x] Failed verification keeps all rows and sets `compaction_ok=false` (`test_failed_verification_keeps_source_rows`).
+- [~] Growth curve on a **synthetic** stream (`scripts/measure_store_growth.py`): detail rows flat (~12.5k) from day 3; 6.7 MB at day 14, +0.2 MB/day before roll-up. Repeat with real recordings.
+- [~] AC-08 harness: answers identical before/after compaction (`test_accuracy_before_and_after_compaction`); benchmark run still open.
+- [x] Tests: `tests/test_compaction.py` (14 tests incl. growth bound and roll-up).
 
 ### 2.5 Activity history — FR3.3 (H) — partial
 - [x] Per-object transition events and wearer `room_change` events.
-- [ ] Define an "activity event" (room visit + the object interactions inside it).
-- [ ] Group transitions into timestamped activities; expose via `/api/v1/timeline` with session/date filters.
-- [ ] Activity-level summaries that feed "what did I do?" (M3) and the daily summary (M4).
-- [ ] Ground-truth order/time test on a scripted sequence (AC-05, ≥ 70%).
+- [x] Activity = one room stay + the events that ended in it (`memory/activities.py`).
+- [x] `/api/v1/activities?home_id=&start=&end=`; timeline events carry `activity_id` (`test_activities_endpoint_and_timeline_link`).
+- [x] Deterministic activity lines (`test_summary_is_deterministic_and_caps_clauses`).
+- [~] AC-05 harness (`test_scripted_sequence_order_and_times`) and `scripts/evaluate_activity_order.py`; recorded run still open.
 
 ### 2.6 Identity and spatial correctness (H)
-- [ ] Remove demo-specific identity/state rules from `scene_graph.py` (§6 C1) and re-verify the demos with general rules.
-- [ ] Store detection confidence on every observation (FR3.2 requires it; `ObjectMemoryEntry` has none).
-- [ ] Gravity-aligned height and vertical relations (`on`, `under`, `above`, `on_floor`) — `context/answer.md` §2.
-- [ ] Fix the oriented-box vertical axis (§6 C2).
-- [ ] AC-04: 5 known objects at known anchors, ≥ 70% correct, ≤ 20% duplicate identities — recorded run.
+- [~] Demo rules removed (§6 C1; `test_no_anchor_is_fabricated`, `test_shoes_follow_the_same_rules_as_any_class`). Re-running demo01/04/06 on Modal with the new rules is still open.
+- [x] Confidence on every entry, run and state (`test_confidence_is_stored_on_entries_and_runs`).
+- [x] Gravity frame + relation classifier (`tests/test_gravity.py`, `tests/test_relations.py`, `test_shoes_on_and_under_bed_in_pitched_session`).
+- [x] Oriented boxes in the gravity frame (`test_obb_height_is_along_up_for_tilted_gravity`).
+- [ ] AC-04 recorded run. *Tooling ready:* `scripts/evaluate_placements.py`.
 
 ### 2.7 Restart persistence and graph lifecycle — FR3.5 / AC-06 (H)
-- [ ] Restart-equivalence test: memory identical before and after an application restart.
-- [ ] Explicit cache invalidation when a new graph is written while the API is alive.
-- [ ] API-level test for a corrupt `r4d_scene_graph.json`.
-- [ ] Decide and document append-only versus rebuilt history (§6 A1 recommends append-only).
+- [x] Restart equivalence for graph files and the store (`test_json_graph_survives_restart`, `test_store_survives_restart`).
+- [x] Cache reloads on file change (`test_new_graph_is_visible_without_restart`).
+- [x] Corrupt graph → not ready, not cached (`test_corrupt_graph_returns_not_found_not_500`).
+- [x] Append-only across sessions; a re-ingest replaces only its own session (`docs/artifact_contracts.md` §4a).
 
 ### 2.8 Room evaluation — AC-22 / SC9 (H) — unmeasured
-- [ ] Annotate at least one multi-room video per `docs/evaluation_plan.md`.
+- [ ] Annotate at least one multi-room video per `docs/evaluation_plan.md`. *Tooling ready:* `scripts/evaluate_rooms.py` (`test_room_metrics_perfect_and_late_transition`).
 - [ ] Measure region precision/recall, keyframe segmentation accuracy (≥ 0.90), `room_change` F1 (≥ 0.70), correct-room query rate (≥ 0.90).
 - [ ] Record config, commit, model versions and artifacts with the run.
 
@@ -177,20 +178,20 @@ Design and size budget are in `context/answer.md` §1.
 - [ ] Configurable abstention threshold (decision #8).
 - [ ] Distinguish never observed / observed but stale / low confidence.
 - [ ] 5 unanswerable queries, ≥ 4 abstain, zero fabricated locations (AC-12).
-- [ ] Remove the Flutter offline mock answers (§6 A9) — they fabricate locations.
+- [x] Flutter offline mock answers removed (§6 A9); unreachable server says so (widget test runs in CI).
 
 ### 3.6 Evidence grounding — FR5.4 / SC5 (H)
 - [ ] Every non-abstaining answer carries an evidence reference: observation ID, time, anchor, room, crop path (AC-11).
-- [ ] Store a real evidence crop when a placement is recorded; replace the generated SVG.
+- [~] Real JPEG crop per run in the home store (`tests/test_evidence.py`); the per-dataset path still returns the SVG card. Decision #9 (keep crops past 24 h) needs supervisor confirmation.
 - [ ] Fallback text evidence when the frame has been purged.
 - [ ] Evidence-coverage test over all non-abstaining answers (100%).
 
 ### 3.7 Answer quality and multi-instance handling (M)
-- [ ] Enforce ≤ 2 short sentences (NFR-U2, AC-14); current templates emit up to 3.
+- [x] ≤ 2 sentences (`test_no_answer_exceeds_two_sentences_or_overclaims`).
 - [ ] Clarification flow when several instances match (UC-03 A3); `other_instances` is returned but unused.
 - [ ] Query log with resolved evidence (UC-03 postcondition).
 - [ ] Optional tool-calling agent / VLM over memory (decision #3); retrieval-first, evidence required, keyframe captions cached (TC4).
-- [ ] Vocabulary / ontology file as the single source for labels and synonyms — `context/answer.md` §3.
+- [x] `config/vocabulary.yaml` (`tests/test_vocabulary.py`).
 
 ---
 
@@ -256,11 +257,11 @@ Design and size budget are in `context/answer.md` §1.
 - [ ] Document dataset limitations before reporting any number.
 
 ### 5.2 Report and documentation
-- [ ] Correct the report where it says rename persists to the home registry (Table 3.8, UC-13 main flow, §5.3) — or land §2.3 first.
+- [x] Report claim is now true: rename persists to the store and `home_map.json` (§2.3).
 - [ ] Update figures that lag the text: use-case diagram (UC-13), component, class, data-flow and sequence diagrams (rooms, registry, compaction, auth, speech).
 - [ ] Update report test count (84 → current) and M1 status (live path is now connected to memory).
 - [ ] Rewrite `docs/fyp1_mid_defense_dossier.md`: it still claims 55 tests, `S = 5.0×` and a Z-up frame.
-- [ ] Fix `AGENTS.md` stale path `src/aegis/poc/memory/scene_graph.py`.
+- [x] Fix `AGENTS.md` stale path and module list.
 - [ ] Consolidated compute/storage/device account (panel item 3) using measured numbers from `benchmark_stats.json`.
 - [ ] Iteration 3 and 4 dates, owners and scope (decision #11).
 - [ ] End-to-end GPU + Flutter + live-camera evidence run.
@@ -270,48 +271,50 @@ Design and size budget are in `context/answer.md` §1.
 
 ## 6. Improvements found in the current codebase
 
+Status after the implementation pass (2026-11-15): `[~]` items are done in code but still need the measurement named in `context/plan.md` — A10 (parallel detect deferred until stage times are measured), M1 (`scripts/compare_masks.py`), M2 (DINOv2 default after measurement; cross-session use pending), M6 (`scripts/evaluate_hand_contact.py`).
+
 Each item was checked in source. Priority: **P0** blocks requirements or produces wrong answers · **P1** blocks scale or accuracy · **P2** cleanup.
 
 ### 6.1 Architecture
 
-- [ ] **A1 (P0) Memory is rebuilt per session, not maintained.** `build_relative_4d_scene_graph` consumes one session's boxes, `_clear_downstream_artifacts` wipes prior output, and instance IDs restart at 1. Nothing accumulates across sessions, so "three days of memory" has no place to live. *Fix:* a persistent memory store with an `ingest(session)` operation that matches new observations against existing instances and anchors.
-- [ ] **A2 (P0) Timeline stores one entry per instance per keyframe.** Occluded instances are re-emitted every keyframe (`scene_graph.py:780-889`), so size is O(keyframes × instances). Measured on the `demo04` fixture: 268 entries, 294 KB for 46 s (≈ 1.1 KB per entry, ≈ 6 KB per second of video). The graph is then written three times (`r4d_scene_graph.json`, and twice more inside `spatial_memory_graph.json`, `workers.py:448-487`). *Fix:* store state runs (one row per stable placement), in SQLite.
-- [ ] **A3 (P0) Every session has its own world frame and an unverified scale.** `vggt_runner.py:177-194` puts the origin at the first keyframe. Positions from two sessions are not comparable, so registry proximity matching and cross-session re-identification by 3D distance cannot work. Thresholds (`0.45`, `0.35`, `zone_link_radius: 1.5`) are written as metres while the report states scale is not calibrated. *Fix:* keep cross-session memory symbolic (room / anchor / relation), align sessions with a similarity transform estimated from shared anchors when geometry is needed, and express thresholds relative to a per-session scale estimate.
-- [ ] **A4 (P0) No gravity direction.** "Up" is assumed to be −Y of the first camera (`rooms.py:27`, `workers.py:904`), which is only true if the phone starts level. This is the root of the elevation problem — see `context/answer.md` §2.
-- [ ] **A5 (P1) VGGT runs once over the whole session.** `model(images)` receives every keyframe (`vggt_runner.py:106-113`); all pointmaps go into one `.npz` and are loaded whole in the detect stage (`workers.py:347-349`). At ≈ 4.3 MB per keyframe a one-hour live session cannot fit GPU or RAM. *Fix:* overlapping windows, per-window artifacts deleted after lifting.
-- [ ] **A6 (P1) API is a JSON file behind a process-global cache.** `ACTIVE_DATASET_ID` is global mutable state; `find_latest_objects_state` re-scans the entire timeline on almost every request (`api.py:266-284`); `/datasets` loads every graph; the cache is never invalidated by a new file. Simulation endpoints mutate memory through `GET` and contain demo literals (`"Demo06-Self"`, frame `642`). *Fix:* a repository layer over the store with a `latest_state` table; move the simulator behind a debug flag.
-- [ ] **A7 (P1) Vocabulary is spread over at least six places** (`config/demo.yaml`, `ANCHOR_CLASS_NAMES`, `ROOM_LANDMARK_ROOM_TYPES`, `CONTAINER_LABELS`, size filters in `lifting.py`, `ITEM_SYNONYMS`) plus three separate label normalisers. See `context/answer.md` §3.
-- [ ] **A8 (P1) Wall-clock time is dropped.** Promotion keeps `capture_timestamp` in a sidecar, but graph entries and events carry seconds-from-start. "This morning" and the 6-hour freshness rule cannot be evaluated. *Fix:* store absolute capture time on every observation and event.
-- [ ] **A9 (P0) The Flutter client fabricates answers when offline.** `api_service.dart:244-470` returns canned locations with `confidence: 0.96` if the backend does not respond in 3 s. This breaks the safe-failure invariant and SC6. *Fix:* show "can't reach memory" instead; keep mocks in tests only.
-- [ ] **A10 (P1) Live is not continuous end to end.** Capture → promote → upload → three cold Modal functions → download. Models are loaded on every call. *Fix:* micro-batches, Modal classes that load weights once, and run detection in parallel with VGGT since it only needs pointmaps at lifting time.
-- [ ] **A11 (P1) No evidence artifact exists.** Events list `evidence_frames` IDs but no crop is saved, and frames must be purged after 24 h. *Fix:* write a small crop when a placement run is created.
+- [x] **A1 (P0) Memory is rebuilt per session, not maintained.** `build_relative_4d_scene_graph` consumes one session's boxes, `_clear_downstream_artifacts` wipes prior output, and instance IDs restart at 1. Nothing accumulates across sessions, so "three days of memory" has no place to live. *Fix:* a persistent memory store with an `ingest(session)` operation that matches new observations against existing instances and anchors.
+- [x] **A2 (P0) Timeline stores one entry per instance per keyframe.** Occluded instances are re-emitted every keyframe (`scene_graph.py:780-889`), so size is O(keyframes × instances). Measured on the `demo04` fixture: 268 entries, 294 KB for 46 s (≈ 1.1 KB per entry, ≈ 6 KB per second of video). The graph is then written three times (`r4d_scene_graph.json`, and twice more inside `spatial_memory_graph.json`, `workers.py:448-487`). *Fix:* store state runs (one row per stable placement), in SQLite.
+- [x] **A3 (P0) Every session has its own world frame and an unverified scale.** `vggt_runner.py:177-194` puts the origin at the first keyframe. Positions from two sessions are not comparable, so registry proximity matching and cross-session re-identification by 3D distance cannot work. Thresholds (`0.45`, `0.35`, `zone_link_radius: 1.5`) are written as metres while the report states scale is not calibrated. *Fix:* keep cross-session memory symbolic (room / anchor / relation), align sessions with a similarity transform estimated from shared anchors when geometry is needed, and express thresholds relative to a per-session scale estimate.
+- [x] **A4 (P0) No gravity direction.** "Up" is assumed to be −Y of the first camera (`rooms.py:27`, `workers.py:904`), which is only true if the phone starts level. This is the root of the elevation problem — see `context/answer.md` §2.
+- [x] **A5 (P1) VGGT runs once over the whole session.** `model(images)` receives every keyframe (`vggt_runner.py:106-113`); all pointmaps go into one `.npz` and are loaded whole in the detect stage (`workers.py:347-349`). At ≈ 4.3 MB per keyframe a one-hour live session cannot fit GPU or RAM. *Fix:* overlapping windows, per-window artifacts deleted after lifting.
+- [x] **A6 (P1) API is a JSON file behind a process-global cache.** `ACTIVE_DATASET_ID` is global mutable state; `find_latest_objects_state` re-scans the entire timeline on almost every request (`api.py:266-284`); `/datasets` loads every graph; the cache is never invalidated by a new file. Simulation endpoints mutate memory through `GET` and contain demo literals (`"Demo06-Self"`, frame `642`). *Fix:* a repository layer over the store with a `latest_state` table; move the simulator behind a debug flag.
+- [x] **A7 (P1) Vocabulary is spread over at least six places** (`config/demo.yaml`, `ANCHOR_CLASS_NAMES`, `ROOM_LANDMARK_ROOM_TYPES`, `CONTAINER_LABELS`, size filters in `lifting.py`, `ITEM_SYNONYMS`) plus three separate label normalisers. See `context/answer.md` §3.
+- [x] **A8 (P1) Wall-clock time is dropped.** Promotion keeps `capture_timestamp` in a sidecar, but graph entries and events carry seconds-from-start. "This morning" and the 6-hour freshness rule cannot be evaluated. *Fix:* store absolute capture time on every observation and event.
+- [x] **A9 (P0) The Flutter client fabricates answers when offline.** `api_service.dart:244-470` returns canned locations with `confidence: 0.96` if the backend does not respond in 3 s. This breaks the safe-failure invariant and SC6. *Fix:* show "can't reach memory" instead; keep mocks in tests only.
+- [~] **A10 (P1) Live is not continuous end to end.** Capture → promote → upload → three cold Modal functions → download. Models are loaded on every call. *Fix:* micro-batches, Modal classes that load weights once, and run detection in parallel with VGGT since it only needs pointmaps at lifting time.
+- [x] **A11 (P1) No evidence artifact exists.** Events list `evidence_frames` IDs but no crop is saved, and frames must be purged after 24 h. *Fix:* write a small crop when a placement run is created.
 
 ### 6.2 Model choices
 
-- [ ] **M1 (P1) Two segmenters per detection.** YOLOE-seg already returns masks, then SAM 2 hiera-large is run on every box (`detector.py:407-430`). *Fix:* use the YOLOE mask and call SAM 2 only when it is missing or small; or drop to a smaller SAM 2. Measure mask IoU and time before choosing.
-- [ ] **M2 (P1) Hand-written tracker with a 16-bin HSV histogram for re-ID** (`detector.py:54-104`). Similar-coloured objects swap identities; lighting changes break matches. *Fix:* Ultralytics' built-in trackers or SAM 2 video propagation for short-term tracks, and an image-embedding (DINOv2 / SigLIP class) of the masked crop for long-term re-ID. The same embedding enables open-vocabulary query matching.
-- [ ] **M3 (P1) Detection is tied to VGGT keyframes** (stride 6). On the live path at 2 FPS that is one detection every ≥ 3 s, so short pick-up/put-down actions are missed. *Fix:* detect and track on every keyframe, reconstruct on a subset, lift using the nearest reconstructed frame.
-- [ ] **M4 (P1) Detections are capped at 6 per frame and suppressed across classes** at IoU 0.35 (`detector.py:382-404`). Cluttered scenes lose objects. *Fix:* class-aware suppression and a configurable cap.
-- [ ] **M5 (P2) VGGT settings are ignored.** `vggt.dtype`, `vggt.batch_size` and `vggt.image_size` are never read; inference runs in float32 at a hard-coded 512; images are loaded and resized twice. *Fix:* honour the config, enable autocast, and measure frames-per-window on the L4.
-- [ ] **M6 (P2) Hands come from an open-vocabulary "hand" prompt and box overlap.** A dedicated hand/hand-object model would make pickup detection more reliable — evaluate on the demos.
-- [ ] **M7 (P2) Unbatched inference from file paths** (`model.predict(str(image_path))` after the frame was already decoded). Batch frames and pass arrays.
-- [ ] **M8 (decision) VLM use.** Call a VLM only when an event is created (caption the evidence crop, cache it) and for low-margin spatial relations; never per frame (TC4).
+- [~] **M1 (P1) Two segmenters per detection.** YOLOE-seg already returns masks, then SAM 2 hiera-large is run on every box (`detector.py:407-430`). *Fix:* use the YOLOE mask and call SAM 2 only when it is missing or small; or drop to a smaller SAM 2. Measure mask IoU and time before choosing.
+- [~] **M2 (P1) Hand-written tracker with a 16-bin HSV histogram for re-ID** (`detector.py:54-104`). Similar-coloured objects swap identities; lighting changes break matches. *Fix:* Ultralytics' built-in trackers or SAM 2 video propagation for short-term tracks, and an image-embedding (DINOv2 / SigLIP class) of the masked crop for long-term re-ID. The same embedding enables open-vocabulary query matching.
+- [x] **M3 (P1) Detection is tied to VGGT keyframes** (stride 6). On the live path at 2 FPS that is one detection every ≥ 3 s, so short pick-up/put-down actions are missed. *Fix:* detect and track on every keyframe, reconstruct on a subset, lift using the nearest reconstructed frame.
+- [x] **M4 (P1) Detections are capped at 6 per frame and suppressed across classes** at IoU 0.35 (`detector.py:382-404`). Cluttered scenes lose objects. *Fix:* class-aware suppression and a configurable cap.
+- [x] **M5 (P2) VGGT settings are ignored.** `vggt.dtype`, `vggt.batch_size` and `vggt.image_size` are never read; inference runs in float32 at a hard-coded 512; images are loaded and resized twice. *Fix:* honour the config, enable autocast, and measure frames-per-window on the L4.
+- [~] **M6 (P2) Hands come from an open-vocabulary "hand" prompt and box overlap.** A dedicated hand/hand-object model would make pickup detection more reliable — evaluate on the demos.
+- [x] **M7 (P2) Unbatched inference from file paths** (`model.predict(str(image_path))` after the frame was already decoded). Batch frames and pass arrays.
+- [x] **M8 (decision) VLM use.** Call a VLM only when an event is created (caption the evidence crop, cache it) and for low-margin spatial relations; never per frame (TC4).
 
 ### 6.3 Code
 
-- [ ] **C1 (P0) Demo-specific rules inside the memory engine.** Shoes get IDs from fixed X thresholds (`scene_graph.py:289-297`); in-hand and placement are forced by frame ranges 280–480 (`:621-641`, `:669-681`, `:795-812`); with no anchors a fake `Storage Cabinet #1` is created at the origin (`:193-202`) and used as an event destination (`:442`). Any other video containing shoes gets wrong identities and states. `lifting.py:336` says such rules were removed. *Fix:* delete them, rely on the general association path, return no anchor when none is observed.
-- [ ] **C2 (P0) Oriented boxes use the wrong vertical axis.** `lifting.py:139-177` fits yaw in the X–Y plane and treats Z as height — a leftover from the Z-up frame. In the current Y-down frame this rotates boxes about the viewing axis. *Fix:* fit in the plane perpendicular to the estimated up vector.
-- [ ] **C3 (P0) Room rename corrupts events.** `api.py:572-580` rewrites the source/destination of every event whose room label starts with `"room #"`, not only the renamed room. *Fix:* store `room_id` on events and match on it.
-- [ ] **C4 (P1) Objects can never be "on the floor" or "under" anything** outside the shoe special case; any object within 0.35 of an anchor centre becomes `on_surface` or `inside` (`scene_graph.py:706-711`). `bed`, `sofa`, `dining table` are room landmarks only, so they can never be an object's anchor.
-- [ ] **C5 (P1) `dataset_id` is not validated in the API.** It is interpolated into paths in `get_search_paths` and `/video/{dataset_id}`; `validate_dataset_id` exists but is not called. Labels are also written unescaped into the SVG response.
-- [ ] **C6 (P1) Silent synthetic reconstruction.** On CPU, any VGGT failure falls back to fabricated poses and flat depth (`vggt_runner.py:196-239`). *Fix:* raise unless a test flag is set.
-- [ ] **C7 (P2) Dead and broken legacy code.** `paths.py:105` reads `config.dust3r`, which does not exist; `depth`, `pose` and `geometry` config sections and the DROID settings are unused; `dust3r` aliases remain in three files.
-- [ ] **C8 (P2) Query matching is substring-based and over-broad.** `"cup"` and `"mug"` resolve to `bottle`; `canonical in clean` matches inside other words; `_matches_query` has five fallbacks. Replace with the ontology lookup.
-- [ ] **C9 (P2) Answer wording asserts more than the evidence** ("safely put away", "securely stored") and exceeds two sentences.
-- [ ] **C10 (P2) `workers.py` is 1,300 lines** mixing orchestration and Rerun drawing; `_write_ply` writes ASCII in a Python loop. Split the visualiser out; write binary PLY.
-- [ ] **C11 (P2) Tests lock in demo behaviour** and there is none for vertical relations, multi-session identity, or the rename bug. Add coverage reporting to CI.
-- [ ] **C12 (P1) Live frames are re-encoded from JPEG to PNG** on promotion (`live_handoff.py:152-154`), roughly a tenfold size increase with no quality gain. Accept JPEG in the frame contract.
-- [ ] **C13 (P2) Flutter:** half of `api_service.dart` is mock data; UI branches on dataset names (`home_screen.dart:542-544`); timeouts are hard-coded; one widget test.
+- [x] **C1 (P0) Demo-specific rules inside the memory engine.** Shoes get IDs from fixed X thresholds (`scene_graph.py:289-297`); in-hand and placement are forced by frame ranges 280–480 (`:621-641`, `:669-681`, `:795-812`); with no anchors a fake `Storage Cabinet #1` is created at the origin (`:193-202`) and used as an event destination (`:442`). Any other video containing shoes gets wrong identities and states. `lifting.py:336` says such rules were removed. *Fix:* delete them, rely on the general association path, return no anchor when none is observed.
+- [x] **C2 (P0) Oriented boxes use the wrong vertical axis.** `lifting.py:139-177` fits yaw in the X–Y plane and treats Z as height — a leftover from the Z-up frame. In the current Y-down frame this rotates boxes about the viewing axis. *Fix:* fit in the plane perpendicular to the estimated up vector.
+- [x] **C3 (P0) Room rename corrupts events.** `api.py:572-580` rewrites the source/destination of every event whose room label starts with `"room #"`, not only the renamed room. *Fix:* store `room_id` on events and match on it.
+- [x] **C4 (P1) Objects can never be "on the floor" or "under" anything** outside the shoe special case; any object within 0.35 of an anchor centre becomes `on_surface` or `inside` (`scene_graph.py:706-711`). `bed`, `sofa`, `dining table` are room landmarks only, so they can never be an object's anchor.
+- [x] **C5 (P1) `dataset_id` is not validated in the API.** It is interpolated into paths in `get_search_paths` and `/video/{dataset_id}`; `validate_dataset_id` exists but is not called. Labels are also written unescaped into the SVG response.
+- [x] **C6 (P1) Silent synthetic reconstruction.** On CPU, any VGGT failure falls back to fabricated poses and flat depth (`vggt_runner.py:196-239`). *Fix:* raise unless a test flag is set.
+- [x] **C7 (P2) Dead and broken legacy code.** `paths.py:105` reads `config.dust3r`, which does not exist; `depth`, `pose` and `geometry` config sections and the DROID settings are unused; `dust3r` aliases remain in three files.
+- [x] **C8 (P2) Query matching is substring-based and over-broad.** `"cup"` and `"mug"` resolve to `bottle`; `canonical in clean` matches inside other words; `_matches_query` has five fallbacks. Replace with the ontology lookup.
+- [x] **C9 (P2) Answer wording asserts more than the evidence** ("safely put away", "securely stored") and exceeds two sentences.
+- [x] **C10 (P2) `workers.py` is 1,300 lines** mixing orchestration and Rerun drawing; `_write_ply` writes ASCII in a Python loop. Split the visualiser out; write binary PLY.
+- [x] **C11 (P2) Tests lock in demo behaviour** and there is none for vertical relations, multi-session identity, or the rename bug. Add coverage reporting to CI.
+- [x] **C12 (P1) Live frames are re-encoded from JPEG to PNG** on promotion (`live_handoff.py:152-154`), roughly a tenfold size increase with no quality gain. Accept JPEG in the frame contract.
+- [x] **C13 (P2) Flutter:** half of `api_service.dart` is mock data; UI branches on dataset names (`home_screen.dart:542-544`); timeouts are hard-coded; one widget test.
 
 ---
 
