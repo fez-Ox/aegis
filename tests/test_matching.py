@@ -155,3 +155,16 @@ def test_appearance_needs_a_margin() -> None:
     ]
     session = [InstanceInfo(1, "mug", "next_to", None, appearance=(0.95, 0.05))]
     assert match_instances(session, home, _no_map) == {1: 7}
+
+
+def test_continuity_does_not_override_signature_or_type() -> None:
+    """Regression: back-to-back sessions must not merge rooms of different types."""
+    home = [
+        RoomInfo(10, "Kitchen", frozenset({"Kitchen landmark", "desk"})),
+        RoomInfo(11, "Bedroom", frozenset({"Bedroom landmark", "desk"})),
+    ]
+    session = [RoomInfo(1, "Kitchen", frozenset({"Kitchen landmark", "desk"}))]
+    # The previous session ended in the bedroom; the evidence says kitchen.
+    assert match_rooms(session, home, continuity=(1, 11)) == {1: 10}
+    typed = [RoomInfo(2, "Kitchen")]
+    assert match_rooms(typed, home, continuity=(2, 11)) == {2: None}

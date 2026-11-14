@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from aegis.core.config import RetentionConfig
 from aegis.core.timeutil import parse_iso, shift_iso, to_utc_iso, utc_now
 from aegis.core.vocabulary import Vocabulary, default_vocabulary
 from aegis.geometry.gravity import GravityFrame
@@ -49,6 +50,8 @@ class IngestReport:
     events_inserted: int = 0
     events_skipped: int = 0
     activities: int = 0
+    days_compacted: int = 0
+    compaction_failures: int = 0
     detail: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -107,6 +110,7 @@ def ingest_session(
     now: datetime | None = None,
     timezone: str = DEFAULT_TIMEZONE,
     evidence_root: Path | str | None = None,
+    retention: RetentionConfig | None = None,
 ) -> IngestReport:
     """Merge ``graph`` into ``store``; see the module docstring.
 
@@ -191,6 +195,15 @@ def ingest_session(
     from aegis.memory.home_registry import export_registry
 
     export_registry(store)
+    if retention is not None:
+        # Never on the query path: compaction runs after the ingest commits.
+        from aegis.memory.compaction import compact, rollup
+
+        moment = now or utc_now()
+        result = compact(store, now=moment, config=retention)
+        rollup(store, now=moment, config=retention)
+        report.days_compacted = len(result.days_compacted)
+        report.compaction_failures = len(result.days_failed)
     return report
 
 

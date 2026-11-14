@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from aegis.core.paths import validate_dataset_id
 from aegis.core.vocabulary import default_vocabulary
+from aegis.memory.compaction import compaction_ok
 from aegis.memory.homes import DuplicateRoomLabelError, get_store
 from aegis.memory.reasoning import QueryReasoningEngine, event_summary, room_phrase
 from aegis.memory.repository import (
@@ -101,6 +102,7 @@ class HealthResponse(BaseModel):
     num_events: int
     total_timeline_frames: int
     simulator_enabled: bool = False
+    compaction_ok: bool | None = None
 
 
 class AnchorModel(BaseModel):
@@ -153,14 +155,17 @@ class TimelineEventModel(BaseModel):
     event_id: str
     event_type: str
     object: str
+    tier: str = "detailed"
+    period_start: str | None = None
+    period_end: str | None = None
     source_relation: str | None = None
     destination_relation: str | None = None
     source_anchor: str | None = None
     destination_anchor: str | None = None
     source_room: str | None = None
     destination_room: str | None = None
-    start_time: float
-    end_time: float
+    start_time: float | None = None
+    end_time: float | None = None
     start_wallclock: str | None = None
     end_wallclock: str | None = None
     activity_id: int | None = None
@@ -325,6 +330,9 @@ def health(dataset_id: str | None = None, home_id: str | None = None) -> HealthR
         num_events=len(repo.events()),
         total_timeline_frames=repo.keyframe_count(),
         simulator_enabled=simulator_enabled(),
+        compaction_ok=(
+            compaction_ok(repo.store) if isinstance(repo, StoreRepository) else None
+        ),
     )
 
 
@@ -621,13 +629,45 @@ def query_memory(
 
 @app.get("/api/v1/timeline", response_model=list[TimelineEventModel])
 def get_timeline(
-    dataset_id: str | None = None, home_id: str | None = None
+    dataset_id: str | None = None,
+    home_id: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
 ) -> list[TimelineEventModel]:
-    """Chronological events with one plain sentence each."""
+    """Chronological events with one plain sentence each.
+
+    For a home store, history older than the detail window comes back as
+    ``tier="summarised"`` lines (``event_type="summary"``).
+    """
 
     _ds, repo = resolve_repository(dataset_id, home_id)
     results: list[TimelineEventModel] = []
-    for event in repo.events():
+    if isinstance(repo, StoreRepository):
+        try:
+            summaries = repo.store.summaries(start, end)
+            events = repo.events_between(start, end)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail="start/end must be ISO-8601 with a timezone"
+            ) from exc
+        for line in summaries:
+            results.append(
+                TimelineEventModel(
+                    event_id=f"summary_{line['summary_id']:06d}",
+                    event_type="summary",
+                    object=str(
+                        line["sidecar"].get("label")
+                        or line["subject_key"].split(":")[0].title()
+                    ),
+                    tier="summarised",
+                    period_start=line["period_start"],
+                    period_end=line["period_end"],
+                    summary=line["text"],
+                )
+            )
+    else:
+        events = repo.events()
+    for event in events:
         results.append(
             TimelineEventModel(
                 event_id=str(event.get("event_id", "")),

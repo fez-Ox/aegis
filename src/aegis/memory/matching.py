@@ -54,20 +54,21 @@ def match_rooms(
     result: dict[int, int | None] = {room.room_id: None for room in session_rooms}
     used: set[int] = set()
     home_by_id = {room.room_id: room for room in home_rooms}
+    session_by_id = {room.room_id: room for room in session_rooms}
 
-    if continuity is not None:
-        session_room, home_room = continuity
-        if session_room in result and home_room in home_by_id:
-            result[session_room] = home_room
-            used.add(home_room)
+    def compatible(a: RoomInfo, b: RoomInfo) -> bool:
+        return (
+            a.room_type == "Room" or b.room_type == "Room" or a.room_type == b.room_type
+        )
 
+    # Signature evidence first: it is the strongest cue.
     proposals: list[tuple[float, int, int]] = []
     for room in session_rooms:
-        if result[room.room_id] is not None or not room.signature:
+        if not room.signature:
             continue
         scores = []
         for home in home_rooms:
-            if home.room_id in used or not home.signature:
+            if not home.signature:
                 continue
             typed = room.room_type != "Room" and home.room_type != "Room"
             if typed and room.room_type != home.room_type:
@@ -85,6 +86,20 @@ def match_rooms(
             continue
         result[room_id] = home_id
         used.add(home_id)
+
+    # Continuity: a back-to-back session starts where the wearer was, unless
+    # the evidence above placed that room elsewhere or the types disagree.
+    if continuity is not None:
+        session_room, home_room = continuity
+        if (
+            session_room in result
+            and result[session_room] is None
+            and home_room in home_by_id
+            and home_room not in used
+            and compatible(session_by_id[session_room], home_by_id[home_room])
+        ):
+            result[session_room] = home_room
+            used.add(home_room)
 
     bare_session = [
         r for r in session_rooms if result[r.room_id] is None and not r.signature

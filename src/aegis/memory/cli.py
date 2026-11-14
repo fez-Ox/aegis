@@ -20,6 +20,14 @@ def _vocabulary(config_path: str | None):
     return default_vocabulary()
 
 
+def _retention(config_path: str | None):
+    if config_path:
+        return load_config(config_path).memory.retention
+    from aegis.core.config import RetentionConfig
+
+    return RetentionConfig()
+
+
 def _home(args) -> str:
     if args.home_id:
         return args.home_id
@@ -39,13 +47,15 @@ def _store_root(args) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aegis-memory", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("ingest", "show", "size"):
+    for name in ("ingest", "show", "size", "compact"):
         command = sub.add_parser(name)
         command.add_argument("--home-id", default=None)
         command.add_argument("--store-root", default=None)
         command.add_argument("--config-path", default=None)
         if name == "ingest":
             command.add_argument("graph", type=Path, help="r4d_scene_graph.json (v2)")
+        if name == "compact":
+            command.add_argument("--now", default=None, help="ISO time (default: now)")
     args = parser.parse_args(argv)
 
     store = open_store(_home(args), _store_root(args))
@@ -57,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
                 graph,
                 vocabulary=_vocabulary(args.config_path),
                 evidence_root=args.graph.parent,
+                retention=_retention(args.config_path),
             )
             print(json.dumps(report.as_dict(), indent=2))
         elif args.command == "show":
@@ -75,6 +86,15 @@ def main(argv: list[str] | None = None) -> int:
                     f"{state['anchor_label'] or '-'} in {state['room_label'] or '-'} "
                     f"at {state['last_seen_wallclock']}"
                 )
+        elif args.command == "compact":
+            from aegis.core.timeutil import parse_iso, utc_now
+            from aegis.memory.compaction import compact, rollup
+
+            moment = parse_iso(args.now) if args.now else utc_now()
+            retention = _retention(args.config_path)
+            result = compact(store, now=moment, config=retention)
+            rolled = rollup(store, now=moment, config=retention)
+            print(json.dumps({**result.__dict__, "rollups": rolled}, indent=2))
         else:
             print(
                 json.dumps({"bytes": store.db_size_bytes(), **store.counts()}, indent=2)

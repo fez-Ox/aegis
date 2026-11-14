@@ -405,6 +405,37 @@ class EvidenceConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RetentionConfig:
+    """Tiered retention: full detail for ``hot_days``, then text summaries."""
+
+    hot_days: int = 3
+    # Vocabulary entries with importance: high keep detail longer.
+    important_hot_days: int = 7
+    # Calendar days of summaries (IANA zone name).
+    timezone: str = "Asia/Karachi"
+    # Keep the crop behind each object's last-known state after compaction.
+    keep_last_evidence: bool = True
+    weekly_rollup_after_days: int = 30
+    monthly_rollup_after_days: int = 365
+
+    def __post_init__(self) -> None:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        if self.hot_days < 1 or self.important_hot_days < self.hot_days:
+            raise ValueError(
+                "memory.retention needs hot_days >= 1 and important_hot_days >= hot_days"
+            )
+        if not 0 < self.weekly_rollup_after_days < self.monthly_rollup_after_days:
+            raise ValueError("memory.retention roll-up thresholds are inconsistent")
+        try:
+            ZoneInfo(self.timezone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(
+                f"memory.retention.timezone {self.timezone!r} is unknown"
+            ) from exc
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryConfig:
     """Spatio-temporal memory construction settings."""
 
@@ -412,6 +443,7 @@ class MemoryConfig:
     gravity: GravityConfig = field(default_factory=GravityConfig)
     build: MemoryBuildConfig = field(default_factory=MemoryBuildConfig)
     evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
+    retention: RetentionConfig = field(default_factory=RetentionConfig)
     # Durable per-home memory (laptop side): <store_root>/<home_id>/memory.db
     home_id: str = "home01"
     store_root: str = "outputs/_homes"
@@ -891,6 +923,9 @@ class RuntimeConfig:
                 ),
                 evidence=_section(
                     EvidenceConfig, memory_raw.get("evidence"), "memory.evidence"
+                ),
+                retention=_section(
+                    RetentionConfig, memory_raw.get("retention"), "memory.retention"
                 ),
                 home_id=_home_id(str(memory_raw.get("home_id", "home01"))),
                 store_root=str(memory_raw.get("store_root", "outputs/_homes")),

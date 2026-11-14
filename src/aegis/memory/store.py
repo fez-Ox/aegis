@@ -433,6 +433,38 @@ class HomeStore:
             )
         return result
 
+    def summaries(
+        self, start: str | None = None, end: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Summarised history whose period overlaps [start, end] (dates)."""
+
+        clauses, params = [], []
+        if start is not None:
+            clauses.append("period_end >= ?")
+            params.append(start[:10])
+        if end is not None:
+            clauses.append("period_start <= ?")
+            params.append(end[:10])
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.query(
+            f"SELECT * FROM summary {where} ORDER BY period_start, kind, subject_key",
+            params,
+        )
+        return [
+            {
+                "summary_id": row["summary_id"],
+                "level": row["level"],
+                "period_start": row["period_start"],
+                "period_end": row["period_end"],
+                "kind": row["kind"],
+                "subject_key": row["subject_key"],
+                "text": row["text"],
+                "sidecar": json.loads(row["sidecar"]),
+                "tier": "summarised",
+            }
+            for row in rows
+        ]
+
     def latest_states(self) -> list[dict[str, Any]]:
         """Last-known state of every object, with names resolved."""
 

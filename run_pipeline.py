@@ -299,7 +299,11 @@ def _ingest_into_home(dataset_id: str, config: RuntimeConfig, home_id: str) -> N
     store = open_store(home_id, config.memory.store_root)
     try:
         report = ingest_session(
-            store, graph, vocabulary=config.vocab(), evidence_root=graph_path.parent
+            store,
+            graph,
+            vocabulary=config.vocab(),
+            evidence_root=graph_path.parent,
+            retention=config.memory.retention,
         )
     finally:
         store.close()

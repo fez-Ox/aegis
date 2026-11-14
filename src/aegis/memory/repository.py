@@ -265,9 +265,14 @@ class StoreRepository:
         ]
 
     def events(self) -> list[dict[str, Any]]:
+        return self.events_between(None, None)
+
+    def events_between(
+        self, start: str | None, end: str | None
+    ) -> list[dict[str, Any]]:
         from aegis.core.timeutil import parse_iso
 
-        events = self.store.events()
+        events = self.store.events(start, end)
         for event in events:
             event["start_time"] = parse_iso(event["start_wallclock"]).timestamp()
             event["end_time"] = parse_iso(event["end_wallclock"]).timestamp()
