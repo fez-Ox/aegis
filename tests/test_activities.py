@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from aegis.core.timeutil import shift_iso
+from aegis.core.timeutil import parse_iso, shift_iso
 from aegis.memory.activities import ActivityDraft, activity_summary, build_activities
 from aegis.memory.homes import close_stores
 from aegis.memory.ingest import ingest_session
@@ -128,19 +128,8 @@ def test_scripted_sequence_order_and_times(tmp_path) -> None:
     correct = 0
     for (prefix, kind, t), event in zip(truth, events, strict=False):
         expected = _at(t)
-        same_time = (
-            abs(
-                (
-                    __import__("aegis.core.timeutil", fromlist=["parse_iso"]).parse_iso(
-                        event["end_wallclock"]
-                    )
-                    - __import__(
-                        "aegis.core.timeutil", fromlist=["parse_iso"]
-                    ).parse_iso(expected)
-                ).total_seconds()
-            )
-            <= 1.0
-        )
+        offset = parse_iso(event["end_wallclock"]) - parse_iso(expected)
+        same_time = abs(offset.total_seconds()) <= 1.0
         if (
             event["object"].startswith(prefix)
             and event["event_type"] == kind
