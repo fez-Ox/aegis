@@ -79,7 +79,7 @@ def test_cli_captures_and_promotes_a_session(tmp_path, monkeypatch) -> None:
     metadata = json.loads((dataset / "metadata.json").read_text(encoding="utf-8"))
     assert metadata["preprocess_source"] == "live_session"
     assert metadata["frame_count"] == 3
-    assert (dataset / "frames" / "frame_000000.png").is_file()
+    assert (dataset / "frames" / "frame_000000.jpg").is_file()
     assert (dataset / "live_timestamps.json").is_file()
 
 

@@ -7,7 +7,7 @@ Android / IP Webcam MJPEG
         -> OpenCVMjpegSource
         -> ingest_live sampling, pause control, keyframes, gap recovery
         -> LiveSessionWriter (JPEG + index.jsonl + session.json + checkpoints)
-        -> promote_live_session (data/<dataset_id>: PNG + metadata.json)
+        -> promote_live_session / promote_live_segments (data/<id>: JPEG + metadata.json)
         -> run_preprocess / run_vggt / run_detect_and_lift / run_rerun
         -> mobile API + Rerun
 ```
@@ -117,29 +117,43 @@ older than the last checkpoint is lost.
 ## 6. Promote a session into the memory pipeline
 
 ```bash
-# Promote and upload, then run preprocess only.
+# Process a capture as segments (default 120 frames each, live.segment_frames):
+# promote -> upload -> preprocess -> VGGT -> perception -> download -> ingest
+# into the home store, one segment at a time.
 uv run python run_pipeline.py \
+  --config-path config/live.yaml \
   --live-session captures/walkthrough-01 \
   --dataset-id live_walkthrough_01 \
   --stage live
 
-# Promote and run the complete VGGT -> perception -> R4DSG -> Rerun path.
-uv run python run_pipeline.py \
-  --live-session captures/walkthrough-01 \
-  --dataset-id live_walkthrough_01 \
-  --stage all
+# Same, while the capture is still running (polls every 10 s, finishes with
+# the remaining frames once the capture stops). Add --rerun for a Rerun
+# recording per segment, --keep-frames to keep local segment frames.
+uv run python run_pipeline.py --config-path config/live.yaml \
+  --live-session latest --dataset-id live_walkthrough_01 --stage live --follow
 
-# Or ask the runner for the newest capture directory.
-uv run modal run run_pipeline.py --dataset-id live_walkthrough_01 --stage live --live-session latest
+# Whole capture as one dataset (short captures only; vggt.max_keyframes applies).
+uv run python run_pipeline.py --live-session captures/walkthrough-01 \
+  --dataset-id live_walkthrough_01 --stage all
 ```
 
-Promotion writes `data/<dataset_id>/frames/frame_XXXXXX.png`, a schema-v2
-`metadata.json` with `preprocess_source: "live_session"` and
-`timebase: "capture"`, plus `source_metadata.json`, `live_session.json`, and
-`live_timestamps.json`. The dataset directory is uploaded to
+Segments are named `<dataset_id>_seg0001`, `_seg0002`, ... A new segment
+also starts after a capture gap longer than 30 s; a final chunk shorter than
+8 frames joins the previous segment. Progress is checkpointed in
+`captures/<session>/pipeline_state.json`, so re-running the same command
+resumes after the last finished segment. Segments share no geometry; the
+home store joins them (the wearer's room continues across a boundary of a
+few seconds, and an object carried across a boundary stays one object).
+
+Promotion writes `data/<dataset_id>/frames/frame_XXXXXX.jpg` (copied byte
+for byte when no resize is needed), a schema-v2 `metadata.json` with
+`preprocess_source: "live_session"` and `timebase: "capture"` (plus a
+`segment` block for segments), `source_metadata.json`, `live_session.json`
+and `live_timestamps.json`. The dataset directory is uploaded to
 `modal://aegis-poc-data/<dataset_id>/` before the remote preprocess stage runs.
 `run_preprocess` detects the promoted metadata and does not require
-`video.mp4`.
+`video.mp4`. `config/live.yaml` reconstructs and detects every live
+keyframe (`vggt.keyframe_stride: 1`).
 
 The CLI can promote without invoking Modal:
 
@@ -162,7 +176,7 @@ After promotion:
 
 ```text
 data/live_walkthrough_01/
-  frames/frame_000000.png ...
+  frames/frame_000000.jpg ...
   metadata.json
   source_metadata.json
   live_session.json

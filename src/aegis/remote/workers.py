@@ -94,6 +94,7 @@ def _clear_downstream_artifacts(paths: DatasetPaths) -> None:
         paths.pointcloud_ply,
         paths.pointcloud_metadata,
         paths.pointmaps_npz,
+        paths.pointmaps_index,
         paths.gravity,
         paths.objects_json,
         paths.events_json,
@@ -108,6 +109,8 @@ def _clear_downstream_artifacts(paths: DatasetPaths) -> None:
             stale_file.unlink()
     if paths.depth.exists():
         shutil.rmtree(paths.depth)
+    if paths.pointmaps_dir.exists():
+        shutil.rmtree(paths.pointmaps_dir)
     evidence_dir = paths.objects_json.parent / "evidence"
     if evidence_dir.exists():
         shutil.rmtree(evidence_dir)
@@ -241,7 +244,63 @@ def _write_ply(path: Path, points: np.ndarray, colors: np.ndarray) -> None:
             )
 
 
-def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
+def write_pointmaps(
+    paths: DatasetPaths,
+    keyframe_ids: Sequence[int],
+    pointmaps: np.ndarray,
+    confmaps: np.ndarray,
+) -> None:
+    """One compressed file per keyframe, so readers never load them all."""
+
+    if paths.pointmaps_dir.exists():
+        shutil.rmtree(paths.pointmaps_dir)
+    paths.pointmaps_dir.mkdir(parents=True, exist_ok=True)
+    for frame_id, points, conf in zip(keyframe_ids, pointmaps, confmaps, strict=True):
+        np.savez_compressed(
+            paths.pointmaps_dir / f"{int(frame_id)}.npz",
+            points=points.astype(np.float32),
+            conf=conf.astype(np.float32),
+        )
+    _write_json(
+        paths.pointmaps_index,
+        {"schema_version": 1, "keyframe_ids": [int(f) for f in keyframe_ids]},
+    )
+
+
+class PointmapReader:
+    """Per-keyframe pointmaps; falls back to the legacy single ``.npz``."""
+
+    def __init__(self, paths: DatasetPaths) -> None:
+        self.paths = paths
+        if paths.pointmaps_index.exists():
+            self.keyframe_ids = [
+                int(f) for f in _read_json(paths.pointmaps_index)["keyframe_ids"]
+            ]
+            self._legacy = None
+        elif paths.pointmaps_npz.exists():
+            data = np.load(paths.pointmaps_npz)
+            self.keyframe_ids = [int(f) for f in data["keyframe_ids"].tolist()]
+            self._legacy = data
+        else:
+            raise FileNotFoundError(
+                f"pointmaps are missing; run the vggt stage first: {paths.pointmaps_dir}"
+            )
+        self._index = {fid: i for i, fid in enumerate(self.keyframe_ids)}
+
+    def __contains__(self, frame_id: int) -> bool:
+        return int(frame_id) in self._index
+
+    def get(self, frame_id: int) -> tuple[np.ndarray, np.ndarray]:
+        if self._legacy is not None:
+            index = self._index[int(frame_id)]
+            return self._legacy["pointmaps"][index], self._legacy["confmaps"][index]
+        with np.load(self.paths.pointmaps_dir / f"{int(frame_id)}.npz") as data:
+            return data["points"], data["conf"]
+
+
+def run_vggt(
+    dataset_id: str, raw_config: Mapping[str, Any], *, model: Any = None
+) -> dict[str, Any]:
     """Execute VGGT-Ω feed-forward 3D reconstruction on keyframes."""
 
     t0 = time.perf_counter()
@@ -256,6 +315,12 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     keyframe_records = frames[:: config.vggt.keyframe_stride]
     if len(keyframe_records) < 2:
         keyframe_records = frames[: min(len(frames), 2)]
+    if len(keyframe_records) > config.vggt.max_keyframes:
+        raise ValueError(
+            f"{len(keyframe_records)} keyframes exceed vggt.max_keyframes="
+            f"{config.vggt.max_keyframes}; lower video.sample_fps, raise "
+            "vggt.keyframe_stride, or process the capture with --segment-frames"
+        )
     image_paths = [paths.frames / str(rec["filename"]) for rec in keyframe_records]
 
     gpu_device = "CPU"
@@ -276,15 +341,17 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         or os.getenv("HUGGING_FACE_HUB_TOKEN")
         or os.getenv("hf_token")
     )
-    rec_result = run_vggt_reconstruction(image_paths, config.vggt, hf_token=hf_token)
+    rec_result = run_vggt_reconstruction(
+        image_paths, config.vggt, hf_token=hf_token, model=model
+    )
 
-    # Save pointmaps and confidence maps
+    # Save pointmaps and confidence maps (one file per keyframe)
     paths.pointmaps_npz.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        paths.pointmaps_npz,
-        pointmaps=rec_result["pointmaps"],
-        confmaps=rec_result["confmaps"],
-        keyframe_ids=np.array([int(rec["frame_id"]) for rec in keyframe_records]),
+    write_pointmaps(
+        paths,
+        [int(rec["frame_id"]) for rec in keyframe_records],
+        rec_result["pointmaps"],
+        rec_result["confmaps"],
     )
 
     # Save global point cloud
@@ -396,7 +463,7 @@ run_dust3r = run_vggt
 
 
 def run_detect_and_lift(
-    dataset_id: str, raw_config: Mapping[str, Any]
+    dataset_id: str, raw_config: Mapping[str, Any], *, models: Any = None
 ) -> dict[str, Any]:
     """Run open-vocabulary object perception and lift 2D detections to 3D bounding boxes."""
 
@@ -404,20 +471,12 @@ def run_detect_and_lift(
     config = _config(raw_config)
     paths = dataset_paths(config, dataset_id)
     metadata = _require_metadata(paths)
-    if not paths.pointmaps_npz.exists():
-        raise FileNotFoundError(
-            f"pointmaps artifact is missing; run dust3r/vggt reconstruction first: {paths.pointmaps_npz}"
-        )
-
+    pointmap_reader = PointmapReader(paths)
     frames = metadata.get("frames", [])
-    data = np.load(paths.pointmaps_npz)
-    pointmaps = data["pointmaps"]
-    confmaps = data["confmaps"]
-    keyframe_ids = data["keyframe_ids"].tolist()
+    keyframe_ids = pointmap_reader.keyframe_ids
 
     keyframe_id_set = set(keyframe_ids)
     keyframe_records = [f for f in frames if int(f["frame_id"]) in keyframe_id_set]
-    keyframe_index_map = {int(kid): idx for idx, kid in enumerate(keyframe_ids)}
 
     gpu_device = "CPU"
     try:
@@ -445,11 +504,10 @@ def run_detect_and_lift(
         sam2_config=config.sam2,
         weights_dir=weights_dir,
         vocabulary=config.vocab(),
+        models=models,
     )
 
-    frame_res = tuple(
-        metadata.get("resolution", (pointmaps[0].shape[1], pointmaps[0].shape[0]))
-    )
+    frame_res = tuple(metadata["resolution"])
     from aegis.geometry.gravity import GravityFrame
 
     gravity = (
@@ -463,26 +521,29 @@ def run_detect_and_lift(
     raw_lifted_boxes: list[BoundingBox3D] = []
     masks_generated = sum(1 for det in detections_2d if det.mask is not None)
 
+    by_frame: dict[int, list[Any]] = {}
     for det in detections_2d:
-        kf_idx = keyframe_index_map.get(det.frame_id)
-        if kf_idx is None:
-            continue
-        pm = pointmaps[kf_idx]
-        cm = confmaps[kf_idx]
-        box_3d = lift_detection_to_3d(
-            det,
-            pm,
-            mask=det.mask,
-            confmap=cm,
-            min_conf_thr=0.01,
-            min_points=config.perception.min_points_in_box,
-            frame_size=(int(frame_res[0]), int(frame_res[1])),
-            gravity=gravity,
-            vocabulary=vocabulary,
-            unit=unit,
-        )
-        if box_3d is not None:
-            raw_lifted_boxes.append(box_3d)
+        if det.frame_id in pointmap_reader:
+            by_frame.setdefault(int(det.frame_id), []).append(det)
+    # One pointmap in memory at a time.
+    for frame_id, frame_detections in sorted(by_frame.items()):
+        pm, cm = pointmap_reader.get(frame_id)
+        for det in frame_detections:
+            box_3d = lift_detection_to_3d(
+                det,
+                pm,
+                mask=det.mask,
+                confmap=cm,
+                min_conf_thr=0.01,
+                min_points=config.perception.min_points_in_box,
+                frame_size=(int(frame_res[0]), int(frame_res[1])),
+                gravity=gravity,
+                vocabulary=vocabulary,
+                unit=unit,
+            )
+            if box_3d is not None:
+                raw_lifted_boxes.append(box_3d)
+        del pm, cm
 
     # Layer 2: Evaluate 3D spatial containment and dynamic motion states
     lifted_boxes = evaluate_spatial_containment_and_states(
@@ -601,6 +662,13 @@ def run_detect_and_lift(
             "total_boxes_3d": len(lifted_boxes),
         },
     )
+
+    # Pointmaps are transient (~4 MB per keyframe): drop them once lifted.
+    if not config.vggt.keep_pointmaps:
+        if paths.pointmaps_dir.exists():
+            shutil.rmtree(paths.pointmaps_dir)
+        paths.pointmaps_index.unlink(missing_ok=True)
+        paths.pointmaps_npz.unlink(missing_ok=True)
 
     elapsed = time.perf_counter() - t0
     peak_vram_gb = 0.0

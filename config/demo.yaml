@@ -58,9 +58,8 @@ pose:
 
 vggt:
   model_id: facebook/VGGT-Omega
-  image_size: 518
+  image_size: 512
   keyframe_stride: 6
-  batch_size: 1
   dtype: bfloat16
 
 sam2:

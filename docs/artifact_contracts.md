@@ -132,7 +132,7 @@ records `preprocess_source: "live_session"` in `benchmark_stats.json`.
 |---|---|---|
 | `outputs/geometry/poses.json` | 1 | `T_world_camera`; `source` is `VGGT-Omega` or `synthetic` (tests only). |
 | `outputs/geometry/gravity.json` | 1 | Up vector, floor offset, camera height, source (`floor_plane`, `camera_prior`, `assumed`) and confidence. Coordinates are never rotated; heights are derived. |
-| `outputs/geometry/pointmaps.npz` | array keys | `pointmaps`, `confmaps`, `keyframe_ids`. |
+| `outputs/geometry/pointmaps/<frame_id>.npz` + `pointmaps_index.json` | array keys | `points`, `conf` per keyframe; deleted after the detect stage unless `vggt.keep_pointmaps`. The legacy single `pointmaps.npz` is still read. |
 | `outputs/geometry/pointcloud.ply` | PLY | Raw VGGT-Ω world coordinates. |
 | `outputs/objects/detected_objects_3d.json` | 2 | 3D boxes fitted in the gravity frame: `size = (length, width, height)`, `rotation` = world-from-box with columns `[a, b, up]`, `up_min`/`up_max`/`support_up` elevations. |
 | `outputs/objects/r4d_scene_graph.json` | 2 | `session`, `gravity`, `anchors`, `rooms`, `state_runs`, `latest_states`, `events`, `room_visits`; carries `dataset_id`. No per-keyframe data, so its size does not grow with video length. Readers still accept schema 1 (`timeline`). |

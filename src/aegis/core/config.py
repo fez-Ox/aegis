@@ -212,10 +212,14 @@ class VggtConfig:
     """VGGT-Ω feed-forward 3D reconstruction settings."""
 
     model_id: str = "facebook/VGGT-Omega"
-    image_size: int = 518
+    # Every run so far used 512 with the vggt_omega_1b_512 checkpoint.
+    image_size: int = 512
     keyframe_stride: int = 6
-    batch_size: int = 1
     dtype: str = "bfloat16"
+    # Hard limit per reconstruction; long captures are split into segments.
+    max_keyframes: int = 120
+    # Keep per-keyframe pointmaps after the detect stage (debugging only).
+    keep_pointmaps: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,6 +320,8 @@ class LiveCaptureConfig:
     reconnect_timeout_seconds: float = 30.0
     buffer_capacity: int = 30
     checkpoint_every: int = 1
+    # Frames per promoted segment (0 = one dataset for the whole capture).
+    segment_frames: int = 120
     keyframe: KeyframeConfig = field(default_factory=KeyframeConfig)
 
     def __post_init__(self) -> None:
@@ -331,6 +337,8 @@ class LiveCaptureConfig:
             raise ValueError("live.buffer_capacity must be positive")
         if self.checkpoint_every <= 0:
             raise ValueError("live.checkpoint_every must be positive")
+        if self.segment_frames < 0:
+            raise ValueError("live.segment_frames must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -653,11 +661,18 @@ class RuntimeConfig:
             keyframe_stride=int(
                 vggt_raw.get("keyframe_stride", vggt_defaults.keyframe_stride)
             ),
-            batch_size=int(vggt_raw.get("batch_size", vggt_defaults.batch_size)),
             dtype=str(vggt_raw.get("dtype", vggt_defaults.dtype)),
+            max_keyframes=int(
+                vggt_raw.get("max_keyframes", vggt_defaults.max_keyframes)
+            ),
+            keep_pointmaps=bool(
+                vggt_raw.get("keep_pointmaps", vggt_defaults.keep_pointmaps)
+            ),
         )
-        if vggt.keyframe_stride <= 0 or vggt.image_size <= 0:
-            raise ValueError("vggt settings must be positive")
+        if vggt.keyframe_stride <= 0 or vggt.image_size <= 0 or vggt.max_keyframes < 2:
+            raise ValueError("vggt settings must be positive (max_keyframes >= 2)")
+        if vggt.dtype not in {"bfloat16", "float16", "float32"}:
+            raise ValueError("vggt.dtype must be 'bfloat16', 'float16' or 'float32'")
 
         sam2 = Sam2Config(
             model_id=str(sam2_raw.get("model_id", sam2_defaults.model_id)),
@@ -884,6 +899,9 @@ class RuntimeConfig:
             ),
             checkpoint_every=int(
                 live_raw.get("checkpoint_every", live_defaults.checkpoint_every)
+            ),
+            segment_frames=int(
+                live_raw.get("segment_frames", live_defaults.segment_frames)
             ),
             keyframe=keyframe,
         )

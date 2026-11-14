@@ -242,6 +242,62 @@ def _update_track(
     state.last_index = frame_index
 
 
+@dataclass
+class DetectorModels:
+    """Loaded detector (YOLOE / YOLO-World) and optional SAM 2 predictor."""
+
+    detector: Any
+    sam2: Any = None
+
+
+def load_models(
+    config: PerceptionConfig,
+    *,
+    sam2_config: Sam2Config | None = None,
+    weights_dir: Path | None = None,
+) -> DetectorModels:
+    """Load the models once; a warm Modal container reuses them."""
+
+    import os
+    import shutil
+
+    from ultralytics import YOLO, YOLOWorld
+
+    # YOLOE-seg is promptable and emits masks directly; YOLO-World remains
+    # available for compatibility.
+    model_class = YOLO if config.detector_backend == "yoloe" else YOLOWorld
+    if weights_dir is not None:
+        weights_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["YOLO_CONFIG_DIR"] = str(weights_dir)
+        model_path = weights_dir / config.detector_model
+        if model_path.exists():
+            model = model_class(str(model_path))
+        else:
+            model = model_class(config.detector_model)
+            local_download = Path(config.detector_model)
+            if local_download.exists() and not model_path.exists():
+                shutil.copy2(local_download, model_path)
+    else:
+        model = model_class(config.detector_model)
+
+    sam2_predictor = None
+    if sam2_config is not None:
+        try:
+            import torch
+            from sam2.sam2_image_predictor import (  # type: ignore[import-not-found]
+                SAM2ImagePredictor,
+            )
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            sam2_predictor = SAM2ImagePredictor.from_pretrained(
+                sam2_config.model_id, device=device
+            )
+        except (ImportError, RuntimeError, ValueError, OSError, AttributeError) as err:
+            print(f"[detector] Warning: Could not initialize SAM2ImagePredictor: {err}")
+            sam2_predictor = None
+    return DetectorModels(detector=model, sam2=sam2_predictor)
+
+
 def detect_and_track_objects(
     frame_records: Sequence[dict[str, Any]],
     frames_dir: Path,
@@ -250,6 +306,7 @@ def detect_and_track_objects(
     sam2_config: Sam2Config | None = None,
     weights_dir: Path | None = None,
     vocabulary: Vocabulary | None = None,
+    models: DetectorModels | None = None,
 ) -> list[Detection2D]:
     """Run open-vocabulary object detection and assign consistent track IDs.
 
@@ -274,50 +331,15 @@ def detect_and_track_objects(
     list[Detection2D]
         List of all detected 2D bounding boxes across keyframes with optional segmentation masks.
     """
-    import os
-    import shutil
-
     import cv2
-    from ultralytics import YOLO, YOLOWorld
 
     vocab = vocabulary or default_vocabulary()
-
-    # YOLOE-seg is promptable and emits masks directly.  This avoids relying on
-    # a weak detector box before SAM2 is asked to segment the object.  The
-    # legacy YOLO-World path remains available for compatibility.
-    model_class = YOLO if config.detector_backend == "yoloe" else YOLOWorld
-    if weights_dir is not None:
-        weights_dir.mkdir(parents=True, exist_ok=True)
-        os.environ["YOLO_CONFIG_DIR"] = str(weights_dir)
-        model_path = weights_dir / config.detector_model
-        if model_path.exists():
-            model = model_class(str(model_path))
-        else:
-            model = model_class(config.detector_model)
-            local_download = Path(config.detector_model)
-            if local_download.exists() and not model_path.exists():
-                shutil.copy2(local_download, model_path)
-    else:
-        model = model_class(config.detector_model)
-
+    if models is None:
+        models = load_models(config, sam2_config=sam2_config, weights_dir=weights_dir)
+    model = models.detector
+    sam2_predictor = models.sam2
+    # Prompts can differ per call (task-scoped configs); setting them is cheap.
     model.set_classes(list(config.target_classes))
-
-    # Initialize SAM 2 predictor if requested
-    sam2_predictor = None
-    if sam2_config is not None:
-        try:
-            import torch
-            from sam2.sam2_image_predictor import (  # type: ignore[import-not-found]
-                SAM2ImagePredictor,
-            )
-
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            sam2_predictor = SAM2ImagePredictor.from_pretrained(
-                sam2_config.model_id, device=device
-            )
-        except (ImportError, RuntimeError, ValueError, OSError, AttributeError) as err:
-            print(f"[detector] Warning: Could not initialize SAM2ImagePredictor: {err}")
-            sam2_predictor = None
 
     all_detections: list[Detection2D] = []
     active_tracks: dict[int, _TrackState] = {}

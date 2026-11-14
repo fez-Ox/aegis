@@ -1,10 +1,11 @@
 """Promote a live capture session into canonical dataset artifacts (M1.1).
 
-The batch pipeline expects ``frames/frame_XXXXXX.png`` plus ``metadata.json``.
-A live session stores JPEGs, an index, and capture timestamps. Promotion is the
-explicit boundary between those two contracts: frames are re-encoded as PNGs,
-capture timestamps are normalised to start at zero while remaining authoritative,
-and the original session manifest is copied alongside the dataset.
+The pipeline reads ``frames/<filename>`` as listed in ``metadata.json``. A live
+session stores JPEGs, an index, and capture timestamps. Promotion is the
+explicit boundary between those two contracts: frames stay JPEG (copied byte
+for byte when no resize is needed), capture timestamps are normalised to start
+at zero while remaining authoritative, and the session manifest is copied
+alongside the dataset. Long captures can be promoted as several segments.
 """
 
 from __future__ import annotations
@@ -28,7 +29,8 @@ from aegis.ingestion.contracts import (
     write_json_atomic,
 )
 
-_FRAME_GLOB = "frame_*.png"
+_FRAME_GLOBS = ("frame_*.png", "frame_*.jpg")
+JPEG_QUALITY = 90
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +45,8 @@ class PromotionResult:
     gap_count: int
     pause_count: int
     resolution: tuple[int, int]
+    first_sequence: int = 0
+    last_sequence: int = 0
 
 
 def _timestamp(value: str) -> datetime:
@@ -75,31 +79,7 @@ def _intrinsics(camera: CameraConfig | None, resolution: tuple[int, int]) -> Any
     return values
 
 
-def promote_live_session(
-    session_dir: str | Path,
-    *,
-    dataset_id: str,
-    data_root: str | Path = Path("data"),
-    video: VideoConfig | None = None,
-    camera: CameraConfig | None = None,
-) -> PromotionResult:
-    """Convert ``captures/<session>`` into ``data/<dataset_id>``.
-
-    The destination must not already contain a batch video; promoting over one
-    would silently mix two sources. Live-derived frame and metadata files are
-    replaced atomically enough for a re-run (stale PNGs are removed first).
-    """
-
-    import cv2
-
-    session_path = Path(session_dir)
-    if not session_path.is_dir():
-        raise FileNotFoundError(
-            f"live session directory does not exist: {session_path}"
-        )
-    safe_id = validate_dataset_id(dataset_id)
-    manifest = load_session_manifest(session_path)
-
+def _read_frame_records(session_path: Path) -> list[dict[str, Any]]:
     index_path = session_path / "index.jsonl"
     if not index_path.exists():
         raise ContractError(f"live session index is missing: {index_path}")
@@ -108,13 +88,43 @@ def promote_live_session(
         for record in read_live_index(index_path)
         if record.get("record_type", RECORD_TYPE_FRAME) == RECORD_TYPE_FRAME
     ]
-    if not records:
-        raise ContractError(f"live session contains no frame records: {session_path}")
-
     records.sort(key=lambda record: int(record["sequence"]))
     sequences = [int(record["sequence"]) for record in records]
     if len(set(sequences)) != len(sequences):
         raise ContractError("live session contains duplicate frame sequences")
+    return records
+
+
+def _within(records: list[dict[str, Any]], items: list[Any], key: str) -> list[Any]:
+    """Gap/pause records whose start lies inside the frames' capture span."""
+
+    first = _timestamp(str(records[0]["capture_timestamp"]))
+    last = _timestamp(str(records[-1]["capture_timestamp"]))
+    kept = []
+    for item in items:
+        try:
+            moment = _timestamp(str(item[key]))
+        except (KeyError, TypeError, ValueError, ContractError):
+            continue
+        if first <= moment <= last:
+            kept.append(item)
+    return kept
+
+
+def _materialise(
+    session_path: Path,
+    manifest: dict[str, Any],
+    records: list[dict[str, Any]],
+    *,
+    safe_id: str,
+    data_root: Path,
+    video: VideoConfig | None,
+    camera: CameraConfig | None,
+    segment: dict[str, Any] | None = None,
+) -> PromotionResult:
+    """Write ``data/<safe_id>`` from the given frame records."""
+
+    import cv2
 
     dataset_dir = Path(data_root) / safe_id
     if (dataset_dir / "video.mp4").exists():
@@ -123,8 +133,9 @@ def promote_live_session(
         )
     frames_dir = dataset_dir / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
-    for stale in frames_dir.glob(_FRAME_GLOB):
-        stale.unlink()
+    for pattern in _FRAME_GLOBS:
+        for stale in frames_dir.glob(pattern):
+            stale.unlink()
 
     first_image = cv2.imread(str(session_path / str(records[0]["frame_path"])))
     if first_image is None:
@@ -144,15 +155,24 @@ def promote_live_session(
 
     for frame_id, record in enumerate(records):
         relative = Path(str(record["frame_path"]))
-        image = cv2.imread(str(session_path / relative))
-        if image is None:
-            raise ContractError(f"could not decode live frame: {relative}")
-        height, width = image.shape[:2]
-        image = _resize(image, video, (width, height))
-        filename = f"frame_{frame_id:06d}.png"
+        source = session_path / relative
+        filename = f"frame_{frame_id:06d}.jpg"
         output_path = frames_dir / filename
-        if not cv2.imwrite(str(output_path), image):
-            raise OSError(f"could not write promoted frame: {output_path}")
+        same_size = video is None or (source_width, source_height) == target_resolution
+        if same_size and source.suffix.lower() in {".jpg", ".jpeg"}:
+            # The capture is already JPEG at the target size: copy the bytes,
+            # never decode and re-encode (C12).
+            shutil.copyfile(source, output_path)
+        else:
+            image = cv2.imread(str(source))
+            if image is None:
+                raise ContractError(f"could not decode live frame: {relative}")
+            height, width = image.shape[:2]
+            image = _resize(image, video, (width, height))
+            if not cv2.imwrite(
+                str(output_path), image, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
+            ):
+                raise OSError(f"could not write promoted frame: {output_path}")
         output_bytes += output_path.stat().st_size
 
         captured = _timestamp(str(record["capture_timestamp"]))
@@ -188,6 +208,9 @@ def promote_live_session(
     timestamp_sources = sorted({str(record["timestamp_source"]) for record in records})
     gaps = list(manifest.get("gaps", []))
     pauses = list(manifest.get("pauses", []))
+    if segment is not None:
+        gaps = _within(records, gaps, "gap_start")
+        pauses = _within(records, pauses, "started_at")
     intrinsics = _intrinsics(camera, target_resolution)
 
     metadata: dict[str, Any] = {
@@ -224,6 +247,8 @@ def promote_live_session(
         "pause_count": len(pauses),
         "keyframe_selection": manifest.get("keyframe_selection", {"enabled": False}),
     }
+    if segment is not None:
+        metadata["segment"] = segment
     validate_normalized_metadata(metadata)
 
     source_metadata = {
@@ -264,7 +289,146 @@ def promote_live_session(
         gap_count=len(gaps),
         pause_count=len(pauses),
         resolution=(int(target_resolution[0]), int(target_resolution[1])),
+        first_sequence=int(records[0]["sequence"]),
+        last_sequence=int(records[-1]["sequence"]),
     )
+
+
+def promote_live_session(
+    session_dir: str | Path,
+    *,
+    dataset_id: str,
+    data_root: str | Path = Path("data"),
+    video: VideoConfig | None = None,
+    camera: CameraConfig | None = None,
+) -> PromotionResult:
+    """Convert ``captures/<session>`` into one dataset ``data/<dataset_id>``.
+
+    The destination must not already contain a batch video; promoting over one
+    would silently mix two sources. Frames that are already JPEG at the target
+    size are copied byte for byte; others are resized and written as JPEG.
+    """
+
+    session_path = Path(session_dir)
+    if not session_path.is_dir():
+        raise FileNotFoundError(
+            f"live session directory does not exist: {session_path}"
+        )
+    safe_id = validate_dataset_id(dataset_id)
+    manifest = load_session_manifest(session_path)
+    records = _read_frame_records(session_path)
+    if not records:
+        raise ContractError(f"live session contains no frame records: {session_path}")
+    return _materialise(
+        session_path,
+        manifest,
+        records,
+        safe_id=safe_id,
+        data_root=Path(data_root),
+        video=video,
+        camera=camera,
+    )
+
+
+def plan_segments(
+    records: list[dict[str, Any]],
+    *,
+    segment_frames: int,
+    max_gap_seconds: float = 30.0,
+    min_tail: int = 8,
+) -> list[list[dict[str, Any]]]:
+    """Cut frame records into consecutive segments.
+
+    A new segment starts after ``segment_frames`` frames or after a capture
+    gap longer than ``max_gap_seconds``. A final chunk shorter than
+    ``min_tail`` joins the previous segment when no gap separates them.
+    """
+
+    if segment_frames <= 0:
+        return [records] if records else []
+    segments: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    previous_time = None
+    for record in records:
+        moment = _timestamp(str(record["capture_timestamp"]))
+        long_gap = (
+            previous_time is not None
+            and (moment - previous_time).total_seconds() > max_gap_seconds
+        )
+        if current and (len(current) >= segment_frames or long_gap):
+            segments.append(current)
+            current = []
+        current.append(record)
+        previous_time = moment
+    if current and segments and len(current) < min_tail:
+        gap = (
+            _timestamp(str(current[0]["capture_timestamp"]))
+            - _timestamp(str(segments[-1][-1]["capture_timestamp"]))
+        ).total_seconds()
+        if gap <= max_gap_seconds:
+            segments[-1].extend(current)
+            current = []
+    if current:
+        segments.append(current)
+    return segments
+
+
+def promote_live_segments(
+    session_dir: str | Path,
+    *,
+    base_dataset_id: str,
+    segment_frames: int,
+    data_root: str | Path = Path("data"),
+    video: VideoConfig | None = None,
+    camera: CameraConfig | None = None,
+    start_sequence: int = 0,
+    first_index: int = 1,
+    include_tail: bool = True,
+) -> list[PromotionResult]:
+    """Promote a capture as several datasets ``<base>_seg0001``, ...
+
+    Only frames with ``sequence >= start_sequence`` are used, which makes
+    promotion incremental while a capture is still running. With
+    ``include_tail=False`` an incomplete final segment is left for later.
+    """
+
+    session_path = Path(session_dir)
+    validate_dataset_id(base_dataset_id)
+    manifest = load_session_manifest(session_path)
+    records = [
+        r
+        for r in _read_frame_records(session_path)
+        if int(r["sequence"]) >= start_sequence
+    ]
+    # While a capture is still running the tail keeps growing, so it is
+    # neither merged into the previous segment nor promoted yet.
+    segments = plan_segments(
+        records, segment_frames=segment_frames, min_tail=8 if include_tail else 0
+    )
+    if not include_tail and segments and len(segments[-1]) < segment_frames:
+        segments = segments[:-1]
+    results = []
+    for offset, chunk in enumerate(segments):
+        index = first_index + offset
+        safe_id = validate_dataset_id(f"{base_dataset_id}_seg{index:04d}")
+        results.append(
+            _materialise(
+                session_path,
+                manifest,
+                chunk,
+                safe_id=safe_id,
+                data_root=Path(data_root),
+                video=video,
+                camera=camera,
+                segment={
+                    "index": index,
+                    "base_dataset_id": base_dataset_id,
+                    "first_sequence": int(chunk[0]["sequence"]),
+                    "last_sequence": int(chunk[-1]["sequence"]),
+                },
+            )
+        )
+    return results
 
 
 def find_latest_live_session(

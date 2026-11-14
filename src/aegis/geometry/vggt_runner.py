@@ -15,6 +15,30 @@ import numpy as np
 
 from aegis.core.config import VggtConfig
 
+CHECKPOINT_FILENAME = "vggt_omega_1b_512.pt"
+
+
+def load_model(config: VggtConfig, *, hf_token: str | None = None) -> Any:
+    """Load VGGT-Ω once (a warm Modal container reuses it across calls)."""
+
+    import torch
+    from huggingface_hub import hf_hub_download
+    from vggt_omega.models import VGGTOmega
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    ckpt_path = hf_hub_download(
+        repo_id=config.model_id,
+        filename=CHECKPOINT_FILENAME,
+        token=hf_token,
+        cache_dir=os.environ.get("HF_HOME"),
+    )
+    model = VGGTOmega().to(device).eval()
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    if "model" in ckpt:
+        ckpt = ckpt["model"]
+    model.load_state_dict(ckpt)
+    return model
+
 
 def run_vggt_reconstruction(
     image_paths: Sequence[Path],
@@ -23,6 +47,7 @@ def run_vggt_reconstruction(
     hf_token: str | None = None,
     actor_boxes_by_image: Sequence[list[tuple[float, float, float, float]]]
     | None = None,
+    model: Any = None,
 ) -> dict[str, Any]:
     """Execute VGGT-Ω feed-forward multi-view reconstruction and point cloud fusion.
 
@@ -68,17 +93,11 @@ def run_vggt_reconstruction(
         torch = None
         device = "cpu"
 
-    # Load and preprocess input keyframe images
-    loaded_images: list[np.ndarray] = []
     for p in image_paths:
-        img = cv2.imread(str(p), cv2.IMREAD_COLOR)
-        if img is None:
+        if not Path(p).is_file():
             raise FileNotFoundError(f"Keyframe image not found: {p}")
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, (config.image_size, config.image_size))
-        loaded_images.append(img_resized)
-
-    n_images = len(loaded_images)
+    loaded_images: list[np.ndarray] = []
+    n_images = len(image_paths)
     h = w = config.image_size
 
     synthetic = False
@@ -91,33 +110,27 @@ def run_vggt_reconstruction(
     try:
         if torch is None:
             raise ImportError("torch is not installed")
-        from huggingface_hub import hf_hub_download
-        from vggt_omega.models import VGGTOmega
         from vggt_omega.utils.load_fn import load_and_preprocess_images
         from vggt_omega.utils.pose_enc import encoding_to_camera
 
-        hf_cache_dir = os.environ.get("HF_HOME")
-        ckpt_path = hf_hub_download(
-            repo_id=config.model_id,
-            filename="vggt_omega_1b_512.pt",
-            token=token,
-            cache_dir=hf_cache_dir,
-        )
-
-        model = VGGTOmega().to(device).eval()
-        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-        if "model" in ckpt:
-            ckpt = ckpt["model"]
-        model.load_state_dict(ckpt)
+        if model is None:
+            model = load_model(config, hf_token=token)
 
         images = load_and_preprocess_images(
             [str(p) for p in image_paths],
             mode="balanced",
-            image_resolution=512,
+            image_resolution=config.image_size,
         ).to(device)
 
+        autocast_dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16}.get(
+            config.dtype
+        )
         with torch.inference_mode():
-            predictions = model(images)
+            if device == "cuda" and autocast_dtype is not None:
+                with torch.autocast("cuda", dtype=autocast_dtype):
+                    predictions = model(images)
+            else:
+                predictions = model(images)
 
         extrinsic_t, intrinsic_t = encoding_to_camera(
             predictions["pose_enc"],
@@ -214,6 +227,12 @@ def run_vggt_reconstruction(
             e,
         )
         synthetic = True
+        for p in image_paths:
+            img = cv2.imread(str(p), cv2.IMREAD_COLOR)
+            if img is None:
+                raise FileNotFoundError(f"Keyframe image not readable: {p}") from e
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            loaded_images.append(cv2.resize(img_rgb, (w, h)))
         poses = np.zeros((n_images, 4, 4), dtype=np.float64)
         for i in range(n_images):
             poses[i] = np.eye(4, dtype=np.float64)
