@@ -408,6 +408,16 @@ def run_detect_and_lift(
     frame_res = tuple(
         metadata.get("resolution", (pointmaps[0].shape[1], pointmaps[0].shape[0]))
     )
+    from aegis.geometry.gravity import GravityFrame
+
+    gravity = (
+        GravityFrame.from_dict(_read_json(paths.gravity))
+        if paths.gravity.exists()
+        else GravityFrame.assumed()
+    )
+    gravity_cfg = config.memory.gravity
+    unit = gravity.unit(gravity_cfg.assumed_camera_height, gravity_cfg.min_confidence)
+    vocabulary = config.vocab()
     raw_lifted_boxes: list[BoundingBox3D] = []
     masks_generated = sum(1 for det in detections_2d if det.mask is not None)
 
@@ -425,6 +435,9 @@ def run_detect_and_lift(
             min_conf_thr=0.01,
             min_points=config.perception.min_points_in_box,
             frame_size=(int(frame_res[0]), int(frame_res[1])),
+            gravity=gravity,
+            vocabulary=vocabulary,
+            unit=unit,
         )
         if box_3d is not None:
             raw_lifted_boxes.append(box_3d)
@@ -433,6 +446,9 @@ def run_detect_and_lift(
     lifted_boxes = evaluate_spatial_containment_and_states(
         raw_lifted_boxes,
         smoothing_alpha=config.perception.track_smoothing,
+        vocabulary=vocabulary,
+        unit=unit,
+        hand_distance=config.perception.hand_contact_max_distance,
     )
     motion_trails = compute_motion_trails(lifted_boxes)
 
@@ -462,8 +478,9 @@ def run_detect_and_lift(
     _write_json(
         paths.objects_json,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "dataset_id": dataset_id,
+            "gravity": gravity.as_dict(),
             "total_detections_2d": len(detections_2d),
             "total_boxes_3d": len(lifted_boxes),
             "boxes_3d": serialize_boxes_3d(lifted_boxes),

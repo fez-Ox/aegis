@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
 
 from aegis.core.models import BoundingBox3D, Detection2D
+from aegis.core.vocabulary import Vocabulary, default_vocabulary
+from aegis.geometry.gravity import GravityFrame
+from aegis.geometry.transforms import quaternion_from_matrix
 
 
 def _resize_mask(mask: np.ndarray, target_h: int, target_w: int) -> np.ndarray:
@@ -37,11 +41,15 @@ def lift_detection_to_3d(
     lower_quantile: float = 0.05,
     upper_quantile: float = 0.95,
     frame_size: tuple[int, int] | None = None,
+    gravity: GravityFrame | None = None,
+    vocabulary: Vocabulary | None = None,
+    unit: float = 1.0,
 ) -> BoundingBox3D | None:
     """Lift a 2D object detection to a 3D bounding box using dense pointmaps and optional instance masks.
 
     Supports mask-guided lifting to eliminate background/floor contamination, followed by
-    Z-aligned Oriented Bounding Box (OBB) fitting via 2D principal component analysis.
+    a gravity-aligned oriented box fit (height along the session's up vector, yaw from
+    the principal direction of the points in the floor plane).
 
     Parameters
     ----------
@@ -64,6 +72,12 @@ def lift_detection_to_3d(
     frame_size : tuple[int, int] | None, optional
         The (width, height) of the original frame that the 2D bounding box was detected on.
         If provided and different from pointmap (W, H), the box is scaled accordingly.
+    gravity : GravityFrame | None, optional
+        Session gravity frame; None uses the legacy assumption (up = -Y).
+    vocabulary : Vocabulary | None, optional
+        Label vocabulary (plausible sizes, support surfaces). Remote workers must pass it.
+    unit : float, optional
+        Scale unit from :meth:`GravityFrame.unit`; multiplies absolute thresholds.
 
     Returns
     -------
@@ -131,111 +145,118 @@ def lift_detection_to_3d(
     med = np.median(pts, axis=0)
     dists = np.linalg.norm(pts - med, axis=1)
     dist_thr = np.quantile(dists, 0.90)
-    inlier_mask = dists <= max(float(dist_thr * 1.5), 0.08)
+    inlier_mask = dists <= max(float(dist_thr * 1.5), 0.08 * unit)
     inlier_pts = pts[inlier_mask]
     if len(inlier_pts) < 3:
         inlier_pts = pts
 
-    # Fit Z-aligned Oriented Bounding Box (OBB) using 2D covariance in horizontal plane
+    return _fit_gravity_obb(
+        detection,
+        inlier_pts,
+        gravity=gravity or GravityFrame.assumed(),
+        vocabulary=vocabulary or default_vocabulary(),
+        lower_quantile=lower_quantile,
+        upper_quantile=upper_quantile,
+        unit=unit,
+    )
+
+
+def _fit_gravity_obb(
+    detection: Detection2D,
+    points: np.ndarray,
+    *,
+    gravity: GravityFrame,
+    vocabulary: Vocabulary,
+    lower_quantile: float,
+    upper_quantile: float,
+    unit: float,
+) -> BoundingBox3D | None:
+    """Fit a box whose height axis is the gravity up vector.
+
+    Yaw is the principal direction of the points projected onto the floor
+    plane. Extents are robust quantiles along ``(a, b, up)``; the centre is
+    the middle of those extents. Returns None when the box is larger than
+    the vocabulary's plausible size for this label.
+    """
+
+    e1, e2, up = gravity.basis()
+    h1 = points @ e1
+    h2 = points @ e2
+    vertical = points @ up
+
     yaw = 0.0
-    rot_quat: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
-    try:
-        xy = inlier_pts[:, :2]
-        if len(xy) >= 5:
-            cov = np.cov(xy, rowvar=False)
-            if np.isfinite(cov).all():
-                _evals, evecs = np.linalg.eigh(cov)
-                v = evecs[:, -1]
-                yaw = float(np.arctan2(v[1], v[0]))
-                rot_quat = (
-                    0.0,
-                    0.0,
-                    float(np.sin(yaw / 2.0)),
-                    float(np.cos(yaw / 2.0)),
-                )
+    if len(points) >= 5:
+        cov = np.cov(np.vstack([h1, h2]))
+        if np.isfinite(cov).all():
+            _evals, evecs = np.linalg.eigh(cov)
+            vx, vy = float(evecs[0, -1]), float(evecs[1, -1])
+            if vx < 0 or (vx == 0 and vy < 0):
+                vx, vy = -vx, -vy
+            yaw = float(np.arctan2(vy, vx))
 
-        cos_y, sin_y = np.cos(-yaw), np.sin(-yaw)
-        x_rot = inlier_pts[:, 0] * cos_y - inlier_pts[:, 1] * sin_y
-        y_rot = inlier_pts[:, 0] * sin_y + inlier_pts[:, 1] * cos_y
-        z_pts = inlier_pts[:, 2]
+    cos_y, sin_y = float(np.cos(yaw)), float(np.sin(yaw))
+    along_a = h1 * cos_y + h2 * sin_y
+    along_b = -h1 * sin_y + h2 * cos_y
+    min_extent = 0.05 * unit
 
-        q_min_x, q_max_x = (
-            np.quantile(x_rot, lower_quantile),
-            np.quantile(x_rot, upper_quantile),
-        )
-        q_min_y, q_max_y = (
-            np.quantile(y_rot, lower_quantile),
-            np.quantile(y_rot, upper_quantile),
-        )
-        q_min_z, q_max_z = (
-            np.quantile(z_pts, lower_quantile),
-            np.quantile(z_pts, upper_quantile),
-        )
+    def _span(values: np.ndarray) -> tuple[float, float, float]:
+        low = float(np.quantile(values, lower_quantile))
+        high = float(np.quantile(values, upper_quantile))
+        return low, high, max(high - low, min_extent)
 
-        cx_rot = float(np.median(x_rot))
-        cy_rot = float(np.median(y_rot))
-        cz = float(np.median(z_pts))
+    low_a, high_a, length = _span(along_a)
+    low_b, high_b, width = _span(along_b)
+    low_v, high_v, height = _span(vertical)
 
-        cos_pos, sin_pos = np.cos(yaw), np.sin(yaw)
-        cx = cx_rot * cos_pos - cy_rot * sin_pos
-        cy = cx_rot * sin_pos + cy_rot * cos_pos
-
-        extent = (
-            max(float(q_max_x - q_min_x), 0.05),
-            max(float(q_max_y - q_min_y), 0.05),
-            max(float(q_max_z - q_min_z), 0.05),
-        )
-        center = (cx, cy, cz)
-    except (RuntimeError, ValueError, IndexError, TypeError):
-        q_min = np.quantile(inlier_pts, lower_quantile, axis=0)
-        q_max = np.quantile(inlier_pts, upper_quantile, axis=0)
-        c = np.median(inlier_pts, axis=0)
-        center = (float(c[0]), float(c[1]), float(c[2]))
-        extent_arr = np.maximum(q_max - q_min, 0.05)
-        extent = (float(extent_arr[0]), float(extent_arr[1]), float(extent_arr[2]))
-
-    # Filter out unphysical 3D boxes (e.g. spurious floor or background patches)
-    lbl = detection.label.lower()
-    max_dim = max(extent)
-    volume = extent[0] * extent[1] * extent[2]
-    compact_classes = (
-        "shoe",
-        "pot",
-        "bowl",
-        "basket",
-        "container",
-        "cup",
-        "bottle",
-        "plate",
+    a_axis = cos_y * e1 + sin_y * e2
+    b_axis = -sin_y * e1 + cos_y * e2
+    center_vec = (
+        0.5 * (low_a + high_a) * a_axis
+        + 0.5 * (low_b + high_b) * b_axis
+        + 0.5 * (low_v + high_v) * up
     )
-    if any(k in lbl for k in compact_classes) and (max_dim > 0.85 or volume > 0.25):
-        return None
-    anchor_classes = (
-        "counter",
-        "refrigerator",
-        "fridge",
-        "sink",
-        "cabinet",
-        "shelf",
-        "table",
-    )
-    if any(k in lbl for k in anchor_classes) and (max_dim > 4.5 or volume > 15.0):
+    rotation = quaternion_from_matrix(np.column_stack([a_axis, b_axis, up]))
+
+    entry = vocabulary.entry(detection.label)
+    support_up: float | None = None
+    if entry.support_surface and len(points) >= 50 and high_v > low_v:
+        upper = vertical[(vertical >= 0.5 * (low_v + high_v)) & (vertical <= high_v)]
+        if len(upper) > 0:
+            bin_width = max(0.05 * (high_v - low_v), 1e-6)
+            edges = np.arange(
+                float(upper.min()), float(upper.max()) + bin_width, bin_width
+            )
+            if len(edges) < 2:
+                support_up = float(np.median(upper))
+            else:
+                counts, edges = np.histogram(upper, bins=edges)
+                best = int(np.argmax(counts))
+                in_bin = upper[(upper >= edges[best]) & (upper <= edges[best + 1])]
+                support_up = float(np.median(in_bin)) if len(in_bin) else None
+
+    size = (float(length), float(width), float(height))
+    if entry.max_extent is not None and max(size) > entry.max_extent * unit:
         return None
 
+    x1, y1, x2, y2 = detection.bbox
     return BoundingBox3D(
         frame_id=detection.frame_id,
         timestamp=detection.timestamp,
         track_id=detection.track_id,
         label=detection.label,
         confidence=detection.confidence,
-        center=center,
-        size=extent,
+        center=(float(center_vec[0]), float(center_vec[1]), float(center_vec[2])),
+        size=size,
         bbox_2d=(float(x1), float(y1), float(x2), float(y2)),
-        rotation=rot_quat,
+        rotation=rotation,
         yaw=yaw,
         is_hand=detection.is_hand,
         appearance=detection.appearance,
         held_by_hand_track_id=detection.contact_target_track_id,
+        up_min=low_v,
+        up_max=high_v,
+        support_up=support_up,
+        point_count=len(points),
     )
 
 
@@ -253,205 +274,130 @@ def compute_motion_trails(
     return trails
 
 
-CONTAINER_LABELS = {
-    "cabinet",
-    "storage cabinet",
-    "shelf",
-    "cupboard",
-    "box",
-    "drawer",
-    "table",
-    "desk",
-    "counter",
-    "kitchen counter",
-    "refrigerator",
-    "fridge",
-    "podium",
-    "lectern",
-    "rostrum",
-}
-
-
-def _is_container_label(label: str) -> bool:
-    normalized = " ".join(label.lower().split())
-    return any(
-        token == normalized or token in normalized.split() for token in CONTAINER_LABELS
-    )
-
-
-def _smooth_track_boxes(
+def _smoothed_centers(
     boxes_3d: Sequence[BoundingBox3D],
     smoothing_alpha: float,
-) -> list[BoundingBox3D]:
-    """Apply a light per-track EMA without inventing observations during gaps."""
+) -> dict[int, np.ndarray]:
+    """Per-track EMA of box centres, keyed by input index.
+
+    Used only to estimate velocities; the returned boxes keep their raw
+    geometry (sizes are never smoothed because the a/b axes can swap).
+    """
 
     by_track: dict[int, list[tuple[int, BoundingBox3D]]] = {}
     for index, box in enumerate(boxes_3d):
         by_track.setdefault(box.track_id, []).append((index, box))
 
-    smoothed: list[BoundingBox3D | None] = [None] * len(boxes_3d)
+    smoothed: dict[int, np.ndarray] = {}
     for track_boxes in by_track.values():
-        previous_center: np.ndarray | None = None
-        previous_size: np.ndarray | None = None
+        previous: np.ndarray | None = None
         for index, box in sorted(track_boxes, key=lambda item: item[1].frame_id):
             center = np.asarray(box.center, dtype=np.float64)
-            size = np.asarray(box.size, dtype=np.float64)
-            if previous_center is not None and previous_size is not None:
-                center = (
-                    smoothing_alpha * previous_center + (1.0 - smoothing_alpha) * center
-                )
-                size = smoothing_alpha * previous_size + (1.0 - smoothing_alpha) * size
-            previous_center = center
-            previous_size = size
-            smoothed[index] = BoundingBox3D(
-                frame_id=box.frame_id,
-                timestamp=box.timestamp,
-                track_id=box.track_id,
-                label=box.label,
-                confidence=box.confidence,
-                center=tuple(float(value) for value in center),
-                size=tuple(float(value) for value in size),
-                bbox_2d=box.bbox_2d,
-                spatial_state=box.spatial_state,
-                container_relation=box.container_relation,
-                rotation=box.rotation,
-                yaw=box.yaw,
-                is_hand=box.is_hand,
-                is_in_hand=box.is_in_hand,
-                carrier=box.carrier,
-                held_by_hand_track_id=box.held_by_hand_track_id,
-                appearance=box.appearance,
-            )
-
-    return [box for box in smoothed if box is not None]
+            if previous is not None:
+                center = smoothing_alpha * previous + (1.0 - smoothing_alpha) * center
+            previous = center
+            smoothed[index] = center
+    return smoothed
 
 
 def evaluate_spatial_containment_and_states(
     boxes_3d: Sequence[BoundingBox3D],
     velocity_threshold: float = 0.05,
     smoothing_alpha: float = 0.65,
+    *,
+    vocabulary: Vocabulary | None = None,
+    unit: float = 1.0,
+    hand_distance: float = 0.35,
 ) -> list[BoundingBox3D]:
-    """Classify containment and motion using smoothed 3D extents.
+    """Classify per-box motion and hand-contact states.
 
-    The previous implementation encoded the demo narrative using object IDs and
-    frame ranges. This version derives states only from geometry and observed
-    motion, so it remains usable when the video, object count, or ordering changes.
+    Spatial relations to furniture (inside, on, under, ...) are decided later
+    by :mod:`aegis.memory.relations` in the gravity frame; this stage only
+    labels each box as ``static_structure`` (anchor or landmark), ``hand``,
+    ``in_hand``, ``in_motion`` or ``on_surface`` (a static object; legacy
+    name). ``container_relation`` is always None. Geometry is returned
+    unchanged.
     """
+
     if not 0.0 <= smoothing_alpha < 1.0:
         raise ValueError("smoothing_alpha must be in [0, 1)")
+    vocab = vocabulary or default_vocabulary()
 
-    smoothed_boxes = _smooth_track_boxes(boxes_3d, smoothing_alpha)
-    by_frame: dict[int, list[BoundingBox3D]] = {}
-    for box in smoothed_boxes:
-        by_frame.setdefault(box.frame_id, []).append(box)
+    smoothed = _smoothed_centers(boxes_3d, smoothing_alpha)
+    by_track: dict[int, list[int]] = {}
+    for index, box in enumerate(boxes_3d):
+        by_track.setdefault(box.track_id, []).append(index)
 
-    sorted_by_track: dict[int, list[BoundingBox3D]] = {}
-    for box in smoothed_boxes:
-        sorted_by_track.setdefault(box.track_id, []).append(box)
-
-    velocities: dict[tuple[int, int], float] = {}
-    for track_id, track_boxes in sorted_by_track.items():
-        ordered = sorted(track_boxes, key=lambda item: item.frame_id)
-        for index, current in enumerate(ordered):
-            if index == 0:
+    velocities: dict[int, float] = {}
+    for indices in by_track.values():
+        ordered = sorted(indices, key=lambda i: boxes_3d[i].frame_id)
+        for position, index in enumerate(ordered):
+            if position == 0:
                 reference = ordered[1] if len(ordered) > 1 else None
             else:
-                reference = ordered[index - 1]
+                reference = ordered[position - 1]
             if reference is None:
-                velocities[(track_id, current.frame_id)] = 0.0
+                velocities[index] = 0.0
                 continue
-            dt = max(0.01, abs(current.timestamp - reference.timestamp))
-            distance = float(
-                np.linalg.norm(
-                    np.asarray(current.center) - np.asarray(reference.center)
-                )
+            dt = max(
+                0.01, abs(boxes_3d[index].timestamp - boxes_3d[reference].timestamp)
             )
-            velocities[(track_id, current.frame_id)] = distance / dt
+            distance = float(np.linalg.norm(smoothed[index] - smoothed[reference]))
+            velocities[index] = distance / dt
 
-    updated_boxes: list[BoundingBox3D] = []
-    for frame_id in sorted(by_frame):
-        frame_boxes = by_frame[frame_id]
-        containers = [box for box in frame_boxes if _is_container_label(box.label)]
-        hands = [box for box in frame_boxes if box.is_hand]
+    by_frame: dict[int, list[int]] = {}
+    for index, box in enumerate(boxes_3d):
+        by_frame.setdefault(box.frame_id, []).append(index)
 
-        for box in frame_boxes:
-            is_container = _is_container_label(box.label)
-            is_hand_box = box.is_hand
-            contained_in: str | None = None
-            if not is_container and not is_hand_box:
-                object_center = np.asarray(box.center)
-                object_half_size = np.asarray(box.size) * 0.5
-                object_min = object_center - object_half_size
-                object_max = object_center + object_half_size
-                for container in containers:
-                    container_center = np.asarray(container.center)
-                    container_half_size = np.asarray(container.size) * 0.5
-                    tolerance = np.maximum(container_half_size * 0.08, 0.02)
-                    container_min = container_center - container_half_size - tolerance
-                    container_max = container_center + container_half_size + tolerance
-                    if (object_min >= container_min).all() and (
-                        object_max <= container_max
-                    ).all():
-                        contained_in = f"{container.label} #{container.track_id}"
-                        break
+    updated: list[BoundingBox3D | None] = [None] * len(boxes_3d)
+    for indices in by_frame.values():
+        hands = [boxes_3d[i] for i in indices if boxes_3d[i].is_hand]
+        for index in indices:
+            box = boxes_3d[index]
+            role = vocab.role(box.label)
+            is_structure = role in {"anchor", "landmark"}
+            is_hand_box = box.is_hand or role == "hand"
 
-            velocity = velocities.get((box.track_id, box.frame_id), 0.0)
-
-            # Check hand-object grasp / in-hand state
             is_in_hand = box.is_in_hand
             carrier = box.carrier
-            held_by_hand_id = box.held_by_hand_track_id
-
-            if not is_container and not is_hand_box:
+            held_by = box.held_by_hand_track_id
+            if not is_structure and not is_hand_box:
                 for hand in hands:
-                    dist_to_hand = float(
+                    distance = float(
                         np.linalg.norm(np.asarray(box.center) - np.asarray(hand.center))
                     )
                     if (
                         hand.held_by_hand_track_id == box.track_id
-                        or dist_to_hand <= 0.35
+                        or distance <= hand_distance * unit
                     ):
                         is_in_hand = True
                         carrier = "camera_wearer"
-                        held_by_hand_id = hand.track_id
+                        held_by = hand.track_id
                         break
 
-            if contained_in is not None:
-                spatial_state = f"inside_{contained_in.split()[0]}"
-                is_in_hand = False
-                carrier = None
+            if is_structure:
+                state = "static_structure"
+            elif is_hand_box:
+                state = "hand"
             elif is_in_hand:
-                spatial_state = "in_hand"
-            elif velocity > velocity_threshold and not is_container and not is_hand_box:
-                spatial_state = "in_motion"
-            elif is_container or is_hand_box:
-                spatial_state = "static_structure" if is_container else "hand"
+                state = "in_hand"
+            elif velocities.get(index, 0.0) > velocity_threshold * unit:
+                state = "in_motion"
             else:
-                spatial_state = "on_surface"
+                state = "on_surface"
 
-            updated_boxes.append(
-                BoundingBox3D(
-                    frame_id=box.frame_id,
-                    timestamp=box.timestamp,
-                    track_id=box.track_id,
-                    label=box.label,
-                    confidence=box.confidence,
-                    center=box.center,
-                    size=box.size,
-                    bbox_2d=box.bbox_2d,
-                    spatial_state=spatial_state,
-                    container_relation=contained_in,
-                    rotation=box.rotation,
-                    yaw=box.yaw,
-                    is_hand=is_hand_box,
-                    is_in_hand=is_in_hand,
-                    carrier=carrier,
-                    held_by_hand_track_id=held_by_hand_id,
-                    appearance=box.appearance,
-                )
+            updated[index] = replace(
+                box,
+                spatial_state=state,
+                container_relation=None,
+                is_in_hand=is_in_hand
+                if not is_structure and not is_hand_box
+                else False,
+                carrier=carrier if not is_structure and not is_hand_box else None,
+                held_by_hand_track_id=held_by,
             )
 
-    return updated_boxes
+    return [box for box in updated if box is not None]
 
 
 def voxel_downsample(
