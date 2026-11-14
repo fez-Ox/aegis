@@ -46,9 +46,21 @@ def quaternion_to_matrix(quaternion: list[float]) -> np.ndarray:
     qx, qy, qz, qw = (v / norm for v in (qx, qy, qz, qw))
     return np.asarray(
         [
-            [1.0 - 2.0 * (qy * qy + qz * qz), 2.0 * (qx * qy - qz * qw), 2.0 * (qx * qz + qy * qw)],
-            [2.0 * (qx * qy + qz * qw), 1.0 - 2.0 * (qx * qx + qz * qz), 2.0 * (qy * qz - qx * qw)],
-            [2.0 * (qx * qz - qy * qw), 2.0 * (qy * qz + qx * qw), 1.0 - 2.0 * (qx * qx + qy * qy)],
+            [
+                1.0 - 2.0 * (qy * qy + qz * qz),
+                2.0 * (qx * qy - qz * qw),
+                2.0 * (qx * qz + qy * qw),
+            ],
+            [
+                2.0 * (qx * qy + qz * qw),
+                1.0 - 2.0 * (qx * qx + qz * qz),
+                2.0 * (qy * qz - qx * qw),
+            ],
+            [
+                2.0 * (qx * qz - qy * qw),
+                2.0 * (qy * qz + qx * qw),
+                1.0 - 2.0 * (qx * qx + qy * qy),
+            ],
         ],
         dtype=np.float64,
     )
@@ -108,7 +120,9 @@ def build_patches(root_dir: Path) -> None:
 
     with open(poses_path, encoding="utf-8") as f:
         pose_data = json.load(f)
-    keyframes = {int(p["frame_id"]): float(p["timestamp"]) for p in pose_data.get("poses", [])}
+    keyframes = {
+        int(p["frame_id"]): float(p["timestamp"]) for p in pose_data.get("poses", [])
+    }
     sorted_kf_ids = sorted(keyframes.keys())
 
     # 1. Define Anchors in Z-Up coordinates
@@ -145,69 +159,193 @@ def build_patches(root_dir: Path) -> None:
     # Synchronized with 3D boxes
     boxes_2d: dict[int, list[dict[str, Any]]] = {
         36: [
-            {"label": "Bottle #1", "bbox": [372.9, 294.8, 435.7, 419.9], "color": COLOR_AMBER_BOTTLE},
-            {"label": "Table #1", "bbox": [0.0, 120.9, 535.7, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Bottle #1",
+                "bbox": [372.9, 294.8, 435.7, 419.9],
+                "color": COLOR_AMBER_BOTTLE,
+            },
+            {
+                "label": "Table #1",
+                "bbox": [0.0, 120.9, 535.7, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         42: [
-            {"label": "Bottle #1", "bbox": [386.5, 362.8, 454.3, 493.8], "color": COLOR_AMBER_BOTTLE},
-            {"label": "Table #1", "bbox": [0.0, 141.9, 570.5, 539.9], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Bottle #1",
+                "bbox": [386.5, 362.8, 454.3, 493.8],
+                "color": COLOR_AMBER_BOTTLE,
+            },
+            {
+                "label": "Table #1",
+                "bbox": [0.0, 141.9, 570.5, 539.9],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         48: [
-            {"label": "Table #1", "bbox": [0.0, 57.5, 581.6, 539.9], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Table #1",
+                "bbox": [0.0, 57.5, 581.6, 539.9],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         54: [
-            {"label": "Bottle #1", "bbox": [411.6, 291.4, 489.5, 405.0], "color": COLOR_AMBER_BOTTLE},
-            {"label": "Table #1", "bbox": [0.0, 0.0, 638.9, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Bottle #1",
+                "bbox": [411.6, 291.4, 489.5, 405.0],
+                "color": COLOR_AMBER_BOTTLE,
+            },
+            {
+                "label": "Table #1",
+                "bbox": [0.0, 0.0, 638.9, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         60: [
-            {"label": "Bottle #1", "bbox": [369.0, 288.6, 449.6, 376.5], "color": COLOR_AMBER_BOTTLE},
-            {"label": "Table #1", "bbox": [0.0, 0.0, 608.3, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Bottle #1",
+                "bbox": [369.0, 288.6, 449.6, 376.5],
+                "color": COLOR_AMBER_BOTTLE,
+            },
+            {
+                "label": "Table #1",
+                "bbox": [0.0, 0.0, 608.3, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         66: [
-            {"label": "Bottle #1", "bbox": [285.9, 414.1, 454.3, 539.7], "color": COLOR_AMBER_BOTTLE},
+            {
+                "label": "Bottle #1",
+                "bbox": [285.9, 414.1, 454.3, 539.7],
+                "color": COLOR_AMBER_BOTTLE,
+            },
         ],
         78: [
-            {"label": "Table #2", "bbox": [97.6, 0.6, 500.4, 319.5], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Table #2",
+                "bbox": [97.6, 0.6, 500.4, 319.5],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         84: [
-            {"label": "Table #2", "bbox": [49.2, 44.9, 501.4, 382.7], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Table #2",
+                "bbox": [49.2, 44.9, 501.4, 382.7],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         90: [
-            {"label": "Laptop #1", "bbox": [109.5, 0.0, 275.3, 98.8], "color": COLOR_EMERALD_LAPTOP},
-            {"label": "Table #2", "bbox": [66.8, 47.9, 546.9, 451.5], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Laptop #1",
+                "bbox": [109.5, 0.0, 275.3, 98.8],
+                "color": COLOR_EMERALD_LAPTOP,
+            },
+            {
+                "label": "Table #2",
+                "bbox": [66.8, 47.9, 546.9, 451.5],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         96: [
-            {"label": "Laptop #1", "bbox": [215.0, 25.4, 362.9, 84.0], "color": COLOR_EMERALD_LAPTOP},
-            {"label": "Table #2", "bbox": [145.0, 23.3, 656.1, 534.3], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Laptop #1",
+                "bbox": [215.0, 25.4, 362.9, 84.0],
+                "color": COLOR_EMERALD_LAPTOP,
+            },
+            {
+                "label": "Table #2",
+                "bbox": [145.0, 23.3, 656.1, 534.3],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         102: [
-            {"label": "Laptop #1", "bbox": [88.5, 4.7, 263.1, 81.2], "color": COLOR_EMERALD_LAPTOP},
-            {"label": "Phone #1", "bbox": [223.5, 38.4, 294.7, 82.9], "color": COLOR_PURPLE_PHONE},
-            {"label": "Table #2", "bbox": [0.1, 0.0, 612.4, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Laptop #1",
+                "bbox": [88.5, 4.7, 263.1, 81.2],
+                "color": COLOR_EMERALD_LAPTOP,
+            },
+            {
+                "label": "Phone #1",
+                "bbox": [223.5, 38.4, 294.7, 82.9],
+                "color": COLOR_PURPLE_PHONE,
+            },
+            {
+                "label": "Table #2",
+                "bbox": [0.1, 0.0, 612.4, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         108: [
-            {"label": "Laptop #1", "bbox": [95.9, 0.0, 281.8, 62.7], "color": COLOR_EMERALD_LAPTOP},
-            {"label": "Phone #1", "bbox": [235.0, 25.0, 318.0, 85.0], "color": COLOR_PURPLE_PHONE},
-            {"label": "Table #2", "bbox": [0.3, 0.0, 670.8, 539.1], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Laptop #1",
+                "bbox": [95.9, 0.0, 281.8, 62.7],
+                "color": COLOR_EMERALD_LAPTOP,
+            },
+            {
+                "label": "Phone #1",
+                "bbox": [235.0, 25.0, 318.0, 85.0],
+                "color": COLOR_PURPLE_PHONE,
+            },
+            {
+                "label": "Table #2",
+                "bbox": [0.3, 0.0, 670.8, 539.1],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         114: [
-            {"label": "Table #2", "bbox": [0.1, 6.9, 601.0, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Table #2",
+                "bbox": [0.1, 6.9, 601.0, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         120: [
-            {"label": "Bottle #1", "bbox": [154.3, 352.4, 322.0, 538.9], "color": COLOR_AMBER_BOTTLE},
-            {"label": "Table #2", "bbox": [0.0, 51.0, 556.9, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Bottle #1",
+                "bbox": [154.3, 352.4, 322.0, 538.9],
+                "color": COLOR_AMBER_BOTTLE,
+            },
+            {
+                "label": "Table #2",
+                "bbox": [0.0, 51.0, 556.9, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         126: [
-            {"label": "Bottle #1", "bbox": [186.7, 294.3, 296.1, 419.2], "color": COLOR_AMBER_BOTTLE},
-            {"label": "Table #2", "bbox": [0.0, 0.0, 542.9, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Bottle #1",
+                "bbox": [186.7, 294.3, 296.1, 419.2],
+                "color": COLOR_AMBER_BOTTLE,
+            },
+            {
+                "label": "Table #2",
+                "bbox": [0.0, 0.0, 542.9, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         132: [
-            {"label": "Bottle #1", "bbox": [277.3, 309.7, 382.4, 447.5], "color": COLOR_AMBER_BOTTLE},
-            {"label": "Table #2", "bbox": [0.0, 5.2, 620.6, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Bottle #1",
+                "bbox": [277.3, 309.7, 382.4, 447.5],
+                "color": COLOR_AMBER_BOTTLE,
+            },
+            {
+                "label": "Table #2",
+                "bbox": [0.0, 5.2, 620.6, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
         138: [
-            {"label": "Bottle #1", "bbox": [286.8, 277.5, 380.6, 417.1], "color": COLOR_AMBER_BOTTLE},
-            {"label": "Table #2", "bbox": [0.0, 0.0, 630.7, 540.0], "color": COLOR_BLUE_ANCHOR},
+            {
+                "label": "Bottle #1",
+                "bbox": [286.8, 277.5, 380.6, 417.1],
+                "color": COLOR_AMBER_BOTTLE,
+            },
+            {
+                "label": "Table #2",
+                "bbox": [0.0, 0.0, 630.7, 540.0],
+                "color": COLOR_BLUE_ANCHOR,
+            },
         ],
     }
 
@@ -241,7 +379,9 @@ def build_patches(root_dir: Path) -> None:
         if res_filter.returncode != 0:
             raise RuntimeError(f"rerun rrd filter failed: {res_filter.stderr}")
 
-        print("Step 2: Recording synchronized 3D memory, dynamic anchors, and 2D overlays...")
+        print(
+            "Step 2: Recording synchronized 3D memory, dynamic anchors, and 2D overlays..."
+        )
         rr.init(APP_ID, recording_id=RECORDING_ID, spawn=False)
         rr.save(str(tweaks_rrd))
 
@@ -384,7 +524,9 @@ def build_patches(root_dir: Path) -> None:
                 rr.log(
                     "video/detections",
                     rr.Boxes2D(
-                        array=np.asarray([b["bbox"] for b in frame_b2d], dtype=np.float32),
+                        array=np.asarray(
+                            [b["bbox"] for b in frame_b2d], dtype=np.float32
+                        ),
                         array_format=rr.Box2DFormat.XYXY,
                         colors=[b["color"] for b in frame_b2d],
                         labels=[b["label"] for b in frame_b2d],

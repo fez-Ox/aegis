@@ -448,3 +448,41 @@ def test_simulated_one_hour_session(tmp_path) -> None:
     manifest = load_session_manifest(tmp_path / "soak")
     assert manifest["frame_count"] == total_frames
     assert manifest["status"] == "time_limit"
+
+
+def test_injected_stall_is_buffered_and_reported(tmp_path) -> None:
+    """AC-29 protocol: a debug stall fills the buffer, then drains."""
+
+    clock = _Clock()
+
+    class Source:
+        def frames(self):
+            for step in range(20):
+                clock.value = step * 0.5
+                yield _source_frame(step * 0.5)
+
+    result = ingest_live(
+        lambda: Source(),
+        LiveIngestionConfig(
+            output_root=tmp_path,
+            sample_fps=2,
+            max_duration_seconds=100,
+            reconnect_timeout_seconds=0,
+            buffer_capacity=30,
+            inject_stall_at_seconds=2.0,
+            inject_stall_for_seconds=3.0,
+        ),
+        session_id="injected",
+        sleep_fn=lambda _: None,
+        clock=clock,
+    )
+    assert result.dropped_frames == 0
+    assert result.max_backlog >= 5
+    manifest = json.loads((tmp_path / "injected" / "session.json").read_text())
+    assert manifest["buffer"]["max_backlog_seconds"] == result.max_backlog / 2
+    stall_gaps = [
+        r
+        for r in read_live_index(tmp_path / "injected" / "index.jsonl")
+        if r.get("record_type") == "gap" and r.get("reason") == "storage_stall"
+    ]
+    assert len(stall_gaps) == 1
