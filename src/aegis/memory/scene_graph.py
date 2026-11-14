@@ -431,6 +431,7 @@ def build_relative_4d_scene_graph(
         runs_by_instance,
         names=names,
         canonical={iid: track.canonical for iid, track in instances.items()},
+        appearance={iid: track.appearance for iid, track in instances.items()},
         anchors_by_id=anchors_by_id,
         rooms_by_id=rooms_by_id,
         wearer_room_by_frame=wearer_room_by_frame,
@@ -460,6 +461,7 @@ def build_relative_4d_scene_graph(
         "time_source": "capture" if wallclock else "none",
         "keyframe_count": len(keyframes),
         "duration_seconds": (keyframes[-1][1] - keyframes[0][1]) if keyframes else 0.0,
+        "first_timestamp": keyframes[0][1] if keyframes else 0.0,
     }
     return Relative4DSceneGraph(
         anchors=anchors,
@@ -492,6 +494,7 @@ def _timeline_and_latest(
     *,
     names: Mapping[int, str],
     canonical: Mapping[int, str],
+    appearance: Mapping[int, tuple[float, ...] | None],
     anchors_by_id: Mapping[int, SpatialAnchor],
     rooms_by_id: Mapping[int, RoomRegion],
     wearer_room_by_frame: Mapping[int, RoomRegion | None],
@@ -591,6 +594,11 @@ def _timeline_and_latest(
                 "confidence": last_run.confidence,
                 "height_above_floor": last_run.height_above_floor,
                 "frame_id": ordered[-1].frame_id,
+                "appearance": (
+                    list(appearance[instance_id])
+                    if appearance.get(instance_id) is not None
+                    else None
+                ),
             }
         )
     latest.sort(key=lambda state: state["instance_id"])

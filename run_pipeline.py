@@ -20,6 +20,7 @@ Usage examples:
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any, Literal
@@ -92,6 +93,8 @@ def main(
     stage: Stage = "all",
     upload: bool = True,
     recorded_at: str | None = None,
+    home_id: str | None = None,
+    no_ingest: bool = False,
 ) -> None:
     """Submit one pipeline stage or the complete sequential pipeline to Modal.
 
@@ -275,6 +278,30 @@ def main(
 
     _print_benchmark_summary(results)
     _download_outputs(dataset_id)
+    if not no_ingest:
+        _ingest_into_home(dataset_id, config, home_id or config.memory.home_id)
+
+
+def _ingest_into_home(dataset_id: str, config: RuntimeConfig, home_id: str) -> None:
+    """Merge the downloaded session graph into the home's durable memory."""
+
+    from aegis.memory.ingest import ingest_session
+    from aegis.memory.store import open_store
+
+    graph_path = Path("outputs") / dataset_id / "objects" / "r4d_scene_graph.json"
+    if not graph_path.exists():
+        print(f"  ⚠ No scene graph at {graph_path}; nothing ingested.")
+        return
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    if int(graph.get("schema_version", 1)) != 2:
+        print("  ⚠ Scene graph is schema v1; re-run the detect stage to ingest it.")
+        return
+    store = open_store(home_id, config.memory.store_root)
+    try:
+        report = ingest_session(store, graph, vocabulary=config.vocab())
+    finally:
+        store.close()
+    print(f"  ✓ Ingested {dataset_id} into home {home_id}: {report.as_dict()}")
 
 
 def _print_benchmark_summary(results: list[dict[str, Any]]) -> None:
@@ -459,6 +486,14 @@ if __name__ == "__main__":
         default=None,
         help="ISO-8601 start time of a batch video, e.g. 2026-11-15T09:30:00+05:00",
     )
+    parser.add_argument(
+        "--home-id", type=str, default=None, help="Home store to ingest into"
+    )
+    parser.add_argument(
+        "--no-ingest",
+        action="store_true",
+        help="Do not ingest the result into the home store",
+    )
     args = parser.parse_args()
 
     # Dispatch to modal run
@@ -487,5 +522,9 @@ if __name__ == "__main__":
         cli_cmd.extend(["--keyframe-stride", str(args.keyframe_stride)])
     if args.recorded_at:
         cli_cmd.extend(["--recorded-at", args.recorded_at])
+    if args.home_id:
+        cli_cmd.extend(["--home-id", args.home_id])
+    if args.no_ingest:
+        cli_cmd.append("--no-ingest")
 
     sys.exit(subprocess.run(cli_cmd, check=False).returncode)

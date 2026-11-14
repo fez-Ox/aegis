@@ -22,9 +22,11 @@ from pydantic import BaseModel, Field
 
 from aegis.core.paths import validate_dataset_id
 from aegis.core.vocabulary import default_vocabulary
+from aegis.memory.homes import get_store
 from aegis.memory.reasoning import QueryReasoningEngine, event_summary, room_phrase
 from aegis.memory.repository import (
     JsonGraphRepository,
+    StoreRepository,
     clear_cache,
     get_repository,
     latest_states_from_graph,
@@ -222,6 +224,28 @@ def repository_for(dataset_id: str) -> JsonGraphRepository:
     return get_repository(dataset_id, get_search_paths(dataset_id))
 
 
+def resolve_repository(
+    dataset_id: str | None, home_id: str | None
+) -> tuple[str, JsonGraphRepository | StoreRepository]:
+    """Explicit home -> store; explicit dataset -> graph file; then defaults.
+
+    Without either parameter, ``AEGIS_HOME_ID`` selects a home store and
+    otherwise the active dataset's graph file is used.
+    """
+
+    if home_id and home_id.strip():
+        home = _validated(home_id)
+        return home, StoreRepository(get_store(home))
+    if dataset_id and dataset_id.strip():
+        ds = _validated(dataset_id)
+        return ds, repository_for(ds)
+    env_home = os.getenv("AEGIS_HOME_ID")
+    if env_home:
+        home = _validated(env_home)
+        return home, StoreRepository(get_store(home))
+    return ACTIVE_DATASET_ID, repository_for(ACTIVE_DATASET_ID)
+
+
 def list_available_datasets() -> list[str]:
     """Datasets with an input video, metadata or a processed graph."""
 
@@ -290,9 +314,8 @@ def _state_canonical(state: dict[str, Any]) -> str:
 
 
 @app.get("/api/v1/health", response_model=HealthResponse)
-def health(dataset_id: str | None = None) -> HealthResponse:
-    ds = get_active_dataset(dataset_id)
-    repo = repository_for(ds)
+def health(dataset_id: str | None = None, home_id: str | None = None) -> HealthResponse:
+    ds, repo = resolve_repository(dataset_id, home_id)
     return HealthResponse(
         dataset_loaded=ds,
         scene_graph_ready=repo.ready,
@@ -305,9 +328,10 @@ def health(dataset_id: str | None = None) -> HealthResponse:
 
 
 @app.get("/api/v1/scene_graph")
-def get_full_scene_graph(dataset_id: str | None = None) -> dict[str, Any]:
-    ds = get_active_dataset(dataset_id)
-    repo = repository_for(ds)
+def get_full_scene_graph(
+    dataset_id: str | None = None, home_id: str | None = None
+) -> dict[str, Any]:
+    ds, repo = resolve_repository(dataset_id, home_id)
     return {
         "dataset_id": ds,
         "scene_graph_ready": repo.ready,
@@ -381,8 +405,10 @@ def select_dataset(
 
 
 @app.get("/api/v1/anchors", response_model=list[AnchorModel])
-def get_anchors(dataset_id: str | None = None) -> list[AnchorModel]:
-    repo = repository_for(get_active_dataset(dataset_id))
+def get_anchors(
+    dataset_id: str | None = None, home_id: str | None = None
+) -> list[AnchorModel]:
+    _ds, repo = resolve_repository(dataset_id, home_id)
     latest = repo.latest_states()
     results: list[AnchorModel] = []
     for anchor in repo.anchors():
@@ -408,8 +434,10 @@ def get_anchors(dataset_id: str | None = None) -> list[AnchorModel]:
 
 
 @app.get("/api/v1/rooms", response_model=list[RoomModel])
-def get_rooms(dataset_id: str | None = None) -> list[RoomModel]:
-    repo = repository_for(get_active_dataset(dataset_id))
+def get_rooms(
+    dataset_id: str | None = None, home_id: str | None = None
+) -> list[RoomModel]:
+    _ds, repo = resolve_repository(dataset_id, home_id)
     latest = repo.latest_states()
     anchors = repo.anchors()
     results: list[RoomModel] = []
@@ -442,14 +470,14 @@ def rename_room(
     room_id: int = Query(..., description="Room to rename"),
     label: str = Query(..., min_length=1, max_length=40, description="New room name"),
     dataset_id: str | None = None,
+    home_id: str | None = None,
 ) -> dict[str, Any]:
-    """Rename one room (caregiver calibration) and persist the graph."""
+    """Rename one room (caregiver calibration) and persist it."""
 
-    ds = get_active_dataset(dataset_id)
     new_label = label.strip()
     if not new_label:
         raise HTTPException(status_code=422, detail="label must not be empty")
-    repo = repository_for(ds)
+    ds, repo = resolve_repository(dataset_id, home_id)
     if not repo.ready:
         raise HTTPException(status_code=404, detail=f"No scene graph found for '{ds}'.")
     try:
@@ -488,11 +516,11 @@ def _matching_states(
 def query_memory(
     item: str = Query(..., description="Query, e.g. 'water bottle', 'my keys'"),
     dataset_id: str | None = None,
+    home_id: str | None = None,
 ) -> MemoryQueryResponse:
-    """Where is an item, according to this dataset's memory."""
+    """Where is an item, according to this dataset's (or home's) memory."""
 
-    ds = get_active_dataset(dataset_id)
-    repo = repository_for(ds)
+    ds, repo = resolve_repository(dataset_id, home_id)
     latest = repo.latest_states()
     target, matches = _matching_states(latest, item)
     room_filter = QueryReasoningEngine.extract_room_filter(item)
@@ -561,7 +589,11 @@ def query_memory(
         last_seen_timestamp_s=primary.get("last_seen_timestamp"),
         last_seen_at=primary.get("last_seen_wallclock"),
         is_persistent_memory=reasoning["is_persistent_memory"],
-        crop_url=f"/api/v1/crops/{primary.get('instance_id')}?dataset_id={ds}",
+        crop_url=(
+            None
+            if isinstance(repo, StoreRepository)
+            else f"/api/v1/crops/{primary.get('instance_id')}?dataset_id={ds}"
+        ),
         confidence=float(confidence) if confidence is not None else None,
         other_instances=[
             {
@@ -576,10 +608,12 @@ def query_memory(
 
 
 @app.get("/api/v1/timeline", response_model=list[TimelineEventModel])
-def get_timeline(dataset_id: str | None = None) -> list[TimelineEventModel]:
+def get_timeline(
+    dataset_id: str | None = None, home_id: str | None = None
+) -> list[TimelineEventModel]:
     """Chronological events with one plain sentence each."""
 
-    repo = repository_for(get_active_dataset(dataset_id))
+    _ds, repo = resolve_repository(dataset_id, home_id)
     results: list[TimelineEventModel] = []
     for event in repo.events():
         results.append(

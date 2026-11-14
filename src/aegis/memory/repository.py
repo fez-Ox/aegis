@@ -225,3 +225,61 @@ def get_repository(
         return repository
     clear_cache(dataset_id)
     return JsonGraphRepository(dataset_id, None, ready=False)
+
+
+class StoreRepository:
+    """Repository view of a home store (same dict shapes as the JSON graph)."""
+
+    def __init__(self, store: Any) -> None:
+        self.store = store
+        self.ready = True
+        self.dataset_id = store.home_id
+
+    def anchors(self) -> list[dict[str, Any]]:
+        rooms = {r["room_id"]: r["label"] for r in self.store.rooms()}
+        return [
+            {
+                "anchor_id": row["anchor_id"],
+                "label": row["label"],
+                "canonical": row["canonical"],
+                "center": [],
+                "size": [],
+                "room_id": row["room_id"],
+                "room_label": rooms.get(row["room_id"]),
+                "match_quality": row["match_quality"],
+            }
+            for row in self.store.anchors()
+        ]
+
+    def rooms(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "room_id": row["room_id"],
+                "label": row["label"],
+                "room_type": row["room_type"],
+                "label_source": row["label_source"],
+                "centroid": [],
+                "keyframe_count": 0,
+            }
+            for row in self.store.rooms()
+        ]
+
+    def events(self) -> list[dict[str, Any]]:
+        from aegis.core.timeutil import parse_iso
+
+        events = self.store.events()
+        for event in events:
+            event["start_time"] = parse_iso(event["start_wallclock"]).timestamp()
+            event["end_time"] = parse_iso(event["end_wallclock"]).timestamp()
+        return events
+
+    def latest_states(self) -> dict[int, dict[str, Any]]:
+        return {state["instance_id"]: state for state in self.store.latest_states()}
+
+    def keyframe_count(self) -> int:
+        return sum(int(row["keyframe_count"]) for row in self.store.sessions())
+
+    def rename_room(self, room_id: int, label: str) -> dict[str, Any]:
+        from aegis.memory.homes import rename_home_room
+
+        return rename_home_room(self.store, room_id, label)

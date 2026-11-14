@@ -68,6 +68,16 @@ def _section(cls: type[Any], value: Any, name: str) -> Any:
     return cls(**kwargs)
 
 
+def _home_id(value: str) -> str:
+    import re
+
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value):
+        raise ValueError(
+            "memory.home_id may contain only letters, digits, '.', '_', '-'"
+        )
+    return value
+
+
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
     if value is None:
         return {}
@@ -384,6 +394,9 @@ class MemoryConfig:
     rooms: RoomMemoryConfig = field(default_factory=RoomMemoryConfig)
     gravity: GravityConfig = field(default_factory=GravityConfig)
     build: MemoryBuildConfig = field(default_factory=MemoryBuildConfig)
+    # Durable per-home memory (laptop side): <store_root>/<home_id>/memory.db
+    home_id: str = "home01"
+    store_root: str = "outputs/_homes"
 
 
 @dataclass(frozen=True, slots=True)
@@ -858,6 +871,8 @@ class RuntimeConfig:
                 build=_section(
                     MemoryBuildConfig, memory_raw.get("build"), "memory.build"
                 ),
+                home_id=_home_id(str(memory_raw.get("home_id", "home01"))),
+                store_root=str(memory_raw.get("store_root", "outputs/_homes")),
             ),
             live=live,
             visualization=visualization,

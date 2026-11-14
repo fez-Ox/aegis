@@ -126,18 +126,47 @@ records `preprocess_source: "live_session"` in `benchmark_stats.json`.
 | `live_session.json` | Copy of the capture manifest, including gaps/pauses. |
 | `live_timestamps.json` | Per-frame normalised and original capture timestamps. |
 
-## 4. Downstream artifacts (schema v1, unchanged)
+## 4. Downstream artifacts
 
 | File | Schema | Notes |
 |---|---|---|
-| `outputs/geometry/poses.json` | 1 | `T_world_camera`, source `VGGT-Omega`. |
+| `outputs/geometry/poses.json` | 1 | `T_world_camera`; `source` is `VGGT-Omega` or `synthetic` (tests only). |
+| `outputs/geometry/gravity.json` | 1 | Up vector, floor offset, camera height, source (`floor_plane`, `camera_prior`, `assumed`) and confidence. Coordinates are never rotated; heights are derived. |
 | `outputs/geometry/pointmaps.npz` | array keys | `pointmaps`, `confmaps`, `keyframe_ids`. |
 | `outputs/geometry/pointcloud.ply` | PLY | Raw VGGT-Ω world coordinates. |
-| `outputs/objects/detected_objects_3d.json` | 1 | 2D detections, 3D boxes, motion trails. |
-| `outputs/objects/r4d_scene_graph.json` | 1 | Rooms → anchors → object instances; carries `dataset_id`. |
-| `outputs/objects/events.json` | 1 | Timeline events. |
-| `outputs/objects/spatial_memory_graph.json` | 1 | Layer-1 point cloud + layer-2 R4DSG objects. |
-| `<home_id>/home_map.json` | 1 | Caregiver-calibrated room identity registry. |
+| `outputs/objects/detected_objects_3d.json` | 2 | 3D boxes fitted in the gravity frame: `size = (length, width, height)`, `rotation` = world-from-box with columns `[a, b, up]`, `up_min`/`up_max`/`support_up` elevations. |
+| `outputs/objects/r4d_scene_graph.json` | 2 | `session`, `gravity`, `anchors`, `rooms`, `state_runs`, `latest_states`, `events`, `room_visits`; carries `dataset_id`. No per-keyframe data, so its size does not grow with video length. Readers still accept schema 1 (`timeline`). |
+| `outputs/objects/r4d_timeline.json` | 1 | Per-keyframe entries for the Rerun recording only; never downloaded or served. |
+| `outputs/objects/events.json` | 1 | Timeline events (same objects as in the scene graph). |
+| `outputs/objects/spatial_memory_graph.json` | 2 | Small manifest: counts and file names of the artifacts above. |
+
+## 4a. Home store (laptop side)
+
+One SQLite file per home: `<store_root>/<home_id>/memory.db`
+(`store_root` = `AEGIS_STORE_ROOT` or `memory.store_root`, default
+`outputs/_homes`). Opened only through `aegis.memory.store.open_store`.
+
+| Table | One row is |
+|---|---|
+| `session` | One ingested dataset (video or live segment) with absolute start/end and `time_source` (`capture`, `recorded_at`, or `ingest` when the session had no clock). |
+| `room`, `anchor`, `instance` | Stable identities across sessions. `instance` also holds the object's last-known state, which is never compacted. `anchor.match_quality` records how the anchor was matched (`unique`, `aligned`, `resident`, `ordinal`, `new`). |
+| `state_run` | One stable placement of one object (relation, anchor, room, start/end). A re-sighting in the same place extends the row. |
+| `event` | A change between runs, a `room_change`, or `moved_while_unobserved` between sessions. |
+| `room_visit`, `activity`, `evidence`, `summary`, `compaction_log` | Wearer stays, grouped activities, evidence crops, compacted history and compaction outcomes. |
+
+All times are UTC text `YYYY-MM-DDTHH:MM:SS.ffffff+00:00`.
+
+**History is append-only across sessions.** Re-ingesting the same graph is a
+no-op; ingesting a changed graph for an existing session replaces only that
+session's rows. Sessions must be ingested in chronological order.
+
+Cross-session matching is symbolic because every session has its own world
+origin: rooms by landmark/anchor signature (plus continuity between
+back-to-back segments), anchors by type within a room, then by a 2D
+similarity transform estimated from unambiguous anchors, then by the objects
+resting on them; objects by last-known place, then by class, then by
+appearance. Positions are never compared across sessions without that
+transform.
 
 ## 5. Timestamp semantics
 
