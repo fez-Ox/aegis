@@ -31,6 +31,7 @@ class DatasetPaths:
     pointcloud_ply: Path
     pointcloud_metadata: Path
     pointmaps_npz: Path
+    gravity: Path
     objects_json: Path
     events_json: Path
     rerun_recording: Path
@@ -82,6 +83,7 @@ def dataset_paths(config: RuntimeConfig, dataset_id: str) -> DatasetPaths:
         pointcloud_ply=geometry / "pointcloud.ply",
         pointcloud_metadata=geometry / "pointcloud_metadata.json",
         pointmaps_npz=geometry / "pointmaps.npz",
+        gravity=geometry / "gravity.json",
         objects_json=objects / "detected_objects_3d.json",
         events_json=objects / "events.json",
         rerun_recording=viewer / "demo.rrd",

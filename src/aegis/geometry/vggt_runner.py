@@ -60,9 +60,13 @@ def run_vggt_reconstruction(
         os.environ["HF_TOKEN"] = token
         os.environ["HUGGING_FACE_HUB_TOKEN"] = token
 
-    import torch
+    try:
+        import torch
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        torch = None
+        device = "cpu"
 
     # Load and preprocess input keyframe images
     loaded_images: list[np.ndarray] = []
@@ -77,6 +81,7 @@ def run_vggt_reconstruction(
     n_images = len(loaded_images)
     h = w = config.image_size
 
+    synthetic = False
     poses: np.ndarray
     intrinsics: np.ndarray
     depth_maps: np.ndarray
@@ -84,6 +89,8 @@ def run_vggt_reconstruction(
     confmaps: np.ndarray
 
     try:
+        if torch is None:
+            raise ImportError("torch is not installed")
         from huggingface_hub import hf_hub_download
         from vggt_omega.models import VGGTOmega
         from vggt_omega.utils.load_fn import load_and_preprocess_images
@@ -194,15 +201,19 @@ def run_vggt_reconstruction(
         )
 
     except Exception as e:
-        if device == "cuda":
-            raise RuntimeError(f"VGGT-Ω reconstruction failed on GPU: {e}") from e
+        # Never fabricate geometry silently: the synthetic scene below exists
+        # only for tests and must be requested explicitly.
+        if os.environ.get("AEGIS_ALLOW_SYNTHETIC_VGGT") != "1":
+            raise RuntimeError(f"VGGT-Ω reconstruction failed on {device}: {e}") from e
 
         import logging
 
         logging.getLogger(__name__).warning(
-            "vggt_omega not available on CPU; using synthetic fallback for tests: %s",
+            "VGGT-Ω unavailable; AEGIS_ALLOW_SYNTHETIC_VGGT=1 so a synthetic "
+            "scene is returned: %s",
             e,
         )
+        synthetic = True
         poses = np.zeros((n_images, 4, 4), dtype=np.float64)
         for i in range(n_images):
             poses[i] = np.eye(4, dtype=np.float64)
@@ -297,4 +308,5 @@ def run_vggt_reconstruction(
         "global_points": voxel_pts.astype(np.float32),
         "global_colors": voxel_cols.astype(np.uint8),
         "image_names": [p.name for p in image_paths],
+        "synthetic": synthetic,
     }

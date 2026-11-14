@@ -105,6 +105,14 @@ memory:
     zone_link_radius: 1.5
     # Minimum keyframes observed in a zone before it becomes a room region.
     min_zone_keyframes: 3
+  gravity:
+    # Up direction and floor height from a RANSAC floor-plane fit.
+    enabled: true
+    # Below this confidence, under/above/on-the-floor are not asserted.
+    min_confidence: 0.5
+    # Typical chest-held phone height, in reconstruction units.
+    assumed_camera_height: 1.4
+    ransac_iterations: 500
 
 live:
   # Local FR1/FR2 capture defaults for `aegis-ingest` and the `live` stage.

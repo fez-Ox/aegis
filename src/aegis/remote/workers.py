@@ -94,6 +94,7 @@ def _clear_downstream_artifacts(paths: DatasetPaths) -> None:
         paths.pointcloud_ply,
         paths.pointcloud_metadata,
         paths.pointmaps_npz,
+        paths.gravity,
         paths.objects_json,
         paths.events_json,
         paths.rerun_recording,
@@ -256,6 +257,7 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     )
 
     # Save camera poses
+    pose_source = "synthetic" if rec_result.get("synthetic", False) else "VGGT-Omega"
     pose_records: list[dict[str, Any]] = []
     poses = rec_result["poses"]
     for matrix, rec in zip(poses, keyframe_records, strict=True):
@@ -266,7 +268,7 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                 "filename": str(rec["filename"]),
                 "matrix": matrix.tolist(),
                 "convention": "T_world_camera",
-                "source": "VGGT-Omega",
+                "source": pose_source,
             }
         )
 
@@ -275,11 +277,29 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         {
             "schema_version": 1,
             "dataset_id": dataset_id,
-            "source": "VGGT-Omega",
+            "source": pose_source,
             "convention": "T_world_camera",
             "frame_count": len(pose_records),
             "poses": pose_records,
         },
+    )
+
+    # Gravity frame (up direction + floor height), stored beside the raw
+    # coordinates; the coordinates themselves are never rotated.
+    from aegis.geometry.gravity import GravityFrame, estimate_gravity
+
+    if config.memory.gravity.enabled and not rec_result.get("synthetic", False):
+        gravity = estimate_gravity(
+            rec_result["global_points"],
+            poses[:, :3, 3],
+            poses[:, :3, :3],
+            iterations=config.memory.gravity.ransac_iterations,
+        )
+    else:
+        gravity = GravityFrame.assumed()
+    _write_json(
+        paths.gravity,
+        {"schema_version": 1, "dataset_id": dataset_id, **gravity.as_dict()},
     )
 
     _write_json(
@@ -320,6 +340,10 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         "throughput_fps": kf_fps,
         "pointcloud": str(paths.pointcloud_ply),
         "poses": str(paths.poses),
+        "pose_source": pose_source,
+        "gravity_source": gravity.source,
+        "gravity_confidence": round(gravity.confidence, 3),
+        "camera_height": gravity.camera_height,
     }
     _record_benchmark_stats(paths, dataset_id, "vggt", stage_result)
     return stage_result

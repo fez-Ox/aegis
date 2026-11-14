@@ -33,6 +33,41 @@ def _vocabulary_from_mapping(raw: Mapping[str, Any]) -> Vocabulary:
     return _vocabulary_from_key(json.dumps(raw, sort_keys=True, default=list))
 
 
+def _section(cls: type[Any], value: Any, name: str) -> Any:
+    """Build a flat frozen config dataclass from a mapping.
+
+    Each field is converted to the type of its default value; unknown keys are
+    rejected so a misspelt setting fails loudly instead of being ignored.
+    """
+
+    from dataclasses import MISSING, fields
+
+    raw = _mapping(value, name)
+    known = {item.name: item for item in fields(cls)}
+    unknown = sorted(set(raw) - set(known))
+    if unknown:
+        raise ValueError(f"{name}: unknown setting(s) {', '.join(unknown)}")
+    kwargs: dict[str, Any] = {}
+    for key, item in known.items():
+        if key not in raw:
+            continue
+        default = item.default if item.default is not MISSING else None
+        raw_value = raw[key]
+        if raw_value is None:
+            kwargs[key] = None
+        elif isinstance(default, bool):
+            kwargs[key] = bool(raw_value)
+        elif isinstance(default, int):
+            kwargs[key] = int(raw_value)
+        elif isinstance(default, float):
+            kwargs[key] = float(raw_value)
+        elif isinstance(default, str):
+            kwargs[key] = str(raw_value)
+        else:
+            kwargs[key] = raw_value
+    return cls(**kwargs)
+
+
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
     if value is None:
         return {}
@@ -289,10 +324,32 @@ class LiveCaptureConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class GravityConfig:
+    """Per-session gravity estimation (up direction and floor height)."""
+
+    enabled: bool = True
+    # Below this confidence, vertical relations (under/above/on_floor) are not
+    # asserted and thresholds are not rescaled.
+    min_confidence: float = 0.5
+    # Typical height of a chest-held phone, in reconstruction units.
+    assumed_camera_height: float = 1.4
+    ransac_iterations: int = 500
+
+    def __post_init__(self) -> None:
+        if not 0 < self.min_confidence <= 1:
+            raise ValueError("memory.gravity.min_confidence must be in (0, 1]")
+        if self.assumed_camera_height <= 0:
+            raise ValueError("memory.gravity.assumed_camera_height must be positive")
+        if self.ransac_iterations < 50:
+            raise ValueError("memory.gravity.ransac_iterations must be at least 50")
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryConfig:
     """Spatio-temporal memory construction settings."""
 
     rooms: RoomMemoryConfig = field(default_factory=RoomMemoryConfig)
+    gravity: GravityConfig = field(default_factory=GravityConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -759,7 +816,12 @@ class RuntimeConfig:
             sam2=sam2,
             perception=perception,
             geometry=geometry,
-            memory=MemoryConfig(rooms=rooms),
+            memory=MemoryConfig(
+                rooms=rooms,
+                gravity=_section(
+                    GravityConfig, memory_raw.get("gravity"), "memory.gravity"
+                ),
+            ),
             live=live,
             visualization=visualization,
             vocabulary=dict(vocabulary_raw),
