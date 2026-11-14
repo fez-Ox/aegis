@@ -108,6 +108,9 @@ def _clear_downstream_artifacts(paths: DatasetPaths) -> None:
             stale_file.unlink()
     if paths.depth.exists():
         shutil.rmtree(paths.depth)
+    evidence_dir = paths.objects_json.parent / "evidence"
+    if evidence_dir.exists():
+        shutil.rmtree(evidence_dir)
 
 
 def _live_dataset_metadata(paths: DatasetPaths) -> dict[str, Any] | None:
@@ -534,6 +537,22 @@ def run_detect_and_lift(
         },
     )
 
+    evidence_dir = paths.objects_json.parent / "evidence"
+    if evidence_dir.exists():
+        shutil.rmtree(evidence_dir)
+    crops_written = 0
+    if config.memory.evidence.enabled:
+        from aegis.memory.evidence import write_run_crops
+
+        crops_written = write_run_crops(
+            scene_graph.state_runs,
+            paths.frames,
+            {int(f["frame_id"]): str(f["filename"]) for f in frames},
+            evidence_dir,
+            max_side=config.memory.evidence.max_side,
+            quality=config.memory.evidence.quality,
+        )
+
     r4d_path = paths.objects_json.parent / "r4d_scene_graph.json"
     scene_graph_data = scene_graph.as_dict()
     # Store ownership in the artifact so the API can reject a stale graph
@@ -614,6 +633,7 @@ def run_detect_and_lift(
         "objects_file": str(paths.objects_json),
         "r4d_scene_graph": str(r4d_path),
         "events": len(scene_graph.events),
+        "evidence_crops": crops_written,
         "events_file": str(paths.events_json),
         "spatial_memory_graph": str(memory_graph_path),
     }

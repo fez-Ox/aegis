@@ -517,6 +517,17 @@ def _matching_states(
     ]
 
 
+def _crop_url(
+    repo: JsonGraphRepository | StoreRepository, key: str, state: dict[str, Any]
+) -> str | None:
+    instance_id = state.get("instance_id")
+    if isinstance(repo, StoreRepository):
+        if state.get("evidence_id") is None:
+            return None
+        return f"/api/v1/crops/{instance_id}?home_id={key}"
+    return f"/api/v1/crops/{instance_id}?dataset_id={key}"
+
+
 @app.get("/api/v1/query", response_model=MemoryQueryResponse)
 def query_memory(
     item: str = Query(..., description="Query, e.g. 'water bottle', 'my keys'"),
@@ -594,11 +605,7 @@ def query_memory(
         last_seen_timestamp_s=primary.get("last_seen_timestamp"),
         last_seen_at=primary.get("last_seen_wallclock"),
         is_persistent_memory=reasoning["is_persistent_memory"],
-        crop_url=(
-            None
-            if isinstance(repo, StoreRepository)
-            else f"/api/v1/crops/{primary.get('instance_id')}?dataset_id={ds}"
-        ),
+        crop_url=_crop_url(repo, ds, primary),
         confidence=float(confidence) if confidence is not None else None,
         other_instances=[
             {
@@ -674,8 +681,33 @@ def get_activities(
 
 
 @app.get("/api/v1/crops/{instance_id}")
-def get_crop(instance_id: int, dataset_id: str | None = None) -> Response:
-    """Placeholder card for an instance (real evidence crops: WP10 / M3)."""
+def get_crop(
+    instance_id: int, dataset_id: str | None = None, home_id: str | None = None
+) -> Response:
+    """Evidence crop of an object.
+
+    With ``home_id`` this is the real JPEG behind the object's last-known
+    state (404 when none exists). The per-dataset path still returns a
+    labelled placeholder card until Milestone 3 replaces it.
+    """
+
+    if home_id:
+        _home, repo = resolve_repository(None, home_id)
+        state = repo.latest_states().get(instance_id)
+        evidence_id = state.get("evidence_id") if state else None
+        row = (
+            repo.store.one(
+                "SELECT path FROM evidence WHERE evidence_id = ?", (evidence_id,)
+            )
+            if evidence_id is not None
+            else None
+        )
+        path = repo.store.dir / str(row["path"]) if row is not None else None
+        if path is None or not path.is_file():
+            raise HTTPException(
+                status_code=404, detail="no evidence crop for this object"
+            )
+        return Response(content=path.read_bytes(), media_type="image/jpeg")
 
     ds = get_active_dataset(dataset_id)
     state = repository_for(ds).latest_states().get(instance_id)

@@ -53,7 +53,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "ingest":
             graph = json.loads(args.graph.read_text(encoding="utf-8"))
             report = ingest_session(
-                store, graph, vocabulary=_vocabulary(args.config_path)
+                store,
+                graph,
+                vocabulary=_vocabulary(args.config_path),
+                evidence_root=args.graph.parent,
             )
             print(json.dumps(report.as_dict(), indent=2))
         elif args.command == "show":

@@ -298,7 +298,9 @@ def _ingest_into_home(dataset_id: str, config: RuntimeConfig, home_id: str) -> N
         return
     store = open_store(home_id, config.memory.store_root)
     try:
-        report = ingest_session(store, graph, vocabulary=config.vocab())
+        report = ingest_session(
+            store, graph, vocabulary=config.vocab(), evidence_root=graph_path.parent
+        )
     finally:
         store.close()
     print(f"  ✓ Ingested {dataset_id} into home {home_id}: {report.as_dict()}")
@@ -390,6 +392,24 @@ def _download_outputs(dataset_id: str) -> None:
     ]
 
     print("\n--- Syncing Artifacts from Modal Volume to Local ---")
+    evidence_local = local_root / dataset_id / "objects"
+    evidence_local.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "modal",
+            "volume",
+            "get",
+            "aegis-poc-data",
+            f"{dataset_id}/outputs/objects/evidence",
+            str(evidence_local),
+            "--force",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     for remote_path, local_dest in paths_to_fetch:
         local_dest.parent.mkdir(parents=True, exist_ok=True)
         cmd = [

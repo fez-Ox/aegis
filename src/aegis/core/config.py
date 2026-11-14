@@ -388,12 +388,30 @@ class MemoryBuildConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class EvidenceConfig:
+    """Object-only evidence crops kept after raw frames are purged.
+
+    Keeping them past the 24-hour raw-frame rule is decision #9 and must be
+    confirmed with the supervisor; ``enabled: false`` turns them off.
+    """
+
+    enabled: bool = True
+    max_side: int = 320
+    quality: int = 85
+
+    def __post_init__(self) -> None:
+        if self.max_side < 32 or not 1 <= self.quality <= 100:
+            raise ValueError("memory.evidence values are outside their valid ranges")
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryConfig:
     """Spatio-temporal memory construction settings."""
 
     rooms: RoomMemoryConfig = field(default_factory=RoomMemoryConfig)
     gravity: GravityConfig = field(default_factory=GravityConfig)
     build: MemoryBuildConfig = field(default_factory=MemoryBuildConfig)
+    evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
     # Durable per-home memory (laptop side): <store_root>/<home_id>/memory.db
     home_id: str = "home01"
     store_root: str = "outputs/_homes"
@@ -870,6 +888,9 @@ class RuntimeConfig:
                 ),
                 build=_section(
                     MemoryBuildConfig, memory_raw.get("build"), "memory.build"
+                ),
+                evidence=_section(
+                    EvidenceConfig, memory_raw.get("evidence"), "memory.evidence"
                 ),
                 home_id=_home_id(str(memory_raw.get("home_id", "home01"))),
                 store_root=str(memory_raw.get("store_root", "outputs/_homes")),

@@ -13,12 +13,14 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from aegis.core.timeutil import parse_iso, shift_iso, to_utc_iso, utc_now
 from aegis.core.vocabulary import Vocabulary, default_vocabulary
 from aegis.geometry.gravity import GravityFrame
 from aegis.memory.activities import DEFAULT_TIMEZONE, store_session_activities
+from aegis.memory.evidence import copy_into_store, delete_evidence
 from aegis.memory.matching import (
     AnchorInfo,
     InstanceInfo,
@@ -104,8 +106,13 @@ def ingest_session(
     vocabulary: Vocabulary | None = None,
     now: datetime | None = None,
     timezone: str = DEFAULT_TIMEZONE,
+    evidence_root: Path | str | None = None,
 ) -> IngestReport:
-    """Merge ``graph`` into ``store``; see the module docstring."""
+    """Merge ``graph`` into ``store``; see the module docstring.
+
+    ``evidence_root`` is the directory the graph's relative evidence paths
+    (``evidence/run_*.jpg``) resolve against, normally the graph's folder.
+    """
 
     vocab = vocabulary or default_vocabulary()
     if int(graph.get("schema_version", 1)) != 2:
@@ -157,7 +164,15 @@ def ingest_session(
         anchor_map = _ingest_anchors(store, graph, session_id, room_map, vocab, report)
         instance_map = _ingest_instances(store, graph, anchor_map, vocab, report)
         _ingest_runs(
-            store, graph, session_id, room_map, anchor_map, instance_map, clock, report
+            store,
+            graph,
+            session_id,
+            room_map,
+            anchor_map,
+            instance_map,
+            clock,
+            report,
+            evidence_root,
         )
         _ingest_events(
             store, graph, session_id, room_map, anchor_map, instance_map, clock, report
@@ -436,8 +451,60 @@ def _ingest_instances(store, graph, anchor_map, vocab, report) -> dict[int, int 
 
 
 # ------------------------------------------------------------------ runs
+def _attach_evidence(
+    store,
+    run,
+    *,
+    run_id,
+    run_session,
+    ingest_session_id,
+    home_iid,
+    captured_at,
+    root,
+    extended,
+):
+    """Copy the run's crop into the store; on extension keep the larger crop."""
+
+    meta = run.get("evidence")
+    if not meta or root is None:
+        return
+    source = Path(root) / str(meta["path"])
+    if not source.is_file():
+        return
+    current = store.one("SELECT evidence_id FROM state_run WHERE run_id = ?", (run_id,))
+    old_id = current["evidence_id"] if current is not None else None
+    if extended and old_id is not None:
+        old = store.one("SELECT bytes FROM evidence WHERE evidence_id = ?", (old_id,))
+        if old is not None and int(old["bytes"] or 0) >= source.stat().st_size:
+            return
+    # The evidence belongs to the run's session so that replacing a later
+    # session cannot delete the crop of an earlier run it extended.
+    evidence_id = copy_into_store(
+        store,
+        source=source,
+        session_id=run_session,
+        instance_id=home_iid,
+        captured_at=captured_at,
+        meta=meta,
+        folder=ingest_session_id,
+    )
+    if evidence_id is None:
+        return
+    store.update("state_run", "run_id", run_id, {"evidence_id": evidence_id})
+    if old_id is not None:
+        delete_evidence(store, old_id)
+
+
 def _ingest_runs(
-    store, graph, session_id, room_map, anchor_map, instance_map, clock, report
+    store,
+    graph,
+    session_id,
+    room_map,
+    anchor_map,
+    instance_map,
+    clock,
+    report,
+    evidence_root=None,
 ) -> None:
     by_instance: dict[int, list[Mapping[str, Any]]] = {}
     for run in graph.get("state_runs", []):
@@ -490,6 +557,17 @@ def _ingest_runs(
                         },
                     )
                     report.runs_extended += 1
+                    _attach_evidence(
+                        store,
+                        run,
+                        run_id=previous["run_id"],
+                        run_session=previous["session_id"],
+                        ingest_session_id=session_id,
+                        home_iid=home_iid,
+                        captured_at=start,
+                        root=evidence_root,
+                        extended=True,
+                    )
                     continue
                 store.insert(
                     "event",
@@ -510,7 +588,7 @@ def _ingest_runs(
                 )
                 report.events_inserted += 1
             center = run.get("center") or [None, None, None]
-            store.insert(
+            run_id = store.insert(
                 "state_run",
                 {
                     "instance_id": home_iid,
@@ -530,6 +608,17 @@ def _ingest_runs(
                 },
             )
             report.runs_inserted += 1
+            _attach_evidence(
+                store,
+                run,
+                run_id=run_id,
+                run_session=session_id,
+                ingest_session_id=session_id,
+                home_iid=home_iid,
+                captured_at=start,
+                root=evidence_root,
+                extended=False,
+            )
         store.execute(
             "UPDATE instance SET observation_count = observation_count + ? WHERE instance_id = ?",
             (total, home_iid),
