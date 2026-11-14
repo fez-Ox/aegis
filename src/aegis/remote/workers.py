@@ -497,6 +497,7 @@ def run_detect_and_lift(
     from aegis.perception.detector import detect_and_track_objects
 
     weights_dir = Path(config.storage.model_mount) / "yolo"
+    track_embeddings: dict[int, tuple[float, ...]] = {}
     detections_2d = detect_and_track_objects(
         keyframe_records,
         paths.frames,
@@ -505,6 +506,7 @@ def run_detect_and_lift(
         weights_dir=weights_dir,
         vocabulary=config.vocab(),
         models=models,
+        track_embeddings=track_embeddings,
     )
 
     frame_res = tuple(metadata["resolution"])
@@ -612,6 +614,14 @@ def run_detect_and_lift(
             evidence_dir,
             max_side=config.memory.evidence.max_side,
             quality=config.memory.evidence.quality,
+        )
+
+    if track_embeddings:
+        ids = sorted(track_embeddings)
+        np.savez_compressed(
+            paths.objects_json.parent / "track_embeddings.npz",
+            track_ids=np.asarray(ids, dtype=np.int64),
+            embeddings=np.asarray([track_embeddings[i] for i in ids], dtype=np.float32),
         )
 
     r4d_path = paths.objects_json.parent / "r4d_scene_graph.json"

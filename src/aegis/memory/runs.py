@@ -215,7 +215,12 @@ def build_events(
     room_labels: Mapping[int, str],
     wallclock: Callable[[int], str | None],
 ) -> list[dict[str, Any]]:
-    """One event per change between consecutive runs of an instance."""
+    """One event per change between consecutive runs of an instance.
+
+    Hook (Milestone 3, todo 3.7 / M8): a vision-language model may caption
+    the evidence crop here, once per event, and cache the caption on the run.
+    Never per frame.
+    """
 
     events: list[dict[str, Any]] = []
     for instance_id, runs in runs_by_instance.items():

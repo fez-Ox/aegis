@@ -377,6 +377,8 @@ def build_relative_4d_scene_graph(
     shapes = [anchor_shape(anchor, vocab) for anchor in anchors]
     observations: list[Observation] = []
     for index, box in enumerate(object_boxes):
+        # Hook (Milestone 3, M8): when the result is uncertain, a VLM may be
+        # asked one closed question about the evidence crop.
         relation = classify_relation(
             box_footprint(box, frame),
             shapes,

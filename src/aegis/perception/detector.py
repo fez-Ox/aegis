@@ -50,6 +50,7 @@ class _TrackState:
     velocity: tuple[float, float] = (0.0, 0.0)
     last_index: int = 0
     appearance: tuple[float, ...] | None = None
+    embedding: tuple[float, ...] | None = None
 
 
 def _appearance_descriptor(
@@ -112,6 +113,77 @@ def _appearance_distance(
     if first is None or second is None or len(first) != len(second):
         return None
     return float(0.5 * sum(abs(a - b) for a, b in zip(first, second, strict=True)))
+
+
+Box = tuple[str, float, tuple[float, float, float, float]]
+
+
+def suppress_duplicates(
+    boxes: Sequence[Box], *, duplicate_iou: float, max_detections: int
+) -> list[Box]:
+    """Drop a box only when a more confident box of the same label overlaps it.
+
+    Different classes never suppress each other (a shoe inside a cabinet, a
+    hand holding keys). At most ``max_detections`` boxes are kept.
+    """
+
+    kept: list[Box] = []
+    for item in sorted(boxes, key=lambda b: b[1], reverse=True):
+        if any(
+            other[0] == item[0] and _compute_iou(item[2], other[2]) > duplicate_iou
+            for other in kept
+        ):
+            continue
+        kept.append(item)
+        if len(kept) >= max_detections:
+            break
+    return kept
+
+
+def mask_area_ratio(
+    mask: Any, bbox: tuple[float, float, float, float], image_size: tuple[int, int]
+) -> float:
+    """Mask area as a fraction of its box area (mask may be at any resolution)."""
+
+    import numpy as np
+
+    width, height = image_size
+    box_area = max(bbox[2] - bbox[0], 0.0) * max(bbox[3] - bbox[1], 0.0)
+    if box_area <= 0 or width <= 0 or height <= 0:
+        return 0.0
+    values = np.asarray(mask, dtype=bool)
+    if values.size == 0:
+        return 0.0
+    mask_fraction = float(values.sum()) / float(values.size)
+    box_fraction = box_area / float(width * height)
+    return mask_fraction / box_fraction
+
+
+def choose_mask(
+    direct_mask: Any,
+    bbox: tuple[float, float, float, float],
+    image_size: tuple[int, int],
+    *,
+    min_area_ratio: float,
+) -> tuple[Any, bool]:
+    """Return (mask to use, whether SAM 2 is still needed) for ``mode=fallback``."""
+
+    if direct_mask is None:
+        return None, True
+    if mask_area_ratio(direct_mask, bbox, image_size) < min_area_ratio:
+        return direct_mask, True
+    return direct_mask, False
+
+
+def embedding_distance(
+    first: Sequence[float] | None, second: Sequence[float] | None
+) -> float | None:
+    """1 - cosine similarity of two L2-normalised embeddings."""
+
+    if first is None or second is None or len(first) != len(second):
+        return None
+    dot = sum(a * b for a, b in zip(first, second, strict=True))
+    return float(1.0 - dot)
 
 
 def _bbox_center(bbox: tuple[float, float, float, float]) -> tuple[float, float]:
@@ -189,11 +261,27 @@ def _dormant_match_cost(
     bbox: tuple[float, float, float, float],
     appearance: tuple[float, ...] | None,
     appearance_threshold: float,
+    embedding: tuple[float, ...] | None = None,
+    embedding_threshold: float | None = None,
 ) -> float | None:
-    """Match a disappeared object without trusting stale screen coordinates."""
-    if state.label != label or appearance is None:
+    """Match a disappeared object without trusting stale screen coordinates.
+
+    With a learned embedding on both sides it is the re-ID cue (``1 - cos``
+    against ``embedding_threshold``); otherwise the colour histogram is.
+    """
+    if state.label != label:
         return None
-    appearance_distance = _appearance_distance(state.appearance, appearance)
+    if (
+        embedding is not None
+        and state.embedding is not None
+        and embedding_threshold is not None
+    ):
+        appearance_distance = embedding_distance(state.embedding, embedding)
+        appearance_threshold = embedding_threshold
+    elif appearance is None:
+        return None
+    else:
+        appearance_distance = _appearance_distance(state.appearance, appearance)
     if appearance_distance is None or appearance_distance > appearance_threshold:
         return None
     old_width = max(state.bbox[2] - state.bbox[0], 1.0)
@@ -212,6 +300,7 @@ def _update_track(
     frame_index: int,
     smoothing: float,
     appearance: tuple[float, ...] | None = None,
+    embedding: tuple[float, ...] | None = None,
 ) -> None:
     """Update a track with an exponential position/velocity estimate."""
 
@@ -239,15 +328,76 @@ def _update_track(
                 0.7 * old + 0.3 * new
                 for old, new in zip(state.appearance, appearance, strict=True)
             )
+    if embedding is not None:
+        if state.embedding is None:
+            state.embedding = embedding
+        else:
+            mixed = [
+                0.7 * old + 0.3 * new
+                for old, new in zip(state.embedding, embedding, strict=True)
+            ]
+            norm = sum(v * v for v in mixed) ** 0.5 or 1.0
+            state.embedding = tuple(v / norm for v in mixed)
     state.last_index = frame_index
 
 
 @dataclass
 class DetectorModels:
-    """Loaded detector (YOLOE / YOLO-World) and optional SAM 2 predictor."""
+    """Loaded detector (YOLOE / YOLO-World), SAM 2 and optional re-ID model."""
 
     detector: Any
     sam2: Any = None
+    embedder: Any = None
+
+
+class DinoEmbedder:
+    """DINOv2 ViT-S/14 CLS embedding of a masked box crop (L2-normalised)."""
+
+    MODEL_ID = "facebook/dinov2-small"
+
+    def __init__(self) -> None:
+        import torch
+        from transformers import AutoModel
+
+        self.torch = torch
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = AutoModel.from_pretrained(self.MODEL_ID).to(self.device).eval()
+        self.mean = torch.tensor([0.485, 0.456, 0.406], device=self.device).view(
+            3, 1, 1
+        )
+        self.std = torch.tensor([0.229, 0.224, 0.225], device=self.device).view(3, 1, 1)
+
+    def __call__(
+        self, image_bgr: Any, bbox: tuple[float, float, float, float], mask: Any = None
+    ) -> tuple[float, ...] | None:
+        import cv2
+        import numpy as np
+
+        height, width = image_bgr.shape[:2]
+        x1, y1, x2, y2 = (round(v) for v in bbox)
+        x1, x2 = max(0, x1), min(width, x2)
+        y1, y2 = max(0, y1), min(height, y2)
+        if x2 <= x1 or y2 <= y1:
+            return None
+        crop = cv2.cvtColor(image_bgr[y1:y2, x1:x2], cv2.COLOR_BGR2RGB).astype(
+            np.float32
+        )
+        if mask is not None:
+            full = np.asarray(mask).astype(np.uint8)
+            if full.shape != (height, width):
+                full = cv2.resize(
+                    full, (width, height), interpolation=cv2.INTER_NEAREST
+                )
+            region = full[y1:y2, x1:x2] > 0
+            if region.sum() >= 8:
+                crop[~region] = crop.reshape(-1, 3).mean(axis=0)
+        crop = cv2.resize(crop, (224, 224), interpolation=cv2.INTER_AREA) / 255.0
+        tensor = self.torch.from_numpy(crop).permute(2, 0, 1).to(self.device)
+        tensor = ((tensor - self.mean) / self.std).unsqueeze(0)
+        with self.torch.inference_mode():
+            cls = self.model(pixel_values=tensor).last_hidden_state[0, 0]
+        cls = cls / cls.norm().clamp_min(1e-6)
+        return tuple(float(v) for v in cls.float().cpu().tolist())
 
 
 def load_models(
@@ -295,7 +445,15 @@ def load_models(
         except (ImportError, RuntimeError, ValueError, OSError, AttributeError) as err:
             print(f"[detector] Warning: Could not initialize SAM2ImagePredictor: {err}")
             sam2_predictor = None
-    return DetectorModels(detector=model, sam2=sam2_predictor)
+    if sam2_config is not None and sam2_config.mode == "off":
+        sam2_predictor = None
+    embedder = None
+    if config.reid_backend == "dino":
+        try:
+            embedder = DinoEmbedder()
+        except (ImportError, OSError, RuntimeError) as err:
+            print(f"[detector] Warning: DINOv2 unavailable, using HSV re-ID: {err}")
+    return DetectorModels(detector=model, sam2=sam2_predictor, embedder=embedder)
 
 
 def detect_and_track_objects(
@@ -307,6 +465,7 @@ def detect_and_track_objects(
     weights_dir: Path | None = None,
     vocabulary: Vocabulary | None = None,
     models: DetectorModels | None = None,
+    track_embeddings: dict[int, tuple[float, ...]] | None = None,
 ) -> list[Detection2D]:
     """Run open-vocabulary object detection and assign consistent track IDs.
 
@@ -345,20 +504,44 @@ def detect_and_track_objects(
     active_tracks: dict[int, _TrackState] = {}
     next_track_id = 1
 
-    for frame_index, record in enumerate(frame_records):
-        frame_id = int(record["frame_id"])
-        timestamp = float(record["timestamp"])
-        image_path = frames_dir / str(record["filename"])
-        if not image_path.exists():
-            continue
+    embedder = models.embedder
+    sam2_mode = sam2_config.mode if sam2_config is not None else "off"
+    min_area_ratio = sam2_config.min_mask_area_ratio if sam2_config is not None else 0.0
 
-        frame_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-        results = model.predict(
-            str(image_path),
+    def batches():
+        """Decode each frame once and predict in batches (M7)."""
+
+        pending: list[tuple[int, dict[str, Any], Any]] = []
+        for frame_index, record in enumerate(frame_records):
+            image_path = frames_dir / str(record["filename"])
+            if not image_path.exists():
+                continue
+            image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+            if image is None:
+                continue
+            pending.append((frame_index, record, image))
+            if len(pending) >= config.batch_size:
+                yield from _predict(pending)
+                pending = []
+        if pending:
+            yield from _predict(pending)
+
+    def _predict(items):
+        outputs = model.predict(
+            [image for _i, _r, image in items],
             conf=config.confidence_threshold,
             iou=config.iou_threshold,
             verbose=False,
+            # Masks at the original frame size, not the letterboxed one.
+            retina_masks=True,
         )
+        for (frame_index, record, image), output in zip(items, outputs, strict=True):
+            yield frame_index, record, image, [output]
+
+    for frame_index, record, frame_bgr, results in batches():
+        frame_id = int(record["frame_id"])
+        timestamp = float(record["timestamp"])
+        image_size = (int(frame_bgr.shape[1]), int(frame_bgr.shape[0]))
 
         current_frame_boxes: list[
             tuple[str, float, tuple[float, float, float, float]]
@@ -397,44 +580,37 @@ def detect_and_track_objects(
                     except (AttributeError, IndexError, RuntimeError):
                         pass
 
-        # Class-aware NMS to eliminate duplicate detections per category
-        # without suppressing hands that overlap objects during interaction/grasping.
-        if len(current_frame_boxes) > 1:
-            current_frame_boxes.sort(key=lambda item: item[1], reverse=True)
-            suppressed_boxes: list[
-                tuple[str, float, tuple[float, float, float, float]]
-            ] = []
-            for item in current_frame_boxes:
-                lbl_i = item[0]
-                bbox_i = item[2]
-                is_hand_i = vocab.role(lbl_i) == "hand"
-                suppress = False
-                for kept in suppressed_boxes:
-                    is_hand_kept = vocab.role(kept[0]) == "hand"
-                    if (
-                        is_hand_i == is_hand_kept
-                        and _compute_iou(bbox_i, kept[2]) > 0.35
-                    ):
-                        suppress = True
-                        break
-                if not suppress:
-                    suppressed_boxes.append(item)
-                if len(suppressed_boxes) >= 6:
-                    break
-            current_frame_boxes = suppressed_boxes
+        # Duplicates of the same label only (M4); different classes never
+        # suppress each other.
+        current_frame_boxes = suppress_duplicates(
+            current_frame_boxes,
+            duplicate_iou=config.duplicate_iou,
+            max_detections=config.max_detections_per_frame,
+        )
 
-        # Generate SAM 2 masks for current frame detections if predictor is active
-        masks_by_idx: dict[int, Any] = {
-            b_idx: direct_masks_by_bbox.get(bbox)
-            for b_idx, (_label, _conf, bbox) in enumerate(current_frame_boxes)
-            if bbox in direct_masks_by_bbox
-        }
-        if sam2_predictor is not None and current_frame_boxes and frame_bgr is not None:
+        # Masks: YOLOE's own mask when adequate, SAM 2 only where needed (M1).
+        masks_by_idx: dict[int, Any] = {}
+        needs_sam: list[int] = []
+        for b_idx, (_label, _conf, bbox) in enumerate(current_frame_boxes):
+            direct = direct_masks_by_bbox.get(bbox)
+            if sam2_mode == "always":
+                masks_by_idx[b_idx] = direct
+                needs_sam.append(b_idx)
+            elif sam2_mode == "fallback":
+                chosen, need = choose_mask(
+                    direct, bbox, image_size, min_area_ratio=min_area_ratio
+                )
+                masks_by_idx[b_idx] = chosen
+                if need:
+                    needs_sam.append(b_idx)
+            else:
+                masks_by_idx[b_idx] = direct
+        if sam2_predictor is not None and needs_sam:
             import numpy as np
 
-            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-            sam2_predictor.set_image(frame_rgb)
-            for b_idx, (_, _, bbox_coord) in enumerate(current_frame_boxes):
+            sam2_predictor.set_image(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+            for b_idx in needs_sam:
+                bbox_coord = current_frame_boxes[b_idx][2]
                 try:
                     box_arr = np.array(bbox_coord, dtype=np.float32)
                     p_masks, p_scores, _ = sam2_predictor.predict(
@@ -446,9 +622,16 @@ def detect_and_track_objects(
                     if candidate.any():
                         masks_by_idx[b_idx] = candidate
                 except (RuntimeError, ValueError, IndexError, TypeError):
-                    # Keep a direct YOLOE mask, if one was produced.
-                    masks_by_idx.setdefault(b_idx, None)
+                    pass  # keep the direct YOLOE mask, if any
 
+        embedding_by_idx: dict[int, tuple[float, ...] | None] = {
+            b_idx: (
+                embedder(frame_bgr, bbox, masks_by_idx.get(b_idx))
+                if embedder is not None
+                else None
+            )
+            for b_idx, (_label, _conf, bbox) in enumerate(current_frame_boxes)
+        }
         appearance_by_idx: dict[int, tuple[float, ...] | None] = {
             b_idx: (
                 _appearance_descriptor(frame_bgr, bbox, masks_by_idx.get(b_idx))
@@ -475,6 +658,8 @@ def detect_and_track_objects(
                         bbox,
                         appearance,
                         config.reid_appearance_threshold,
+                        embedding_by_idx[b_idx],
+                        config.reid_embedding_threshold,
                     )
                 else:
                     cost = None
@@ -523,6 +708,7 @@ def detect_and_track_objects(
                     bbox=bbox,
                     last_index=frame_index,
                     appearance=appearance_by_idx[b_idx],
+                    embedding=embedding_by_idx[b_idx],
                 )
             else:
                 _update_track(
@@ -531,6 +717,7 @@ def detect_and_track_objects(
                     frame_index,
                     config.track_smoothing,
                     appearance_by_idx[b_idx],
+                    embedding_by_idx[b_idx],
                 )
 
             mask_val = masks_by_idx.get(b_idx)
@@ -551,4 +738,8 @@ def detect_and_track_objects(
                 )
             )
 
+    if track_embeddings is not None:
+        for track_id, state in active_tracks.items():
+            if state.embedding is not None:
+                track_embeddings[track_id] = state.embedding
     return all_detections

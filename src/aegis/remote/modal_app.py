@@ -91,6 +91,8 @@ PERCEPTION_IMAGE = (
         "ultralytics>=8.3,<9",
         "pyyaml>=6.0,<7",
         "huggingface_hub>=0.23,<1",
+        # DINOv2 re-ID embeddings (perception.reid_backend: dino).
+        "transformers>=4.48,<5",
     )
     .run_commands(
         "pip install git+https://github.com/facebookresearch/sam2.git || true"
@@ -198,6 +200,8 @@ class Perception:
                 runtime.perception.detector_backend,
                 runtime.perception.detector_model,
                 runtime.sam2.model_id if runtime.sam2 else "",
+                runtime.sam2.mode if runtime.sam2 else "",
+                runtime.perception.reid_backend,
             )
         )
         if self.models is None or self.models_key != key:

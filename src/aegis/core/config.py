@@ -229,6 +229,10 @@ class Sam2Config:
     model_id: str = "facebook/sam2-hiera-large"
     prompt_confidence_threshold: float = 0.35
     multimask_output: bool = False
+    # always: refine every box; fallback: only when the detector's own mask
+    # is missing or covers < min_mask_area_ratio of its box; off: never.
+    mode: str = "fallback"
+    min_mask_area_ratio: float = 0.15
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,6 +271,13 @@ class PerceptionConfig:
     track_smoothing: float = 0.65
     hand_contact_iou_threshold: float = 0.10
     hand_contact_max_distance: float = 0.35
+    # Same-label boxes overlapping more than this are duplicates.
+    duplicate_iou: float = 0.5
+    max_detections_per_frame: int = 30
+    batch_size: int = 8
+    # hsv (colour histogram) or dino (DINOv2 embedding) for dormant re-ID.
+    reid_backend: str = "hsv"
+    reid_embedding_threshold: float = 0.35
 
 
 @dataclass(frozen=True, slots=True)
@@ -685,7 +696,15 @@ class RuntimeConfig:
             multimask_output=bool(
                 sam2_raw.get("multimask_output", sam2_defaults.multimask_output)
             ),
+            mode=str(sam2_raw.get("mode", sam2_defaults.mode)).lower(),
+            min_mask_area_ratio=float(
+                sam2_raw.get("min_mask_area_ratio", sam2_defaults.min_mask_area_ratio)
+            ),
         )
+        if sam2.mode not in {"always", "fallback", "off"}:
+            raise ValueError("sam2.mode must be 'always', 'fallback' or 'off'")
+        if not 0.0 <= sam2.min_mask_area_ratio <= 1.0:
+            raise ValueError("sam2.min_mask_area_ratio must be in [0, 1]")
 
         vocabulary_raw = raw.get("vocabulary") or {}
         if not isinstance(vocabulary_raw, Mapping):
@@ -762,7 +781,37 @@ class RuntimeConfig:
                     perception_defaults.hand_contact_max_distance,
                 )
             ),
+            duplicate_iou=float(
+                perception_raw.get("duplicate_iou", perception_defaults.duplicate_iou)
+            ),
+            max_detections_per_frame=int(
+                perception_raw.get(
+                    "max_detections_per_frame",
+                    perception_defaults.max_detections_per_frame,
+                )
+            ),
+            batch_size=int(
+                perception_raw.get("batch_size", perception_defaults.batch_size)
+            ),
+            reid_backend=str(
+                perception_raw.get("reid_backend", perception_defaults.reid_backend)
+            ).lower(),
+            reid_embedding_threshold=float(
+                perception_raw.get(
+                    "reid_embedding_threshold",
+                    perception_defaults.reid_embedding_threshold,
+                )
+            ),
         )
+        if perception.reid_backend not in {"hsv", "dino"}:
+            raise ValueError("perception.reid_backend must be 'hsv' or 'dino'")
+        if (
+            not 0.0 < perception.duplicate_iou <= 1.0
+            or perception.max_detections_per_frame < 1
+            or perception.batch_size < 1
+            or not 0.0 < perception.reid_embedding_threshold <= 2.0
+        ):
+            raise ValueError("perception detection limits are out of valid range")
 
         if perception.detector_backend not in {"yoloe", "yolo_world"}:
             raise ValueError(
