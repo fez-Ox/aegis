@@ -61,72 +61,6 @@ Stage = Literal[
     "all",
 ]
 
-COMPREHENSIVE_INDOOR_CLASSES = [
-    # Spatial anchors (furniture & surfaces)
-    "cabinet",
-    "storage cabinet",
-    "shelf",
-    "cupboard",
-    "refrigerator",
-    "fridge",
-    "sink",
-    "counter",
-    "kitchen counter",
-    "table",
-    "dining table",
-    "desk",
-    "drawer",
-    "chair",
-    "couch",
-    "sofa",
-    "bed",
-    # Kitchen & dining objects
-    "cooking pot",
-    "pot",
-    "pan",
-    "bowl",
-    "plate",
-    "dish",
-    "cup",
-    "mug",
-    "water bottle",
-    "bottle",
-    "fork",
-    "spoon",
-    "knife",
-    "food",
-    # Personal & daily assistive objects
-    "shoes",
-    "shoe",
-    "slippers",
-    "keys",
-    "keychain",
-    "glasses",
-    "reading glasses",
-    "sunglasses",
-    "cell phone",
-    "phone",
-    "wallet",
-    "purse",
-    "backpack",
-    "bag",
-    "book",
-    "laptop",
-    "remote control",
-    "medicine",
-    "pill bottle",
-    # Household & clothing
-    "clothes",
-    "shirt",
-    "pants",
-    "towel",
-    "trash bin",
-    "wastebasket",
-    # Interaction
-    "hand",
-    "human hand",
-]
-
 
 def _validate_modal_mounts(config: RuntimeConfig) -> None:
     if config.storage.data_volume != DATA_VOLUME_NAME:
@@ -250,15 +184,6 @@ def main(
             print(
                 f"Custom perception target classes configured: {', '.join(parsed_classes)}"
             )
-    elif dataset_id != "demo01" and Path(config_path).name == "demo.yaml":
-        # The generic demo config opts into broad indoor discovery.  Keep
-        # dataset-specific configs (for example demo04) task-scoped; merging
-        # 60+ unrelated prompts creates false positives in their scene graphs.
-        existing_targets = list(
-            serialized_config["perception"].get("target_classes", [])
-        )
-        merged = list(dict.fromkeys(existing_targets + COMPREHENSIVE_INDOOR_CLASSES))
-        serialized_config["perception"]["target_classes"] = merged
 
     # 3. Apply optional runtime overrides
     if sample_fps is not None and sample_fps > 0:

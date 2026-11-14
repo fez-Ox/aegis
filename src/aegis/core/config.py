@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from aegis.core.vocabulary import Vocabulary, default_vocabulary
 
 DEFAULT_DROID_WEIGHTS_URL = (
     "https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh"
@@ -15,6 +18,19 @@ DEFAULT_DROID_WEIGHTS_URL = (
 DEFAULT_DROID_CALIB_WEIGHTS_URL = (
     "https://raw.githubusercontent.com/boschresearch/DroidCalib/main/droidcalib.pth"
 )
+
+
+@lru_cache(maxsize=8)
+def _vocabulary_from_key(key: str) -> Vocabulary:
+    import json
+
+    return Vocabulary.from_mapping(json.loads(key))
+
+
+def _vocabulary_from_mapping(raw: Mapping[str, Any]) -> Vocabulary:
+    import json
+
+    return _vocabulary_from_key(json.dumps(raw, sort_keys=True, default=list))
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -281,7 +297,12 @@ class MemoryConfig:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    """Complete configuration passed from the local orchestrator to Modal."""
+    """Complete configuration passed from the local orchestrator to Modal.
+
+    ``vocabulary`` holds the serialised vocabulary (``Vocabulary.to_mapping``)
+    so that remote workers, which do not ship the YAML file, get the same
+    label roles as local code. Use :meth:`vocab` to obtain the object.
+    """
 
     storage: StorageConfig = field(default_factory=StorageConfig)
     video: VideoConfig = field(default_factory=VideoConfig)
@@ -295,6 +316,14 @@ class RuntimeConfig:
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     live: LiveCaptureConfig = field(default_factory=LiveCaptureConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
+    vocabulary: Mapping[str, Any] = field(default_factory=dict)
+
+    def vocab(self) -> Vocabulary:
+        """Return the vocabulary carried in the config, else the repository file."""
+
+        if self.vocabulary:
+            return _vocabulary_from_mapping(self.vocabulary)
+        return default_vocabulary()
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> RuntimeConfig:
@@ -489,7 +518,18 @@ class RuntimeConfig:
             ),
         )
 
+        vocabulary_raw = raw.get("vocabulary") or {}
+        if not isinstance(vocabulary_raw, Mapping):
+            raise TypeError("vocabulary must be a mapping")
+        if vocabulary_raw:
+            # Validate early so a broken vocabulary fails before any Modal call.
+            _vocabulary_from_mapping(vocabulary_raw)
+
         target_classes_raw = perception_raw.get("target_classes")
+        if target_classes_raw is None and vocabulary_raw:
+            target_classes_raw = list(
+                _vocabulary_from_mapping(vocabulary_raw).detector_prompts()
+            )
         if target_classes_raw is not None:
             if not isinstance(target_classes_raw, Sequence) or isinstance(
                 target_classes_raw, (str, bytes)
@@ -722,17 +762,30 @@ class RuntimeConfig:
             memory=MemoryConfig(rooms=rooms),
             live=live,
             visualization=visualization,
+            vocabulary=dict(vocabulary_raw),
         )
 
 
 def load_config(path: str | Path) -> RuntimeConfig:
-    """Load a YAML runtime configuration from ``path``."""
+    """Load a YAML runtime configuration from ``path``.
+
+    The vocabulary file named by the optional top-level ``vocabulary_file`` key
+    (default ``vocabulary.yaml``, relative to the config file) is loaded and
+    embedded so it travels to remote workers with the rest of the config.
+    """
 
     config_path = Path(path)
     with config_path.open("r", encoding="utf-8") as handle:
         raw = yaml.safe_load(handle) or {}
     if not isinstance(raw, Mapping):
         raise TypeError("configuration root must be a mapping")
+    raw = dict(raw)
+    if not raw.get("vocabulary"):
+        vocabulary_name = str(raw.get("vocabulary_file") or "vocabulary.yaml")
+        vocabulary_path = Path(vocabulary_name)
+        if not vocabulary_path.is_absolute():
+            vocabulary_path = config_path.parent / vocabulary_path
+        raw["vocabulary"] = Vocabulary.load(vocabulary_path).to_mapping()
     return RuntimeConfig.from_mapping(raw)
 
 

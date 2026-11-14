@@ -378,6 +378,7 @@ def run_detect_and_lift(
         config.perception,
         sam2_config=config.sam2,
         weights_dir=weights_dir,
+        vocabulary=config.vocab(),
     )
 
     frame_res = tuple(
@@ -430,6 +431,7 @@ def run_detect_and_lift(
         estimate_rooms=config.memory.rooms.enabled,
         zone_link_radius=config.memory.rooms.zone_link_radius,
         min_zone_keyframes=config.memory.rooms.min_zone_keyframes,
+        vocabulary=config.vocab(),
     )
 
     paths.objects_json.parent.mkdir(parents=True, exist_ok=True)

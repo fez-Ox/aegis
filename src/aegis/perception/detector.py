@@ -13,6 +13,7 @@ from typing import Any
 
 from aegis.core.config import PerceptionConfig, Sam2Config
 from aegis.core.models import Detection2D
+from aegis.core.vocabulary import Vocabulary, default_vocabulary
 
 
 def _compute_iou(
@@ -241,15 +242,6 @@ def _update_track(
     state.last_index = frame_index
 
 
-def _canonical_label(label: str) -> str:
-    normalized = " ".join(label.lower().strip().split())
-    if normalized in {"shoe", "shoes"}:
-        return "shoes"
-    if normalized in {"hand", "human hand", "hands"}:
-        return "hand"
-    return normalized
-
-
 def detect_and_track_objects(
     frame_records: Sequence[dict[str, Any]],
     frames_dir: Path,
@@ -257,6 +249,7 @@ def detect_and_track_objects(
     *,
     sam2_config: Sam2Config | None = None,
     weights_dir: Path | None = None,
+    vocabulary: Vocabulary | None = None,
 ) -> list[Detection2D]:
     """Run open-vocabulary object detection and assign consistent track IDs.
 
@@ -272,6 +265,9 @@ def detect_and_track_objects(
         SAM 2 configuration for extracting instance segmentation masks.
     weights_dir : Path | None
         Directory to store downloaded YOLO weights.
+    vocabulary : Vocabulary | None
+        Label vocabulary. Remote workers must pass ``config.vocab()``; ``None``
+        reads the repository file and only works locally.
 
     Returns
     -------
@@ -283,6 +279,8 @@ def detect_and_track_objects(
 
     import cv2
     from ultralytics import YOLO, YOLOWorld
+
+    vocab = vocabulary or default_vocabulary()
 
     # YOLOE-seg is promptable and emits masks directly.  This avoids relying on
     # a weak detector box before SAM2 is asked to segment the object.  The
@@ -363,7 +361,7 @@ def detect_and_track_objects(
                         if cls_id < len(names)
                         else f"object_{cls_id}"
                     )
-                label = _canonical_label(raw_label)
+                label = vocab.canonical(raw_label)
                 conf = float(boxes.conf[idx].item())
                 xyxy = tuple(float(v) for v in boxes.xyxy[idx].tolist())
                 current_frame_boxes.append(
@@ -387,10 +385,10 @@ def detect_and_track_objects(
             for item in current_frame_boxes:
                 lbl_i = item[0]
                 bbox_i = item[2]
-                is_hand_i = lbl_i == "hand"
+                is_hand_i = vocab.role(lbl_i) == "hand"
                 suppress = False
                 for kept in suppressed_boxes:
-                    is_hand_kept = kept[0] == "hand"
+                    is_hand_kept = vocab.role(kept[0]) == "hand"
                     if (
                         is_hand_i == is_hand_kept
                         and _compute_iou(bbox_i, kept[2]) > 0.35
@@ -473,10 +471,14 @@ def detect_and_track_objects(
         # Compute hand-object contact association
         contact_pairs: dict[int, int] = {}  # hand_box_index -> object_track_id
         hand_indices = [
-            idx for idx, (lbl, _, _) in enumerate(current_frame_boxes) if lbl == "hand"
+            idx
+            for idx, (lbl, _, _) in enumerate(current_frame_boxes)
+            if vocab.role(lbl) == "hand"
         ]
         object_indices = [
-            idx for idx, (lbl, _, _) in enumerate(current_frame_boxes) if lbl != "hand"
+            idx
+            for idx, (lbl, _, _) in enumerate(current_frame_boxes)
+            if vocab.role(lbl) != "hand"
         ]
 
         for h_idx in hand_indices:
@@ -510,7 +512,7 @@ def detect_and_track_objects(
                 )
 
             mask_val = masks_by_idx.get(b_idx)
-            is_hand = label == "hand"
+            is_hand = vocab.role(label) == "hand"
             target_obj_track_id = contact_pairs.get(b_idx) if is_hand else None
             all_detections.append(
                 Detection2D(

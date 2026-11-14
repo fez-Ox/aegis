@@ -15,32 +15,13 @@ from typing import Any
 import numpy as np
 
 from aegis.core.models import BoundingBox3D
+from aegis.core.vocabulary import Vocabulary, default_vocabulary
 from aegis.memory.rooms import (
     RoomRegion,
     extract_room_regions,
     implicit_room_from_anchors,
-    is_room_landmark_label,
     room_for_point,
 )
-
-ANCHOR_CLASS_NAMES = {
-    "cabinet",
-    "shelf",
-    "cupboard",
-    "table",
-    "desk",
-    "counter",
-    "kitchen counter",
-    "drawer",
-    "refrigerator",
-    "fridge",
-    "sink",
-    "storage cabinet",
-    "podium",
-    "lectern",
-    "rostrum",
-    "stand",
-}
 
 
 @dataclass
@@ -148,48 +129,28 @@ class Relative4DSceneGraph:
         }
 
 
-def _normalise_label(label: str) -> str:
-    normalized = " ".join(label.lower().strip().split())
-    if normalized in {"shoe", "shoes"}:
-        return "shoes"
-    if normalized in {"bottle", "water bottle"}:
-        return "bottle"
-    if normalized in {"phone", "cell phone", "mobile phone"}:
-        return "cell phone"
-    return normalized
+def _vocab(vocabulary: Vocabulary | None) -> Vocabulary:
+    return vocabulary or default_vocabulary()
 
 
-def _is_anchor_label(label: str) -> bool:
-    normalized = _normalise_label(label)
-    return normalized in ANCHOR_CLASS_NAMES or any(
-        anchor in normalized.split()
-        for anchor in ANCHOR_CLASS_NAMES
-        if " " not in anchor
-    )
+def _normalise_label(label: str, vocabulary: Vocabulary | None = None) -> str:
+    return _vocab(vocabulary).canonical(label)
 
 
-def _anchor_group_label(label: str) -> str:
-    normalized = _normalise_label(label)
-    if normalized in {"refrigerator", "fridge"}:
-        return "refrigerator"
-    if normalized in {"cabinet", "storage cabinet", "cupboard", "shelf"}:
-        return "storage cabinet"
-    if normalized in {"counter", "kitchen counter"}:
-        return "kitchen counter"
-    if normalized in {"table", "desk"}:
-        return "desk"
-    if normalized in {"podium", "lectern", "rostrum", "stand"}:
-        return "podium"
-    return normalized
+def _is_anchor_label(label: str, vocabulary: Vocabulary | None = None) -> bool:
+    return _vocab(vocabulary).role(label) == "anchor"
 
 
 def extract_spatial_anchors(
     boxes_3d: Sequence[BoundingBox3D],
     cluster_threshold: float = 0.40,
+    *,
+    vocabulary: Vocabulary | None = None,
 ) -> list[SpatialAnchor]:
     """Extract robust semantic anchor estimates from recurring observations."""
 
-    anchor_boxes = [box for box in boxes_3d if _is_anchor_label(box.label)]
+    vocab = _vocab(vocabulary)
+    anchor_boxes = [box for box in boxes_3d if _is_anchor_label(box.label, vocab)]
     if not anchor_boxes:
         return [
             SpatialAnchor(
@@ -203,7 +164,7 @@ def extract_spatial_anchors(
 
     groups: dict[str, list[BoundingBox3D]] = {}
     for box in anchor_boxes:
-        groups.setdefault(_anchor_group_label(box.label), []).append(box)
+        groups.setdefault(vocab.canonical(box.label), []).append(box)
 
     anchors: list[SpatialAnchor] = []
     anchor_idx = 1
@@ -230,7 +191,7 @@ def extract_spatial_anchors(
             sizes = np.asarray([box.size for box in cl], dtype=np.float64)
             canonical_center = np.median(centers, axis=0)
             canonical_size = np.quantile(sizes, 0.85, axis=0)
-            display_name = label.replace("_", " ").title()
+            display_name = vocab.display(label)
             if not display_name.endswith(
                 f"#{anchor_idx}"
             ) and not display_name.endswith(str(anchor_idx)):
@@ -275,6 +236,8 @@ def _appearance_distance(
 def classify_unique_instance(
     box: BoundingBox3D,
     existing_instances: dict[int, dict[str, Any]] | None = None,
+    *,
+    vocabulary: Vocabulary | None = None,
 ) -> tuple[int, str]:
     """Assign a persistent ID using track, appearance, and 3D evidence.
 
@@ -284,7 +247,8 @@ def classify_unique_instance(
     """
     c = np.asarray(box.center, dtype=np.float64)
     fid = box.frame_id
-    lbl = _normalise_label(box.label)
+    vocab = _vocab(vocabulary)
+    lbl = _normalise_label(box.label, vocab)
 
     if "shoe" in lbl:
         if c[0] < -0.095:
@@ -354,7 +318,7 @@ def classify_unique_instance(
                 return iid, info["display_name"]
 
     next_id = (max(existing_instances.keys()) + 1) if existing_instances else 1
-    display_name = f"{lbl.title()} #{next_id}"
+    display_name = f"{vocab.display(lbl)} #{next_id}"
     if existing_instances is not None:
         existing_instances[next_id] = {
             "label_key": lbl,
@@ -523,10 +487,12 @@ def build_relative_4d_scene_graph(
     estimate_rooms: bool = True,
     zone_link_radius: float = 1.5,
     min_zone_keyframes: int = 3,
+    vocabulary: Vocabulary | None = None,
 ) -> Relative4DSceneGraph:
     """Build persistent object memory, anchor-relative states, in-hand kinematics, room grounding, and transitions."""
 
-    anchors = extract_spatial_anchors(boxes_3d)
+    vocab = _vocab(vocabulary)
+    anchors = extract_spatial_anchors(boxes_3d, vocabulary=vocab)
 
     # Parse camera poses T_world_camera for kinematic in-hand tracking
     pose_by_frame: dict[int, tuple[np.ndarray, np.ndarray]] = {}
@@ -559,6 +525,7 @@ def build_relative_4d_scene_graph(
             boxes_3d,
             zone_link_radius=zone_link_radius,
             min_zone_keyframes=min_zone_keyframes,
+            vocabulary=vocab,
         )
     if not rooms:
         # Anchor-only memories (no usable trajectory) still get room-grounded
@@ -581,13 +548,10 @@ def build_relative_4d_scene_graph(
 
     by_frame: dict[int, list[BoundingBox3D]] = {}
     for box in boxes_3d:
-        # Room landmarks (doors, beds, sofas, ...) feed room estimation only;
-        # they are architectural context, not personal-object memories.
-        if (
-            not _is_anchor_label(box.label)
-            and not is_room_landmark_label(box.label)
-            and not getattr(box, "is_hand", False)
-        ):
+        # Only personal objects get memories: anchors are furniture, room
+        # landmarks (doors, windows, ...) are architectural context and hands
+        # are interaction cues.
+        if vocab.role(box.label) == "object" and not getattr(box, "is_hand", False):
             by_frame.setdefault(int(box.frame_id), []).append(box)
 
     last_known_by_instance: dict[int, dict[str, Any]] = {}
@@ -602,7 +566,9 @@ def build_relative_4d_scene_graph(
 
         best_by_instance: dict[int, tuple[str, BoundingBox3D]] = {}
         for box in frame_boxes:
-            inst_id, inst_name = classify_unique_instance(box, existing_instances)
+            inst_id, inst_name = classify_unique_instance(
+                box, existing_instances, vocabulary=vocab
+            )
             prev = best_by_instance.get(inst_id)
             if prev is None or box.confidence > prev[1].confidence:
                 best_by_instance[inst_id] = (inst_name, box)

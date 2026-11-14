@@ -72,25 +72,8 @@ perception:
   # YOLOE-seg provides open-vocabulary masks; SAM 2 refines them from the box.
   detector_backend: yoloe
   detector_model: yoloe-11l-seg.pt
-  target_classes:
-    - shoes
-    - shoe
-    - storage cabinet
-    - cabinet
-    - shelf
-    - hand
-    - human hand
-    # Room-defining landmarks: room-level evidence for the memory layer.
-    # They are never stored as personal-object memories.
-    - door
-    - sofa
-    - bed
-    - television
-    - toilet
-    - kitchen counter
-    - dining table
-    - stairs
-    - window
+  # target_classes is generated from config/vocabulary.yaml when omitted.
+  # Task-scoped configs (demo01/03/04/06.yaml) list their own prompts.
   confidence_threshold: 0.45
   iou_threshold: 0.45
   min_points_in_box: 25

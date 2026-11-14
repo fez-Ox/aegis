@@ -22,38 +22,11 @@ from typing import Any
 import numpy as np
 
 from aegis.core.models import BoundingBox3D
+from aegis.core.vocabulary import Vocabulary, default_vocabulary
 
 # Horizontal axes of the raw VGGT-Ω world frame (OpenCV-style: X right,
 # Y down, Z forward). "Up" is therefore -Y and the floor plane is (X, Z).
 _HORIZONTAL_AXES = (0, 2)
-
-# Room-defining landmarks and the room type each one votes for. These are
-# architectural / room-level classes, never personal-object memories.
-ROOM_LANDMARK_ROOM_TYPES: dict[str, str] = {
-    "bed": "Bedroom",
-    "wardrobe": "Bedroom",
-    "nightstand": "Bedroom",
-    "sofa": "Living Room",
-    "couch": "Living Room",
-    "television": "Living Room",
-    "tv": "Living Room",
-    "coffee table": "Living Room",
-    "refrigerator": "Kitchen",
-    "fridge": "Kitchen",
-    "kitchen counter": "Kitchen",
-    "kitchen island": "Kitchen",
-    "stove": "Kitchen",
-    "oven": "Kitchen",
-    "toilet": "Bathroom",
-    "bathtub": "Bathroom",
-    "shower": "Bathroom",
-    "bathroom sink": "Bathroom",
-    "dining table": "Dining Room",
-    "door": "Entryway",
-    "front door": "Entryway",
-    "stairs": "Stairway",
-    "staircase": "Stairway",
-}
 
 
 @dataclass
@@ -84,30 +57,17 @@ class RoomRegion:
         }
 
 
-def normalise_landmark_label(label: str) -> str:
-    """Normalise a raw detection label for room-landmark matching."""
+def is_room_landmark_label(label: str, vocabulary: Vocabulary | None = None) -> bool:
+    """Return True when the label is a room landmark (door, window, stairs, ...).
 
-    normalized = " ".join(str(label).lower().strip().split())
-    if normalized in {"television", "tv"}:
-        return "television"
-    if normalized in {"sofa", "couch"}:
-        return "sofa"
-    if normalized in {"refrigerator", "fridge"}:
-        return "refrigerator"
-    if normalized in {"stairs", "staircase"}:
-        return "stairs"
-    return normalized
-
-
-def is_room_landmark_label(label: str) -> bool:
-    """Return True when the label is a room-defining landmark class.
-
-    Room landmarks are architectural evidence for room estimation. They are
-    intentionally excluded from the object-level memory timeline: a door is
-    context for "which room", not an item the patient can misplace.
+    Room landmarks are architectural evidence for room estimation only. They
+    are never anchors and never personal-object memories: a door is context
+    for "which room", not an item the patient can misplace. Furniture such as
+    a bed is an *anchor* that also votes for the room type.
     """
 
-    return normalise_landmark_label(label) in ROOM_LANDMARK_ROOM_TYPES
+    vocab = vocabulary or default_vocabulary()
+    return vocab.role(label) == "landmark"
 
 
 def parse_camera_positions(
@@ -243,6 +203,7 @@ def extract_room_regions(
     *,
     zone_link_radius: float = 1.5,
     min_zone_keyframes: int = 3,
+    vocabulary: Vocabulary | None = None,
 ) -> list[RoomRegion]:
     """Estimate room regions from the wearer trajectory and room landmarks.
 
@@ -251,9 +212,12 @@ def extract_room_regions(
        from every existing zone (doorway crossings create natural splits).
     2. Merge zones whose centroids are within ``zone_link_radius`` so
        revisits to the same room join one region.
-    3. Type each zone by majority vote of nearby room-defining landmarks;
-       untyped zones fall back to neutral "Room #N" labels.
+    3. Type each zone by majority vote of nearby labels that carry a
+       ``room_type`` in the vocabulary (landmarks and typed anchors such as a
+       bed); untyped zones fall back to neutral "Room #N" labels.
     """
+
+    vocab = vocabulary or default_vocabulary()
 
     if zone_link_radius <= 0:
         raise ValueError("zone_link_radius must be positive")
@@ -315,8 +279,8 @@ def extract_room_regions(
     votes: list[dict[str, int]] = [{} for _ in valid_zones]
     evidence: list[set[str]] = [set() for _ in valid_zones]
     for box in boxes_3d:
-        landmark = normalise_landmark_label(box.label)
-        if landmark not in ROOM_LANDMARK_ROOM_TYPES:
+        entry = vocab.entry(box.label)
+        if entry.room_type is None or entry.role not in {"landmark", "anchor"}:
             continue
         center = np.asarray(box.center, dtype=np.float64)
         best_index = -1
@@ -327,9 +291,9 @@ def extract_room_regions(
                 best_distance = distance
                 best_index = zone_index
         if best_index >= 0 and best_distance <= max(zone_link_radius, 2.0):
-            room_type = ROOM_LANDMARK_ROOM_TYPES[landmark]
+            room_type = entry.room_type
             votes[best_index][room_type] = votes[best_index].get(room_type, 0) + 1
-            evidence[best_index].add(landmark.title())
+            evidence[best_index].add(entry.display)
 
     # Deterministic room IDs in temporal order of first observation.
     valid_zones.sort(key=lambda zone: min(zone.timestamps))
