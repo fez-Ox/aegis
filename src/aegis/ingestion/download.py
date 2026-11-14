@@ -323,3 +323,32 @@ def upload_to_modal_volume(
         err = res.stderr.strip() or res.stdout.strip()
         print(f"  ⚠ Modal upload warning: {err}")
         return False
+
+
+def set_recorded_at(dataset_dir: Path | str, recorded_at: str) -> Path:
+    """Store the wall-clock start time of a batch video in source_metadata.json.
+
+    Batch videos carry no capture timestamps. With ``recorded_at`` the memory
+    builder can place every frame in absolute time (``recorded_at + offset``),
+    which temporal queries and retention need.
+    """
+
+    import json
+
+    from aegis.core.timeutil import to_utc_iso
+
+    normalised = to_utc_iso(recorded_at)
+    path = Path(dataset_dir) / "source_metadata.json"
+    data: dict[str, Any] = {}
+    if path.exists():
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            data = loaded
+    data["recorded_at"] = normalised
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    temporary.replace(path)
+    return path

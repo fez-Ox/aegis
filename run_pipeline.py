@@ -91,6 +91,7 @@ def main(
     keyframe_stride: int | None = None,
     stage: Stage = "all",
     upload: bool = True,
+    recorded_at: str | None = None,
 ) -> None:
     """Submit one pipeline stage or the complete sequential pipeline to Modal.
 
@@ -174,6 +175,19 @@ def main(
         if local_video.exists():
             upload_to_modal_volume(
                 local_video, f"{dataset_id}/video.mp4", volume_name=DATA_VOLUME_NAME
+            )
+
+    # 1b. Wall-clock start of a batch video (live sessions carry their own).
+    if recorded_at:
+        from aegis.ingestion.download import set_recorded_at
+
+        metadata_path = set_recorded_at(Path("data") / dataset_id, recorded_at)
+        print(f"Recorded-at time stored in {metadata_path}")
+        if upload:
+            upload_to_modal_volume(
+                metadata_path,
+                f"{dataset_id}/source_metadata.json",
+                volume_name=DATA_VOLUME_NAME,
             )
 
     # 2. Configure target classes for perception
@@ -439,6 +453,12 @@ if __name__ == "__main__":
         default="config/demo.yaml",
         help="Path to config YAML",
     )
+    parser.add_argument(
+        "--recorded-at",
+        type=str,
+        default=None,
+        help="ISO-8601 start time of a batch video, e.g. 2026-11-15T09:30:00+05:00",
+    )
     args = parser.parse_args()
 
     # Dispatch to modal run
@@ -465,5 +485,7 @@ if __name__ == "__main__":
         cli_cmd.extend(["--sample-fps", str(args.sample_fps)])
     if args.keyframe_stride:
         cli_cmd.extend(["--keyframe-stride", str(args.keyframe_stride)])
+    if args.recorded_at:
+        cli_cmd.extend(["--recorded-at", args.recorded_at])
 
     sys.exit(subprocess.run(cli_cmd, check=False).returncode)

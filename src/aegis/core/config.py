@@ -345,11 +345,45 @@ class GravityConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class MemoryBuildConfig:
+    """Thresholds of the per-session memory builder.
+
+    Distances are multiplied by the session scale unit
+    (:meth:`aegis.geometry.gravity.GravityFrame.unit`).
+    """
+
+    anchor_cluster_radius: float = 0.40
+    association_radius: float = 0.45
+    appearance_threshold: float = 0.35
+    # An instance is confirmed (gets memory) after this many observations.
+    min_observations: int = 2
+    # A new state must be seen this many times in a row to replace the old.
+    min_run_observations: int = 2
+    # A single final observation may still commit a state above this
+    # detection confidence when its relation is certain.
+    trailing_single_confidence: float = 0.5
+    vertical_tolerance: float = 0.15
+
+    def __post_init__(self) -> None:
+        if (
+            self.anchor_cluster_radius <= 0
+            or self.association_radius <= 0
+            or not 0 < self.appearance_threshold <= 1
+            or self.min_observations < 1
+            or self.min_run_observations < 1
+            or not 0 <= self.trailing_single_confidence <= 1
+            or self.vertical_tolerance <= 0
+        ):
+            raise ValueError("memory.build values are outside their valid ranges")
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryConfig:
     """Spatio-temporal memory construction settings."""
 
     rooms: RoomMemoryConfig = field(default_factory=RoomMemoryConfig)
     gravity: GravityConfig = field(default_factory=GravityConfig)
+    build: MemoryBuildConfig = field(default_factory=MemoryBuildConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -820,6 +854,9 @@ class RuntimeConfig:
                 rooms=rooms,
                 gravity=_section(
                     GravityConfig, memory_raw.get("gravity"), "memory.gravity"
+                ),
+                build=_section(
+                    MemoryBuildConfig, memory_raw.get("build"), "memory.build"
                 ),
             ),
             live=live,

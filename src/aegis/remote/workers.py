@@ -102,6 +102,7 @@ def _clear_downstream_artifacts(paths: DatasetPaths) -> None:
         paths.benchmark_stats,
         paths.objects_json.parent / "r4d_scene_graph.json",
         paths.objects_json.parent / "spatial_memory_graph.json",
+        paths.objects_json.parent / "r4d_timeline.json",
     ):
         if stale_file.exists():
             stale_file.unlink()
@@ -133,6 +134,44 @@ def _live_dataset_metadata(paths: DatasetPaths) -> dict[str, Any] | None:
             f"live dataset frames are missing ({len(missing)}): {preview}"
         )
     return metadata
+
+
+def _wallclock_by_frame(
+    paths: DatasetPaths, frame_records: Sequence[Mapping[str, Any]]
+) -> tuple[dict[int, str], str]:
+    """Absolute capture time per frame, and where it came from.
+
+    Live datasets carry ``capture_timestamp`` per frame. Batch videos use
+    ``recorded_at`` from ``source_metadata.json`` plus the frame offset when
+    the operator supplied it. Otherwise no wall-clock time exists.
+    """
+
+    from aegis.core.timeutil import shift_iso, to_utc_iso
+
+    captured = {
+        int(rec["frame_id"]): to_utc_iso(str(rec["capture_timestamp"]))
+        for rec in frame_records
+        if rec.get("capture_timestamp")
+    }
+    if captured and len(captured) == len(frame_records):
+        return captured, "capture"
+    recorded_at = None
+    if paths.source_metadata.exists():
+        try:
+            recorded_at = _read_json(paths.source_metadata).get("recorded_at")
+        except (ValueError, TypeError, OSError):
+            recorded_at = None
+    if recorded_at:
+        return (
+            {
+                int(rec["frame_id"]): shift_iso(
+                    str(recorded_at), float(rec["timestamp"])
+                )
+                for rec in frame_records
+            },
+            "recorded_at",
+        )
+    return {}, "none"
 
 
 def run_preprocess(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
@@ -463,6 +502,7 @@ def run_detect_and_lift(
         pose_data = _read_json(paths.poses)
         pose_records = pose_data.get("poses", [])
 
+    wallclock_by_frame, time_source = _wallclock_by_frame(paths, keyframe_records)
     scene_graph = build_relative_4d_scene_graph(
         lifted_boxes,
         all_kf_ids,
@@ -471,8 +511,14 @@ def run_detect_and_lift(
         estimate_rooms=config.memory.rooms.enabled,
         zone_link_radius=config.memory.rooms.zone_link_radius,
         min_zone_keyframes=config.memory.rooms.min_zone_keyframes,
-        vocabulary=config.vocab(),
+        vocabulary=vocabulary,
+        gravity=gravity,
+        wallclock_by_frame=wallclock_by_frame,
+        settings=config.memory.build,
+        assumed_camera_height=gravity_cfg.assumed_camera_height,
+        min_gravity_confidence=gravity_cfg.min_confidence,
     )
+    scene_graph.session.update(dataset_id=dataset_id, time_source=time_source)
 
     paths.objects_json.parent.mkdir(parents=True, exist_ok=True)
     _write_json(
@@ -493,8 +539,19 @@ def run_detect_and_lift(
     # Store ownership in the artifact so the API can reject a stale graph
     # copied from another video instead of serving cross-scene memories.
     scene_graph_data["dataset_id"] = dataset_id
-    scene_graph_data["schema_version"] = 1
     _write_json(r4d_path, scene_graph_data)
+
+    # The per-keyframe view grows with video length; it exists only for the
+    # Rerun recording and is never downloaded or served.
+    timeline_path = paths.objects_json.parent / "r4d_timeline.json"
+    _write_json(
+        timeline_path,
+        {
+            "schema_version": 1,
+            "dataset_id": dataset_id,
+            "timeline": scene_graph.timeline_dict(),
+        },
+    )
 
     _write_json(
         paths.events_json,
@@ -505,27 +562,24 @@ def run_detect_and_lift(
         },
     )
 
-    # Save Structured Spatial Memory Graph
+    # Small manifest pointing at the artifacts (no embedded copies).
     memory_graph_path = paths.objects_json.parent / "spatial_memory_graph.json"
     _write_json(
         memory_graph_path,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "dataset_id": dataset_id,
-            "layer_1": {
-                "description": "Static Voxelized 3D Room Canvas",
-                "pointcloud_file": str(paths.pointcloud_ply),
-            },
-            "layer_2": {
-                "description": "R4DSG Persistent Object Tracker & Relational States "
-                "(Rooms -> Anchors -> Objects hierarchy)",
-                "room_count": len(scene_graph.rooms),
-                "total_instances": len(motion_trails),
-                "total_boxes_3d": len(lifted_boxes),
-                "objects": serialize_boxes_3d(lifted_boxes),
-                "motion_trails": {str(k): v for k, v in motion_trails.items()},
-                "r4d_scene_graph": scene_graph.as_dict(),
-            },
+            "pointcloud_file": paths.pointcloud_ply.name,
+            "objects_file": paths.objects_json.name,
+            "scene_graph_file": r4d_path.name,
+            "timeline_file": timeline_path.name,
+            "events_file": paths.events_json.name,
+            "room_count": len(scene_graph.rooms),
+            "anchor_count": len(scene_graph.anchors),
+            "instance_count": len(scene_graph.latest_states),
+            "state_run_count": len(scene_graph.state_runs),
+            "event_count": len(scene_graph.events),
+            "total_boxes_3d": len(lifted_boxes),
         },
     )
 
@@ -835,6 +889,9 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         r4d_rooms = r4d_data.get("rooms", [])
         r4d_timeline = r4d_data.get("timeline", {})
         r4d_events = r4d_data.get("events", [])
+    timeline_path = paths.objects_json.parent / "r4d_timeline.json"
+    if timeline_path.exists():
+        r4d_timeline = _read_json(timeline_path).get("timeline", {})
 
     if paths.objects_json.exists():
         obj_data = _read_json(paths.objects_json)
