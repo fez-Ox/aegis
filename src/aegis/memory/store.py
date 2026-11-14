@@ -394,6 +394,45 @@ class HomeStore:
         )
 
     # ------------------------------------------------------------ reads
+    def activities(
+        self, start: str | None = None, end: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Activities with room names and their event ids, oldest first."""
+
+        where, params = _range_clause("a.end_at", start, end)
+        rows = self.query(
+            f"""
+            SELECT a.*, r.label AS room_label
+            FROM activity a LEFT JOIN room r ON r.room_id = a.room_id
+            {where}
+            ORDER BY a.start_at, a.activity_id
+            """,
+            params,
+        )
+        result = []
+        for row in rows:
+            event_ids = [
+                f"event_{e[0]:06d}"
+                for e in self.query(
+                    "SELECT event_id FROM event WHERE activity_id = ? ORDER BY end_at",
+                    (row["activity_id"],),
+                )
+            ]
+            result.append(
+                {
+                    "activity_id": row["activity_id"],
+                    "room_id": row["room_id"],
+                    "room_label": row["room_label"],
+                    "start_at": row["start_at"],
+                    "end_at": row["end_at"],
+                    "event_count": row["event_count"],
+                    "summary": row["summary"],
+                    "events": event_ids,
+                    "tier": "detailed",
+                }
+            )
+        return result
+
     def latest_states(self) -> list[dict[str, Any]]:
         """Last-known state of every object, with names resolved."""
 
@@ -481,6 +520,19 @@ class HomeStore:
             }
             for row in rows
         ]
+
+
+def _range_clause(
+    column: str, start: str | None, end: str | None
+) -> tuple[str, list[str]]:
+    clauses, params = [], []
+    if start is not None:
+        clauses.append(f"{column} >= ?")
+        params.append(to_utc_iso(start))
+    if end is not None:
+        clauses.append(f"{column} <= ?")
+        params.append(to_utc_iso(end))
+    return (f"WHERE {' AND '.join(clauses)}" if clauses else ""), params
 
 
 def open_store(home_id: str, store_root: str | Path | None = None) -> HomeStore:

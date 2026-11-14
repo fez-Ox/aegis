@@ -18,6 +18,7 @@ from typing import Any
 from aegis.core.timeutil import parse_iso, shift_iso, to_utc_iso, utc_now
 from aegis.core.vocabulary import Vocabulary, default_vocabulary
 from aegis.geometry.gravity import GravityFrame
+from aegis.memory.activities import DEFAULT_TIMEZONE, store_session_activities
 from aegis.memory.matching import (
     AnchorInfo,
     InstanceInfo,
@@ -45,6 +46,7 @@ class IngestReport:
     runs_extended: int = 0
     events_inserted: int = 0
     events_skipped: int = 0
+    activities: int = 0
     detail: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -101,6 +103,7 @@ def ingest_session(
     *,
     vocabulary: Vocabulary | None = None,
     now: datetime | None = None,
+    timezone: str = DEFAULT_TIMEZONE,
 ) -> IngestReport:
     """Merge ``graph`` into ``store``; see the module docstring."""
 
@@ -162,6 +165,9 @@ def ingest_session(
         last_room = _ingest_visits(store, graph, session_id, room_map, clock)
         store.update(
             "session", "session_id", session_id, {"last_wearer_room_id": last_room}
+        )
+        report.activities = store_session_activities(
+            store, session_id, timezone=timezone
         )
         for home_iid in set(instance_map.values()):
             if home_iid is not None:

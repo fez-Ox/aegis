@@ -163,6 +163,7 @@ class TimelineEventModel(BaseModel):
     end_time: float
     start_wallclock: str | None = None
     end_wallclock: str | None = None
+    activity_id: int | None = None
     summary: str
 
 
@@ -635,10 +636,41 @@ def get_timeline(
                 end_time=float(event.get("end_time", 0.0)),
                 start_wallclock=event.get("start_wallclock"),
                 end_wallclock=event.get("end_wallclock"),
+                activity_id=event.get("activity_id"),
                 summary=event_summary(event),
             )
         )
     return results
+
+
+class ActivityModel(BaseModel):
+    activity_id: int
+    room_id: int | None = None
+    room_label: str | None = None
+    start_at: str
+    end_at: str
+    event_count: int
+    summary: str
+    events: list[str] = Field(default_factory=list)
+    tier: str = "detailed"
+
+
+@app.get("/api/v1/activities", response_model=list[ActivityModel])
+def get_activities(
+    home_id: str = Query(..., description="Home whose activity history to list"),
+    start: str | None = None,
+    end: str | None = None,
+) -> list[ActivityModel]:
+    """Room stays with the object changes inside them (home store only)."""
+
+    _home, repo = resolve_repository(None, home_id)
+    try:
+        rows = repo.store.activities(start, end)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="start/end must be ISO-8601 with a timezone"
+        ) from exc
+    return [ActivityModel(**row) for row in rows]
 
 
 @app.get("/api/v1/crops/{instance_id}")
