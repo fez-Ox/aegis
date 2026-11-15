@@ -20,6 +20,7 @@ Usage examples:
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any, Literal
@@ -40,18 +41,17 @@ from aegis.remote.modal_app import (
     DATA_VOLUME_NAME,
     MODEL_CACHE_VOLUME_NAME,
     MODEL_MOUNT,
+    Perception,
+    Reconstructor,
     app,
-    detect_and_lift_remote,
     preprocess_video_remote,
     rerun_remote,
-    vggt_reconstruct_remote,
 )
 
 Stage = Literal[
     "live",
     "preprocess",
     "vggt",
-    "dust3r",
     "reconstruct",
     "detect",
     "objects",
@@ -59,72 +59,6 @@ Stage = Literal[
     "memory",
     "detect_and_rerun",
     "all",
-]
-
-COMPREHENSIVE_INDOOR_CLASSES = [
-    # Spatial anchors (furniture & surfaces)
-    "cabinet",
-    "storage cabinet",
-    "shelf",
-    "cupboard",
-    "refrigerator",
-    "fridge",
-    "sink",
-    "counter",
-    "kitchen counter",
-    "table",
-    "dining table",
-    "desk",
-    "drawer",
-    "chair",
-    "couch",
-    "sofa",
-    "bed",
-    # Kitchen & dining objects
-    "cooking pot",
-    "pot",
-    "pan",
-    "bowl",
-    "plate",
-    "dish",
-    "cup",
-    "mug",
-    "water bottle",
-    "bottle",
-    "fork",
-    "spoon",
-    "knife",
-    "food",
-    # Personal & daily assistive objects
-    "shoes",
-    "shoe",
-    "slippers",
-    "keys",
-    "keychain",
-    "glasses",
-    "reading glasses",
-    "sunglasses",
-    "cell phone",
-    "phone",
-    "wallet",
-    "purse",
-    "backpack",
-    "bag",
-    "book",
-    "laptop",
-    "remote control",
-    "medicine",
-    "pill bottle",
-    # Household & clothing
-    "clothes",
-    "shirt",
-    "pants",
-    "towel",
-    "trash bin",
-    "wastebasket",
-    # Interaction
-    "hand",
-    "human hand",
 ]
 
 
@@ -158,6 +92,13 @@ def main(
     vggt_model: str | None = None,
     stage: Stage = "all",
     upload: bool = True,
+    recorded_at: str | None = None,
+    home_id: str | None = None,
+    no_ingest: bool = False,
+    segment_frames: int | None = None,
+    follow: bool = False,
+    keep_frames: bool = False,
+    rerun: bool = False,
 ) -> None:
     """Submit one pipeline stage or the complete sequential pipeline to Modal.
 
@@ -209,6 +150,26 @@ def main(
             dataset_id = "".join(
                 c if (c.isalnum() or c in "._-") else "_" for c in inferred
             )
+        frames_per_segment = (
+            config.live.segment_frames if segment_frames is None else segment_frames
+        )
+        if frames_per_segment > 0 and stage == "live":
+            _run_live_segmented(
+                live_path,
+                base_dataset_id=dataset_id,
+                segment_frames=frames_per_segment,
+                config=config,
+                serialized_config=_finalise_config(
+                    serialized_config, classes, sample_fps, keyframe_stride
+                ),
+                upload=upload,
+                home_id=home_id or config.memory.home_id,
+                ingest=not no_ingest,
+                follow=follow,
+                keep_frames=keep_frames,
+                rerun=rerun,
+            )
+            return
         promotion = promote_live_session(
             live_path,
             dataset_id=dataset_id,
@@ -246,6 +207,19 @@ def main(
                 local_video, f"{dataset_id}/video.mp4", volume_name=DATA_VOLUME_NAME
             )
 
+    # 1b. Wall-clock start of a batch video (live sessions carry their own).
+    if recorded_at:
+        from aegis.ingestion.download import set_recorded_at
+
+        metadata_path = set_recorded_at(Path("data") / dataset_id, recorded_at)
+        print(f"Recorded-at time stored in {metadata_path}")
+        if upload:
+            upload_to_modal_volume(
+                metadata_path,
+                f"{dataset_id}/source_metadata.json",
+                volume_name=DATA_VOLUME_NAME,
+            )
+
     # 2. Configure target classes for perception
     if classes:
         parsed_classes = [c.strip().lower() for c in classes.split(",") if c.strip()]
@@ -254,15 +228,6 @@ def main(
             print(
                 f"Custom perception target classes configured: {', '.join(parsed_classes)}"
             )
-    elif dataset_id != "demo01" and Path(config_path).name == "demo.yaml":
-        # The generic demo config opts into broad indoor discovery.  Keep
-        # dataset-specific configs (for example demo04) task-scoped; merging
-        # 60+ unrelated prompts creates false positives in their scene graphs.
-        existing_targets = list(
-            serialized_config["perception"].get("target_classes", [])
-        )
-        merged = list(dict.fromkeys(existing_targets + COMPREHENSIVE_INDOOR_CLASSES))
-        serialized_config["perception"]["target_classes"] = merged
 
     # 3. Apply optional runtime overrides
     if sample_fps is not None and sample_fps > 0:
@@ -300,7 +265,6 @@ def main(
         "live",
         "preprocess",
         "vggt",
-        "dust3r",
         "reconstruct",
         "detect",
         "objects",
@@ -325,24 +289,150 @@ def main(
 
     results: list[dict[str, Any]] = []
 
-    # Step 1: Preprocess video frames or a promoted live dataset
-    if stage in {"live", "preprocess", "all"}:
-        results.append(preprocess_video_remote.remote(dataset_id, serialized_config))
-
-    # Step 2: 3D Scene Reconstruction (VGGT-Ω)
-    if stage in {"vggt", "dust3r", "reconstruct", "all"}:
-        results.append(vggt_reconstruct_remote.remote(dataset_id, serialized_config))
-
-    # Step 3: 2D Object Perception and 3D Bounding Box Lifting
-    if stage in {"detect", "objects", "memory", "detect_and_rerun", "all"}:
-        results.append(detect_and_lift_remote.remote(dataset_id, serialized_config))
-
-    # Final Step: Build Rerun 4D visualization recording
-    if stage in {"rerun", "memory", "detect_and_rerun", "all"}:
-        results.append(rerun_remote.remote(dataset_id, serialized_config))
+    # A whole (unsegmented) live capture runs the full chain.
+    results = _run_stages(
+        dataset_id,
+        serialized_config,
+        preprocess=stage in {"live", "preprocess", "all"},
+        reconstruct=stage in {"live", "vggt", "reconstruct", "all"},
+        detect=stage
+        in {"live", "detect", "objects", "memory", "detect_and_rerun", "all"},
+        visualise=stage in {"live", "rerun", "memory", "detect_and_rerun", "all"},
+    )
 
     _print_benchmark_summary(results)
     _download_outputs(dataset_id)
+    if not no_ingest:
+        _ingest_into_home(dataset_id, config, home_id or config.memory.home_id)
+
+
+def _run_stages(
+    dataset_id: str,
+    serialized_config: dict[str, Any],
+    *,
+    preprocess: bool,
+    reconstruct: bool,
+    detect: bool,
+    visualise: bool,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    if preprocess:
+        results.append(preprocess_video_remote.remote(dataset_id, serialized_config))
+    if reconstruct:
+        results.append(Reconstructor().run.remote(dataset_id, serialized_config))
+    if detect:
+        results.append(Perception().run.remote(dataset_id, serialized_config))
+    if visualise:
+        results.append(rerun_remote.remote(dataset_id, serialized_config))
+    return results
+
+
+def _finalise_config(
+    serialized_config: dict[str, Any],
+    classes: str | None,
+    sample_fps: int | None,
+    keyframe_stride: int | None,
+) -> dict[str, Any]:
+    """Apply CLI overrides and the HF token (same rules as the batch path)."""
+
+    if classes:
+        parsed = [c.strip().lower() for c in classes.split(",") if c.strip()]
+        if parsed:
+            serialized_config["perception"]["target_classes"] = parsed
+    if sample_fps:
+        serialized_config["video"]["sample_fps"] = sample_fps
+    if keyframe_stride:
+        serialized_config["vggt"]["keyframe_stride"] = keyframe_stride
+    token = (
+        os.getenv("HF_TOKEN")
+        or os.getenv("HUGGING_FACE_HUB_TOKEN")
+        or os.getenv("hf_token")
+    )
+    if token:
+        serialized_config["hf_token"] = token
+    return serialized_config
+
+
+def _run_live_segmented(
+    live_path: Path,
+    *,
+    base_dataset_id: str,
+    segment_frames: int,
+    config: RuntimeConfig,
+    serialized_config: dict[str, Any],
+    upload: bool,
+    home_id: str,
+    ingest: bool,
+    follow: bool,
+    keep_frames: bool,
+    rerun: bool,
+) -> None:
+    """Promote, process, download and ingest one segment at a time."""
+
+    from aegis.ingestion.segment_runner import run_live_segments
+
+    def process(promotion: Any) -> None:
+        segment_id = promotion.dataset_id
+        print(
+            f"Segment {segment_id}: {promotion.frame_count} frames, "
+            f"{promotion.duration_sec:.1f}s"
+        )
+        if upload:
+            upload_dataset_to_modal_volume(
+                promotion.dataset_dir, segment_id, DATA_VOLUME_NAME
+            )
+        results = _run_stages(
+            segment_id,
+            serialized_config,
+            preprocess=True,
+            reconstruct=True,
+            detect=True,
+            visualise=rerun,
+        )
+        _print_benchmark_summary(results)
+        _download_outputs(segment_id)
+        if ingest:
+            _ingest_into_home(segment_id, config, home_id)
+
+    done = run_live_segments(
+        live_path,
+        base_dataset_id=base_dataset_id,
+        segment_frames=segment_frames,
+        process=process,
+        video=config.video,
+        camera=config.camera,
+        follow=follow,
+        keep_frames=keep_frames,
+    )
+    print(f"Processed {len(done)} segment(s) of {live_path.name}: {', '.join(done)}")
+
+
+def _ingest_into_home(dataset_id: str, config: RuntimeConfig, home_id: str) -> None:
+    """Merge the downloaded session graph into the home's durable memory."""
+
+    from aegis.memory.ingest import ingest_session
+    from aegis.memory.store import open_store
+
+    graph_path = Path("outputs") / dataset_id / "objects" / "r4d_scene_graph.json"
+    if not graph_path.exists():
+        print(f"  ⚠ No scene graph at {graph_path}; nothing ingested.")
+        return
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    if int(graph.get("schema_version", 1)) != 2:
+        print("  ⚠ Scene graph is schema v1; re-run the detect stage to ingest it.")
+        return
+    store = open_store(home_id, config.memory.store_root)
+    try:
+        report = ingest_session(
+            store,
+            graph,
+            vocabulary=config.vocab(),
+            evidence_root=graph_path.parent,
+            retention=config.memory.retention,
+        )
+    finally:
+        store.close()
+    print(f"  ✓ Ingested {dataset_id} into home {home_id}: {report.as_dict()}")
 
 
 def _print_benchmark_summary(results: list[dict[str, Any]]) -> None:
@@ -431,6 +521,24 @@ def _download_outputs(dataset_id: str) -> None:
     ]
 
     print("\n--- Syncing Artifacts from Modal Volume to Local ---")
+    evidence_local = local_root / dataset_id / "objects"
+    evidence_local.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "modal",
+            "volume",
+            "get",
+            "aegis-poc-data",
+            f"{dataset_id}/outputs/objects/evidence",
+            str(evidence_local),
+            "--force",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     for remote_path, local_dest in paths_to_fetch:
         local_dest.parent.mkdir(parents=True, exist_ok=True)
         cmd = [
@@ -522,10 +630,35 @@ if __name__ == "__main__":
         help="Path to config YAML",
     )
     parser.add_argument(
-        "--vggt-model",
+        "--recorded-at",
         type=str,
         default=None,
-        help="Hugging Face repo id override for the VGGT-OMEGA checkpoint",
+        help="ISO-8601 start time of a batch video, e.g. 2026-11-15T09:30:00+05:00",
+    )
+    parser.add_argument(
+        "--home-id", type=str, default=None, help="Home store to ingest into"
+    )
+    parser.add_argument(
+        "--segment-frames",
+        type=int,
+        default=None,
+        help="Frames per live segment (default: live.segment_frames; 0 = whole capture)",
+    )
+    parser.add_argument(
+        "--follow", action="store_true", help="Keep processing while the capture runs"
+    )
+    parser.add_argument(
+        "--keep-frames",
+        action="store_true",
+        help="Keep local segment frames after ingest",
+    )
+    parser.add_argument(
+        "--rerun", action="store_true", help="Also build a Rerun recording per segment"
+    )
+    parser.add_argument(
+        "--no-ingest",
+        action="store_true",
+        help="Do not ingest the result into the home store",
     )
     args = parser.parse_args()
 
@@ -553,7 +686,19 @@ if __name__ == "__main__":
         cli_cmd.extend(["--sample-fps", str(args.sample_fps)])
     if args.keyframe_stride:
         cli_cmd.extend(["--keyframe-stride", str(args.keyframe_stride)])
-    if args.vggt_model:
-        cli_cmd.extend(["--vggt-model", args.vggt_model])
+    if args.recorded_at:
+        cli_cmd.extend(["--recorded-at", args.recorded_at])
+    if args.home_id:
+        cli_cmd.extend(["--home-id", args.home_id])
+    if args.no_ingest:
+        cli_cmd.append("--no-ingest")
+    if args.segment_frames is not None:
+        cli_cmd.extend(["--segment-frames", str(args.segment_frames)])
+    if args.follow:
+        cli_cmd.append("--follow")
+    if args.keep_frames:
+        cli_cmd.append("--keep-frames")
+    if args.rerun:
+        cli_cmd.append("--rerun")
 
     sys.exit(subprocess.run(cli_cmd, check=False).returncode)

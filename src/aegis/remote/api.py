@@ -1,30 +1,49 @@
-"""FastAPI Spatio-Temporal Memory API gateway for Aegis.
+"""FastAPI memory API for the Aegis mobile client.
 
-Provides dementia-accessible query, timeline, and spatial anchor endpoints
-for the Flutter mobile client and external services. Can run locally with
-uvicorn or deployed serverless on Modal via modal.asgi_app.
+Serves query, timeline, anchor and room endpoints from a dataset's scene
+graph. Answers never contain invented values: a missing confidence is
+``null``, an unknown anchor is ``null`` and an unprocessed dataset answers
+"not generated yet". The demo simulator routes exist only when
+``AEGIS_ENABLE_SIMULATOR=1``.
 """
 
 from __future__ import annotations
 
+import html
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from aegis.core.paths import validate_dataset_id
+from aegis.core.vocabulary import default_vocabulary
+from aegis.memory.compaction import compaction_ok
+from aegis.memory.homes import DuplicateRoomLabelError, get_store
+from aegis.memory.reasoning import QueryReasoningEngine, event_summary, room_phrase
+from aegis.memory.repository import (
+    JsonGraphRepository,
+    StoreRepository,
+    clear_cache,
+    get_repository,
+    latest_states_from_graph,
+)
+
 logger = logging.getLogger("aegis.api")
+
+API_VERSION = "0.2.0"
 
 app = FastAPI(
     title="Aegis Spatio-Temporal Memory API",
-    description="FastAPI gateway serving R4DSG memory graphs and assistive query endpoints.",
-    version="0.1.0",
+    description="Memory graph queries and timeline for the Aegis client.",
+    version=API_VERSION,
 )
 
-# Enable CORS for Flutter Web, mobile apps, and local testing
+# TODO(M4 4.2): replace the wildcard with explicit origins behind auth.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,23 +52,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import os
-
 DEFAULT_DATASET_ID = "demo01"
 ACTIVE_DATASET_ID = os.getenv("AEGIS_DATASET_ID", DEFAULT_DATASET_ID)
 
 
+def _validated(dataset_id: str) -> str:
+    try:
+        return validate_dataset_id(dataset_id.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid dataset_id") from exc
+
+
 def get_active_dataset(dataset_id: str | None = None) -> str:
-    """Return the requested dataset ID, or the globally active dataset ID."""
+    """Return the requested (validated) dataset ID, or the active one."""
+
     if dataset_id and dataset_id.strip():
-        return dataset_id.strip()
+        return _validated(dataset_id)
     return ACTIVE_DATASET_ID
 
 
 def set_active_dataset(dataset_id: str) -> None:
     """Set the globally active dataset ID."""
+
     global ACTIVE_DATASET_ID
-    ACTIVE_DATASET_ID = dataset_id.strip()
+    ACTIVE_DATASET_ID = _validated(dataset_id)
+
+
+def simulator_enabled() -> bool:
+    return os.getenv("AEGIS_ENABLE_SIMULATOR") == "1"
+
+
+def require_simulator() -> None:
+    if not simulator_enabled():
+        raise HTTPException(status_code=404, detail="Not Found")
 
 
 # ---------------------------------------------------------------------------
@@ -59,12 +94,15 @@ def set_active_dataset(dataset_id: str) -> None:
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-    version: str = "0.1.0"
+    version: str = API_VERSION
     dataset_loaded: str
+    scene_graph_ready: bool
     num_anchors: int
     num_rooms: int
     num_events: int
     total_timeline_frames: int
+    simulator_enabled: bool = False
+    compaction_ok: bool | None = None
 
 
 class AnchorModel(BaseModel):
@@ -98,14 +136,18 @@ class MemoryQueryResponse(BaseModel):
     room_id: int | None = None
     room_label: str | None = None
     relation: str | None = None
+    relation_certain: bool | None = None
+    height_above_floor: float | None = None
     relative_distance_m: float | None = None
     location_summary: str
     explanation: str | None = None
     last_seen_timestamp_s: float | None = None
-    last_seen_time_ago: str = "Just now"
+    last_seen_at: str | None = None
+    # Real freshness wording is Milestone 3 (todo 3.4); never a constant.
+    last_seen_time_ago: str | None = None
     is_persistent_memory: bool = False
     crop_url: str | None = None
-    confidence: float = 0.95
+    confidence: float | None = None
     other_instances: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -113,14 +155,20 @@ class TimelineEventModel(BaseModel):
     event_id: str
     event_type: str
     object: str
+    tier: str = "detailed"
+    period_start: str | None = None
+    period_end: str | None = None
     source_relation: str | None = None
     destination_relation: str | None = None
     source_anchor: str | None = None
     destination_anchor: str | None = None
     source_room: str | None = None
     destination_room: str | None = None
-    start_time: float
-    end_time: float
+    start_time: float | None = None
+    end_time: float | None = None
+    start_wallclock: str | None = None
+    end_wallclock: str | None = None
+    activity_id: int | None = None
     summary: str
 
 
@@ -128,7 +176,7 @@ class SimulateTransitionRequest(BaseModel):
     instance_id: int = 1
     new_relation: str = Field(
         ...,
-        description="'inside', 'on_surface', 'on_floor', or 'carried_by_user'",
+        description="'inside', 'on_surface', 'under', 'on_floor', 'carried_by_user', ...",
     )
     anchor_id: int | None = None
     anchor_label: str | None = None
@@ -145,41 +193,31 @@ class SimulateTransitionResponse(BaseModel):
     instance_id: int
     object_label: str
     new_relation: str
-    anchor_label: str
+    anchor_label: str | None
     relative_distance_m: float
     is_persistent_memory: bool
 
 
 # ---------------------------------------------------------------------------
-# Memory Loader & Store
+# Memory loading
 # ---------------------------------------------------------------------------
-
-_GRAPH_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def get_search_paths(dataset_id: str) -> list[Path]:
-    """Return priority paths to locate r4d_scene_graph.json strictly for the given dataset."""
+    """Priority paths of ``r4d_scene_graph.json`` for exactly this dataset."""
+
     fixture_root = os.getenv("AEGIS_TEST_FIXTURE_ROOT")
     paths: list[Path] = []
-    # CI (and local test runs) use small tracked scene-graph fixtures instead
-    # of large downloaded video artifacts. This is opt-in via the environment
-    # variable and never affects production deployments.
+    # CI uses small tracked fixtures instead of downloaded artifacts; opt-in
+    # through the environment variable only.
     if fixture_root:
         paths.append(
             Path(fixture_root) / dataset_id / "objects" / "r4d_scene_graph.json"
         )
     paths.extend(
         [
-            Path(
-                f"/data/{dataset_id}/objects/r4d_scene_graph.json"
-            ),  # Modal persistent volume (canonical)
-            Path(
-                f"/data/{dataset_id}/outputs/objects/r4d_scene_graph.json"
-            ),  # Modal pipeline artifact layout
-            Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),  # Local output
-            Path(
-                f"outputs/{dataset_id}/outputs/objects/r4d_scene_graph.json"
-            ),  # Local mirror of the Modal pipeline layout
+            Path(f"/data/{dataset_id}/objects/r4d_scene_graph.json"),
+            Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),
             Path(f"data/{dataset_id}/objects/r4d_scene_graph.json"),
             Path(f"outputs/{dataset_id}/r4d_scene_graph.json"),
             Path(f"data/{dataset_id}/r4d_scene_graph.json"),
@@ -188,12 +226,35 @@ def get_search_paths(dataset_id: str) -> list[Path]:
     return paths
 
 
-def list_available_datasets() -> list[str]:
-    """Discover input videos as well as processed scene graphs.
+def repository_for(dataset_id: str) -> JsonGraphRepository:
+    return get_repository(dataset_id, get_search_paths(dataset_id))
 
-    Unprocessed datasets remain selectable so the client can report that a
-    graph is pending, but their queries are still isolated and return no data.
+
+def resolve_repository(
+    dataset_id: str | None, home_id: str | None
+) -> tuple[str, JsonGraphRepository | StoreRepository]:
+    """Explicit home -> store; explicit dataset -> graph file; then defaults.
+
+    Without either parameter, ``AEGIS_HOME_ID`` selects a home store and
+    otherwise the active dataset's graph file is used.
     """
+
+    if home_id and home_id.strip():
+        home = _validated(home_id)
+        return home, StoreRepository(get_store(home))
+    if dataset_id and dataset_id.strip():
+        ds = _validated(dataset_id)
+        return ds, repository_for(ds)
+    env_home = os.getenv("AEGIS_HOME_ID")
+    if env_home:
+        home = _validated(env_home)
+        return home, StoreRepository(get_store(home))
+    return ACTIVE_DATASET_ID, repository_for(ACTIVE_DATASET_ID)
+
+
+def list_available_datasets() -> list[str]:
+    """Datasets with an input video, metadata or a processed graph."""
+
     discovered: set[str] = set()
     roots = [Path("outputs"), Path("data"), Path("/data")]
     fixture_root = os.getenv("AEGIS_TEST_FIXTURE_ROOT")
@@ -203,7 +264,11 @@ def list_available_datasets() -> list[str]:
         if not root_dir.is_dir():
             continue
         for item in root_dir.iterdir():
-            if not item.is_dir():
+            if not item.is_dir() or item.name.startswith(("_", ".")):
+                continue
+            try:
+                validate_dataset_id(item.name)
+            except ValueError:
                 continue
             has_graph = any(
                 p.is_file()
@@ -218,87 +283,36 @@ def list_available_datasets() -> list[str]:
             )
             if has_graph or has_video or (item / "source_metadata.json").is_file():
                 discovered.add(item.name)
-    return sorted(discovered) if discovered else ["demo01", "Demo06-Self"]
+    return sorted(discovered)
 
 
 def load_scene_graph_data(dataset_id: str | None = None) -> dict[str, Any]:
-    """Load only the graph belonging to ``dataset_id``.
+    """Raw graph dict of one dataset (empty, not ready, when missing)."""
 
-    A missing graph is represented by an empty graph.  It must never fall back
-    to the demo01 shoes fixture: doing so makes an unprocessed video appear to
-    contain objects from another video.
-    """
-    import copy
-
-    ds = get_active_dataset(dataset_id)
-
-    if ds in _GRAPH_CACHE:
-        return _GRAPH_CACHE[ds]
-
-    for path in get_search_paths(ds):
-        if not path.is_file():
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                loaded_data = json.load(f)
-            graph_dataset = loaded_data.get("dataset_id")
-            if graph_dataset and graph_dataset != ds:
-                logger.warning(
-                    "Ignoring scene graph for %s at %s (graph belongs to %s)",
-                    ds,
-                    path,
-                    graph_dataset,
-                )
-                continue
-            loaded_data.setdefault("dataset_id", ds)
-            _GRAPH_CACHE[ds] = copy.deepcopy(loaded_data)
-            return _GRAPH_CACHE[ds]
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("Failed to parse %s: %s", path, exc)
-
-    # Do not fabricate memories for a video which has not been processed yet.
-    empty_graph = {
-        "dataset_id": ds,
-        "anchors": [],
-        "rooms": [],
-        "events": [],
-        "timeline": {},
-        "scene_graph_ready": False,
-    }
-    # Do not cache the empty marker: a scene graph can be generated while the
-    # API process remains alive, and the next request should see it.
-    return empty_graph
+    return repository_for(get_active_dataset(dataset_id)).data
 
 
 def find_latest_objects_state(data: dict[str, Any]) -> dict[int, dict[str, Any]]:
-    """Extract latest known state for each object instance from timeline."""
-    timeline = data.get("timeline", {})
-    latest_by_instance: dict[int, dict[str, Any]] = {}
+    """Latest known state per instance of a v1 or v2 graph dict."""
 
-    # Sort frames numerically
-    try:
-        sorted_frames = sorted(timeline.keys(), key=lambda x: int(x))
-    except (ValueError, TypeError):
-        sorted_frames = list(timeline.keys())
-
-    for frame_key in sorted_frames:
-        objects = timeline.get(frame_key, [])
-        for obj in objects:
-            inst_id = obj.get("instance_id")
-            if inst_id is not None:
-                latest_by_instance[inst_id] = obj
-
-    return latest_by_instance
+    return latest_states_from_graph(data)
 
 
 def room_summary_clause(room: str | None) -> str:
-    """Grammar-aware room suffix for timeline summaries (" in the Kitchen")."""
+    """Grammar-aware room suffix (" in the Kitchen")."""
 
-    if not room:
-        return ""
-    if room.lower().startswith("room "):
-        return f" in {room}"
-    return f" in the {room}"
+    return room_phrase(room)
+
+
+def _label_base(label: str) -> str:
+    return str(label).split("[")[0].split("#")[0].strip()
+
+
+def _state_canonical(state: dict[str, Any]) -> str:
+    canonical = state.get("canonical")
+    if canonical:
+        return str(canonical)
+    return default_vocabulary().canonical(_label_base(state.get("label", "")))
 
 
 # ---------------------------------------------------------------------------
@@ -307,126 +321,74 @@ def room_summary_clause(room: str | None) -> str:
 
 
 @app.get("/api/v1/health", response_model=HealthResponse)
-def health(dataset_id: str | None = None) -> HealthResponse:
-    """Return system health and loaded scene graph summary."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    anchors = data.get("anchors", [])
-    events = data.get("events", [])
-    rooms = data.get("rooms", [])
-    timeline = data.get("timeline", {})
-
+def health(dataset_id: str | None = None, home_id: str | None = None) -> HealthResponse:
+    ds, repo = resolve_repository(dataset_id, home_id)
     return HealthResponse(
-        status="ok",
-        version="0.1.0",
         dataset_loaded=ds,
-        num_anchors=len(anchors),
-        num_rooms=len(rooms),
-        num_events=len(events),
-        total_timeline_frames=len(timeline),
+        scene_graph_ready=repo.ready,
+        num_anchors=len(repo.anchors()),
+        num_rooms=len(repo.rooms()),
+        num_events=len(repo.events()),
+        total_timeline_frames=repo.keyframe_count(),
+        simulator_enabled=simulator_enabled(),
+        compaction_ok=(
+            compaction_ok(repo.store) if isinstance(repo, StoreRepository) else None
+        ),
     )
 
 
 @app.get("/api/v1/scene_graph")
-def get_full_scene_graph(dataset_id: str | None = None) -> dict[str, Any]:
-    """Return the complete scene graph payload for the active/requested dataset."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    latest_states = find_latest_objects_state(data)
+def get_full_scene_graph(
+    dataset_id: str | None = None, home_id: str | None = None
+) -> dict[str, Any]:
+    ds, repo = resolve_repository(dataset_id, home_id)
     return {
         "dataset_id": ds,
-        "anchors": data.get("anchors", []),
-        "rooms": data.get("rooms", []),
-        "events": data.get("events", []),
-        "latest_objects": list(latest_states.values()),
-        "total_timeline_frames": len(data.get("timeline", {})),
+        "scene_graph_ready": repo.ready,
+        "anchors": repo.anchors(),
+        "rooms": repo.rooms(),
+        "events": repo.events(),
+        "latest_objects": list(repo.latest_states().values()),
+        "total_timeline_frames": repo.keyframe_count(),
     }
-
-
-def _matches_query(state: dict[str, Any], canonical_item: str, raw_query: str) -> bool:
-    """Robust cognitive matching supporting multi-word phrases, synonyms, and plurals."""
-    from aegis.memory.reasoning import QueryReasoningEngine
-
-    label = state.get("label", "").lower()
-    raw = raw_query.lower().strip()
-    canon = canonical_item.lower().strip()
-
-    if canon in label or raw in label:
-        return True
-
-    base_label = label.split("#")[0].split("[")[0].strip()
-    if base_label and (base_label in canon or base_label in raw):
-        return True
-
-    syns = QueryReasoningEngine.ITEM_SYNONYMS.get(canon, [])
-    if any(syn in label for syn in syns):
-        return True
-
-    for c_key, c_syns in QueryReasoningEngine.ITEM_SYNONYMS.items():
-        if (c_key in base_label or any(s in base_label for s in c_syns)) and (
-            c_key in canon or any(s in canon for s in c_syns)
-        ):
-            return True
-
-    if canon.endswith("s") and len(canon) > 3 and canon[:-1] in label:
-        return True
-    return (canon + "s") in label
 
 
 @app.get("/api/v1/datasets")
 def get_datasets() -> dict[str, Any]:
-    """Return all available datasets, active dataset, and summary of their anchors and tracked objects."""
-    available = list_available_datasets()
     summaries = []
-    for d in available:
-        sg = load_scene_graph_data(d)
-        anchors = [a.get("label", "") for a in sg.get("anchors", [])]
-        rooms = [r.get("label", "") for r in sg.get("rooms", [])]
-        latest = find_latest_objects_state(sg)
-        objects = sorted(
-            {obj.get("label", "") for obj in latest.values() if obj.get("label")}
-        )
-        events = sg.get("events", [])
-        timeline = sg.get("timeline", {})
-        graph_ready = bool(
-            sg.get("anchors")
-            or sg.get("events")
-            or sg.get("timeline")
-            or sg.get("rooms")
-        )
-
-        meta_task = ""
-        for meta_p in [
+    for d in list_available_datasets():
+        repo = repository_for(d)
+        title = ""
+        for meta_path in (
             Path("data") / d / "source_metadata.json",
             Path("outputs") / d / "source_metadata.json",
-        ]:
-            if meta_p.is_file():
+        ):
+            if meta_path.is_file():
                 try:
-                    with open(meta_p, "r", encoding="utf-8") as mf:
-                        meta_task = json.load(mf).get("task", "")
+                    title = json.loads(meta_path.read_text(encoding="utf-8")).get(
+                        "task", ""
+                    )
                 except (OSError, json.JSONDecodeError) as exc:
-                    logger.debug("Failed to read metadata %s: %s", meta_p, exc)
-        if not meta_task:
-            if d == "demo01":
-                meta_task = "Put Shoes Into Storage Cabinet"
-            elif d == "demo03":
-                meta_task = "Put Food Into Fridge & Sink Pots"
-            elif d == "Demo06-Self":
-                meta_task = "Bottle Relocation Between Desks"
-            else:
-                meta_task = f"Egocentric Scene: {d}"
-
+                    logger.debug("Failed to read metadata %s: %s", meta_path, exc)
+        objects = sorted(
+            {
+                s.get("label", "")
+                for s in repo.latest_states().values()
+                if s.get("label")
+            }
+        )
+        rooms = [r.get("label", "") for r in repo.rooms()]
         summaries.append(
             {
                 "dataset_id": d,
-                "title": meta_task,
-                "anchors": anchors,
+                "title": title or f"Egocentric scene: {d}",
+                "anchors": [a.get("label", "") for a in repo.anchors()],
                 "rooms": rooms,
                 "num_rooms": len(rooms),
                 "tracked_objects": objects,
-                "num_events": len(events),
-                "num_timeline_frames": len(timeline),
-                "scene_graph_ready": graph_ready,
+                "num_events": len(repo.events()),
+                "num_timeline_frames": repo.keyframe_count(),
+                "scene_graph_ready": repo.ready,
                 "is_active": d == ACTIVE_DATASET_ID,
             }
         )
@@ -440,162 +402,104 @@ def get_datasets() -> dict[str, Any]:
 
 @app.post("/api/v1/dataset/select")
 def select_dataset(
-    dataset_id: str = Query(
-        ..., description="Target dataset ID (e.g. 'Demo06-Self', 'demo01')"
-    ),
+    dataset_id: str = Query(..., description="Target dataset ID"),
 ) -> dict[str, Any]:
-    """Switch the server's globally active dataset."""
     set_active_dataset(dataset_id)
-    # Refresh on an explicit switch so a graph generated since the previous
-    # selection is not hidden by the in-process cache.
-    _GRAPH_CACHE.pop(dataset_id.strip(), None)
-    data = load_scene_graph_data(dataset_id)
+    repo = repository_for(ACTIVE_DATASET_ID)
     return {
         "status": "ok",
         "active_dataset": ACTIVE_DATASET_ID,
-        "num_anchors": len(data.get("anchors", [])),
-        "num_events": len(data.get("events", [])),
+        "num_anchors": len(repo.anchors()),
+        "num_events": len(repo.events()),
     }
 
 
 @app.get("/api/v1/anchors", response_model=list[AnchorModel])
-def get_anchors(dataset_id: str | None = None) -> list[AnchorModel]:
-    """Return all 3D spatial anchors with their currently contained/resting objects."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    raw_anchors = data.get("anchors", [])
-    latest_states = find_latest_objects_state(data)
-
+def get_anchors(
+    dataset_id: str | None = None, home_id: str | None = None
+) -> list[AnchorModel]:
+    _ds, repo = resolve_repository(dataset_id, home_id)
+    latest = repo.latest_states()
     results: list[AnchorModel] = []
-    for anc in raw_anchors:
-        anc_id = anc.get("anchor_id", 0)
-        label = anc.get("label", f"Anchor #{anc_id}")
-
-        contained = [
-            obj.get("label", f"Instance #{oid}")
-            for oid, obj in latest_states.items()
-            if obj.get("anchor_id") == anc_id
-            and obj.get("relation") in {"inside", "on_surface", "on_top"}
-        ]
-
+    for anchor in repo.anchors():
+        anchor_id = anchor.get("anchor_id", 0)
         results.append(
             AnchorModel(
-                anchor_id=anc_id,
-                label=label,
-                center=anc.get("center", [0.0, 0.0, 0.0]),
-                size=anc.get("size", [1.0, 1.0, 1.0]),
-                room_id=anc.get("room_id"),
-                room_label=anc.get("room_label"),
-                contained_objects=contained,
+                anchor_id=anchor_id,
+                label=anchor.get("label", f"Anchor #{anchor_id}"),
+                center=anchor.get("center", [0.0, 0.0, 0.0]),
+                size=anchor.get("size", [0.0, 0.0, 0.0]),
+                room_id=anchor.get("room_id"),
+                room_label=anchor.get("room_label"),
+                contained_objects=[
+                    obj.get("label", f"Instance #{oid}")
+                    for oid, obj in latest.items()
+                    if obj.get("anchor_id") == anchor_id
+                    and obj.get("relation")
+                    in {"inside", "on_surface", "on_top", "under"}
+                ],
             )
         )
-
     return results
 
 
 @app.get("/api/v1/rooms", response_model=list[RoomModel])
-def get_rooms(dataset_id: str | None = None) -> list[RoomModel]:
-    """Return all room-level spatial regions with their contained anchors and objects."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    raw_rooms = data.get("rooms", [])
-    raw_anchors = data.get("anchors", [])
-    latest_states = find_latest_objects_state(data)
-
+def get_rooms(
+    dataset_id: str | None = None, home_id: str | None = None
+) -> list[RoomModel]:
+    _ds, repo = resolve_repository(dataset_id, home_id)
+    latest = repo.latest_states()
+    anchors = repo.anchors()
     results: list[RoomModel] = []
-    for room in raw_rooms:
+    for room in repo.rooms():
         room_id = room.get("room_id", 0)
         results.append(
             RoomModel(
                 room_id=room_id,
                 label=room.get("label", f"Room #{room_id}"),
                 room_type=room.get("room_type", "Room"),
-                centroid=room.get("centroid", [0.0, 0.0, 0.0]),
+                centroid=room.get("centroid", []),
                 anchors=[
-                    anchor.get("label", f"Anchor #{anchor.get('anchor_id', 0)}")
-                    for anchor in raw_anchors
-                    if anchor.get("room_id") == room_id
+                    a.get("label", f"Anchor #{a.get('anchor_id', 0)}")
+                    for a in anchors
+                    if a.get("room_id") == room_id
                 ],
                 objects=[
                     obj.get("label", f"Instance #{oid}")
-                    for oid, obj in latest_states.items()
+                    for oid, obj in latest.items()
                     if obj.get("room_id") == room_id
                 ],
                 keyframe_count=int(room.get("keyframe_count", 0)),
             )
         )
-
     return results
 
 
 @app.post("/api/v1/rooms/rename")
 def rename_room(
     room_id: int = Query(..., description="Room to rename"),
-    label: str = Query(..., min_length=1, description="New human-readable room name"),
+    label: str = Query(..., min_length=1, max_length=40, description="New room name"),
     dataset_id: str | None = None,
+    home_id: str | None = None,
 ) -> dict[str, Any]:
-    """Rename a room in the persisted scene graph (caregiver house calibration).
-
-    Persists the new label into the r4d_scene_graph.json artifact so the name
-    survives server restarts, and updates every anchor / timeline entry bound
-    to the room. The Flutter client will surface this in a later phase.
-    """
-
-    import json as json_module
-
-    ds = get_active_dataset(dataset_id)
-    source_path = next((path for path in get_search_paths(ds) if path.is_file()), None)
-    if source_path is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No scene graph found for dataset '{ds}'.",
-        )
-
-    with source_path.open("r", encoding="utf-8") as handle:
-        graph_data = json_module.load(handle)
-    if graph_data.get("dataset_id") and graph_data["dataset_id"] != ds:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Scene graph at {source_path} belongs to another dataset.",
-        )
-
-    rooms = graph_data.get("rooms", [])
-    room = next((r for r in rooms if r.get("room_id") == room_id), None)
-    if room is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Room #{room_id} was not found in dataset '{ds}'.",
-        )
+    """Rename one room (caregiver calibration) and persist it."""
 
     new_label = label.strip()
-    room["label"] = new_label
-    for anchor in graph_data.get("anchors", []):
-        if anchor.get("room_id") == room_id:
-            anchor["room_label"] = new_label
-    for entries in graph_data.get("timeline", {}).values():
-        for entry in entries:
-            if entry.get("room_id") == room_id:
-                entry["room_label"] = new_label
-    for event in graph_data.get("events", []):
-        if event.get("source_room") and event.get("source_room", "").lower().startswith(
-            "room #"
-        ):
-            event["source_room"] = new_label
-        if event.get("destination_room") and event.get(
-            "destination_room", ""
-        ).lower().startswith("room #"):
-            event["destination_room"] = new_label
-
-    source_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = source_path.with_suffix(".json.tmp")
-    temporary.write_text(
-        json_module.dumps(graph_data, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(source_path)
-
-    _GRAPH_CACHE[ds] = graph_data
-
+    if not new_label:
+        raise HTTPException(status_code=422, detail="label must not be empty")
+    ds, repo = resolve_repository(dataset_id, home_id)
+    if not repo.ready:
+        raise HTTPException(status_code=404, detail=f"No scene graph found for '{ds}'.")
+    try:
+        repo.rename_room(room_id, new_label)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Room #{room_id} was not found in '{ds}'."
+        ) from exc
+    except DuplicateRoomLabelError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "status": "ok",
         "dataset_id": ds,
@@ -605,72 +509,76 @@ def rename_room(
     }
 
 
-@app.get("/api/v1/query", response_model=MemoryQueryResponse)
-def query_memory(
-    item: str = Query(
-        ..., description="Query item name, e.g. 'water bottle', 'shoes', 'keys'"
-    ),
-    dataset_id: str | None = None,
-) -> MemoryQueryResponse:
-    """Query the memory graph for the current location of an item in the active dataset."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    latest_states = find_latest_objects_state(data)
+def _matching_states(
+    latest: dict[int, dict[str, Any]], item: str
+) -> tuple[str, list[dict[str, Any]]]:
+    """Target name and the states that match a query, by vocabulary id."""
 
-    from aegis.memory.reasoning import QueryReasoningEngine
-
-    events = data.get("events", [])
-    canonical_item = QueryReasoningEngine.extract_target_item(item)
-    room_filter = QueryReasoningEngine.extract_room_filter(item)
-
-    # Find matching instances strictly within this dataset
-    matches: list[dict[str, Any]] = [
-        state
-        for state in latest_states.values()
-        if _matches_query(state, canonical_item, item)
+    vocab = default_vocabulary()
+    entry = vocab.resolve_query(QueryReasoningEngine.strip_room_words(item))
+    if entry is not None:
+        return entry.id, [s for s in latest.values() if _state_canonical(s) == entry.id]
+    phrase = QueryReasoningEngine.item_phrase(item)
+    return phrase, [
+        s
+        for s in latest.values()
+        if phrase and _label_base(s.get("label", "")).lower() == phrase
     ]
 
+
+def _crop_url(
+    repo: JsonGraphRepository | StoreRepository, key: str, state: dict[str, Any]
+) -> str | None:
+    instance_id = state.get("instance_id")
+    if isinstance(repo, StoreRepository):
+        if state.get("evidence_id") is None:
+            return None
+        return f"/api/v1/crops/{instance_id}?home_id={key}"
+    return f"/api/v1/crops/{instance_id}?dataset_id={key}"
+
+
+@app.get("/api/v1/query", response_model=MemoryQueryResponse)
+def query_memory(
+    item: str = Query(..., description="Query, e.g. 'water bottle', 'my keys'"),
+    dataset_id: str | None = None,
+    home_id: str | None = None,
+) -> MemoryQueryResponse:
+    """Where is an item, according to this dataset's (or home's) memory."""
+
+    ds, repo = resolve_repository(dataset_id, home_id)
+    latest = repo.latest_states()
+    target, matches = _matching_states(latest, item)
+    room_filter = QueryReasoningEngine.extract_room_filter(item)
+
     if not matches:
-        available_labels = list(
-            {s.get("label", "") for s in latest_states.values() if s.get("label")}
+        available = sorted(
+            {s.get("label", "") for s in latest.values() if s.get("label")}
         )
-        if not data.get("scene_graph_ready", True) and not available_labels:
+        if not repo.ready:
             reason = f"The scene graph for {ds} has not been generated yet."
         else:
             hint = (
-                f" Available items in {ds}: {', '.join(available_labels)}."
-                if available_labels
+                f" Available items in {ds}: {', '.join(available)}."
+                if available
                 else ""
             )
             reason = f"I couldn't locate any '{item}' in {ds}.{hint}"
         return MemoryQueryResponse(
-            query=item,
-            found=False,
-            location_summary=reason,
-            explanation=reason,
+            query=item, found=False, location_summary=reason, explanation=reason
         )
 
-    # Room-constrained queries ("keys in the kitchen") narrow the candidates.
     if room_filter:
-        room_filter_clean = " ".join(room_filter.split())
         room_matches = [
-            m
-            for m in matches
-            if room_filter_clean in str(m.get("room_label", "")).lower()
+            m for m in matches if room_filter in str(m.get("room_label", "")).lower()
         ]
         if not room_matches:
             known_rooms = sorted(
-                {str(m.get("room_label")) for m in matches if m.get("room_label")}
+                {str(m["room_label"]) for m in matches if m.get("room_label")}
             )
-            from aegis.memory.reasoning import room_phrase
-
             where = (
                 f" It was last seen in {', '.join(known_rooms)}." if known_rooms else ""
             )
-            reason = (
-                f"I couldn't find any '{canonical_item}'"
-                f"{room_phrase(room_filter_clean.title())}.{where}"
-            )
+            reason = f"I couldn't find any '{target}'{room_phrase(room_filter.title())}.{where}"
             return MemoryQueryResponse(
                 query=item,
                 found=False,
@@ -680,41 +588,13 @@ def query_memory(
             )
         matches = room_matches
 
-    # Sort matches: active instance first, then by recency
-    def sort_key(obj: dict[str, Any]) -> tuple[int, int, float]:
-        label = obj.get("label", "").lower()
-        # Prefer an exact lexical match (e.g. "rubbish" -> Rubbish #7)
-        # before choosing the most recent instance among synonyms.
-        exact_match = int(
-            canonical_item.lower() in label or item.lower().strip() in label
-        )
-        is_active = 1 if "active" in label else 0
-        timestamp = float(obj.get("last_seen_timestamp", 0.0))
-        return (exact_match, is_active, timestamp)
-
-    matches.sort(key=sort_key, reverse=True)
+    matches.sort(key=lambda s: float(s.get("last_seen_timestamp") or 0.0), reverse=True)
     primary = matches[0]
-
     reasoning = QueryReasoningEngine.reason_spatio_temporal_state(
-        canonical_item, primary, events
+        target, primary, repo.events()
     )
-
-    anchor_label = reasoning["anchor_label"]
-    relation = reasoning["relation"]
-    dist_val = reasoning["relative_distance_m"]
-    is_persistent = reasoning["is_persistent_memory"]
-    summary = reasoning["explanation"]
-
-    other_instances = [
-        {
-            "instance_id": m.get("instance_id"),
-            "label": m.get("label"),
-            "anchor": m.get("anchor_label"),
-            "relation": m.get("relation"),
-        }
-        for m in matches[1:]
-    ]
-
+    distance = primary.get("relative_distance")
+    confidence = primary.get("confidence")
     return MemoryQueryResponse(
         query=item,
         found=True,
@@ -722,245 +602,349 @@ def query_memory(
         instance_label=primary.get("label"),
         instance_id=primary.get("instance_id"),
         anchor_id=primary.get("anchor_id"),
-        anchor_label=anchor_label,
+        anchor_label=primary.get("anchor_label"),
         room_id=primary.get("room_id"),
         room_label=primary.get("room_label"),
-        relation=relation,
-        relative_distance_m=round(dist_val, 2),
-        location_summary=summary,
-        explanation=summary,
+        relation=reasoning["relation"],
+        relation_certain=reasoning["relation_certain"],
+        height_above_floor=primary.get("height_above_floor"),
+        relative_distance_m=round(float(distance), 2) if distance is not None else None,
+        location_summary=reasoning["explanation"],
+        explanation=reasoning["explanation"],
         last_seen_timestamp_s=primary.get("last_seen_timestamp"),
-        last_seen_time_ago="Recorded today",
-        is_persistent_memory=is_persistent,
-        crop_url=f"/api/v1/crops/{primary.get('instance_id', 1)}?dataset_id={ds}",
-        confidence=0.96,
-        other_instances=other_instances,
+        last_seen_at=primary.get("last_seen_wallclock"),
+        is_persistent_memory=reasoning["is_persistent_memory"],
+        crop_url=_crop_url(repo, ds, primary),
+        confidence=float(confidence) if confidence is not None else None,
+        other_instances=[
+            {
+                "instance_id": m.get("instance_id"),
+                "label": m.get("label"),
+                "anchor": m.get("anchor_label"),
+                "relation": m.get("relation"),
+            }
+            for m in matches[1:]
+        ],
     )
 
 
 @app.get("/api/v1/timeline", response_model=list[TimelineEventModel])
-def get_timeline(dataset_id: str | None = None) -> list[TimelineEventModel]:
-    """Return chronological event stream for the caregiver dashboard."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    raw_events = data.get("events", [])
-    raw_anchors = data.get("anchors", [])
-    default_anchor_name = (
-        raw_anchors[0].get("label", "Room Anchor") if raw_anchors else "Room Anchor"
-    )
+def get_timeline(
+    dataset_id: str | None = None,
+    home_id: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+) -> list[TimelineEventModel]:
+    """Chronological events with one plain sentence each.
 
+    For a home store, history older than the detail window comes back as
+    ``tier="summarised"`` lines (``event_type="summary"``).
+    """
+
+    _ds, repo = resolve_repository(dataset_id, home_id)
     results: list[TimelineEventModel] = []
-    for ev in raw_events:
-        obj_name = ev.get("object", "Object")
-        src_rel = ev.get("source_relation", "")
-        dst_rel = ev.get("destination_relation", "")
-        src_anc = ev.get("source_anchor")
-        dest_anc = ev.get("destination_anchor") or default_anchor_name
-        ev_type = ev.get("event_type", "state_change")
-        src_room = ev.get("source_room")
-        dest_room = ev.get("destination_room")
-
-        if ev_type == "room_change":
-            summary = (
-                f"User moved from the {src_room} to the {dest_room}."
-                if src_room
-                else f"User arrived in {dest_room}."
+    if isinstance(repo, StoreRepository):
+        try:
+            summaries = repo.store.summaries(start, end)
+            events = repo.events_between(start, end)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail="start/end must be ISO-8601 with a timezone"
+            ) from exc
+        for line in summaries:
+            results.append(
+                TimelineEventModel(
+                    event_id=f"summary_{line['summary_id']:06d}",
+                    event_type="summary",
+                    object=str(
+                        line["sidecar"].get("label")
+                        or line["subject_key"].split(":")[0].title()
+                    ),
+                    tier="summarised",
+                    period_start=line["period_start"],
+                    period_end=line["period_end"],
+                    summary=line["text"],
+                )
             )
-        elif ev_type == "anchor_change" or (
-            src_anc and dest_anc and src_anc != dest_anc
-        ):
-            summary = (
-                f"{obj_name} was moved from {src_anc} to {dest_anc}"
-                + room_summary_clause(dest_room)
-                + "."
-            )
-        elif dst_rel == "inside":
-            summary = f"{obj_name} was placed inside {dest_anc}{room_summary_clause(dest_room)}."
-        elif dst_rel == "on_surface":
-            summary = (
-                f"{obj_name} is resting on {dest_anc}{room_summary_clause(dest_room)}."
-            )
-        elif dst_rel == "on_floor":
-            summary = (
-                f"{obj_name} was left on the floor near {dest_anc}"
-                + room_summary_clause(dest_room)
-                + "."
-            )
-        elif dst_rel == "carried_by_user":
-            summary = (
-                f"{obj_name} is being carried by user{room_summary_clause(dest_room)}."
-            )
-        else:
-            summary = f"{obj_name} transition from {src_rel} to {dst_rel}."
-
+    else:
+        events = repo.events()
+    for event in events:
         results.append(
             TimelineEventModel(
-                event_id=ev.get("event_id", "ev_0"),
-                event_type=ev_type,
-                object=obj_name,
-                source_relation=src_rel,
-                destination_relation=dst_rel,
-                source_anchor=src_anc,
-                destination_anchor=dest_anc,
-                source_room=src_room,
-                destination_room=dest_room,
-                start_time=float(ev.get("start_time", 0.0)),
-                end_time=float(ev.get("end_time", 0.0)),
-                summary=summary,
+                event_id=str(event.get("event_id", "")),
+                event_type=event.get("event_type", "state_change"),
+                object=event.get("object", "Object"),
+                source_relation=event.get("source_relation"),
+                destination_relation=event.get("destination_relation"),
+                source_anchor=event.get("source_anchor"),
+                destination_anchor=event.get("destination_anchor"),
+                source_room=event.get("source_room"),
+                destination_room=event.get("destination_room"),
+                start_time=float(event.get("start_time", 0.0)),
+                end_time=float(event.get("end_time", 0.0)),
+                start_wallclock=event.get("start_wallclock"),
+                end_wallclock=event.get("end_wallclock"),
+                activity_id=event.get("activity_id"),
+                summary=event_summary(event),
             )
         )
-
     return results
+
+
+class ActivityModel(BaseModel):
+    activity_id: int
+    room_id: int | None = None
+    room_label: str | None = None
+    start_at: str
+    end_at: str
+    event_count: int
+    summary: str
+    events: list[str] = Field(default_factory=list)
+    tier: str = "detailed"
+
+
+@app.get("/api/v1/activities", response_model=list[ActivityModel])
+def get_activities(
+    home_id: str = Query(..., description="Home whose activity history to list"),
+    start: str | None = None,
+    end: str | None = None,
+) -> list[ActivityModel]:
+    """Room stays with the object changes inside them (home store only)."""
+
+    _home, repo = resolve_repository(None, home_id)
+    try:
+        rows = repo.store.activities(start, end)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="start/end must be ISO-8601 with a timezone"
+        ) from exc
+    return [ActivityModel(**row) for row in rows]
 
 
 @app.get("/api/v1/crops/{instance_id}")
 def get_crop(
-    instance_id: int,
-    dataset_id: str | None = None,
+    instance_id: int, dataset_id: str | None = None, home_id: str | None = None
 ) -> Response:
-    """Serve a high-contrast visual crop of the requested instance from the active scene graph."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    latest_states = find_latest_objects_state(data)
-    state = latest_states.get(instance_id)
+    """Evidence crop of an object.
 
+    With ``home_id`` this is the real JPEG behind the object's last-known
+    state (404 when none exists). The per-dataset path still returns a
+    labelled placeholder card until Milestone 3 replaces it.
+    """
+
+    if home_id:
+        _home, repo = resolve_repository(None, home_id)
+        state = repo.latest_states().get(instance_id)
+        evidence_id = state.get("evidence_id") if state else None
+        row = (
+            repo.store.one(
+                "SELECT path FROM evidence WHERE evidence_id = ?", (evidence_id,)
+            )
+            if evidence_id is not None
+            else None
+        )
+        path = repo.store.dir / str(row["path"]) if row is not None else None
+        if path is None or not path.is_file():
+            raise HTTPException(
+                status_code=404, detail="no evidence crop for this object"
+            )
+        return Response(content=path.read_bytes(), media_type="image/jpeg")
+
+    ds = get_active_dataset(dataset_id)
+    state = repository_for(ds).latest_states().get(instance_id)
     if state:
         title = state.get("label", f"Item #{instance_id}")
-        rel = state.get("relation", "tracked").replace("_", " ").title()
-        anc = state.get("anchor_label", "Anchor")
-        sub = f"{rel} @ {anc}"
+        relation = str(state.get("relation") or "tracked").replace("_", " ").title()
+        anchor = state.get("anchor_label") or "no anchor"
+        subtitle = f"{relation} @ {anchor}"
     else:
         title = f"Item #{instance_id}"
-        sub = f"Tracked Object in {ds}"
-
+        subtitle = f"Tracked object in {ds}"
+    title, subtitle, dataset = (html.escape(str(v)) for v in (title, subtitle, ds))
     svg = f"""<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
   <rect width="240" height="240" rx="24" fill="#0F172A"/>
   <circle cx="120" cy="90" r="48" fill="#14B8A6" fill-opacity="0.15" stroke="#14B8A6" stroke-width="2"/>
-  <path d="M100 95 C 100 85, 110 80, 120 80 C 130 80, 140 85, 140 95 C 140 105, 135 110, 120 110 C 105 110, 100 105, 100 95 Z" fill="#14B8A6"/>
-  <text x="120" y="165" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="bold" fill="#F8FAFC" text-anchor="middle">{title}</text>
-  <text x="120" y="190" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#94A3B8" text-anchor="middle">{sub}</text>
-  <rect x="40" y="205" width="160" height="20" rx="10" fill="#0D9488" fill-opacity="0.2"/>
-  <text x="120" y="219" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#2DD4BF" text-anchor="middle">&#10003; {ds} Grounded</text>
+  <text x="120" y="165" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" fill="#F8FAFC" text-anchor="middle">{title}</text>
+  <text x="120" y="190" font-family="system-ui, sans-serif" font-size="13" fill="#94A3B8" text-anchor="middle">{subtitle}</text>
+  <text x="120" y="219" font-family="system-ui, sans-serif" font-size="11" fill="#2DD4BF" text-anchor="middle">{dataset}</text>
 </svg>"""
     return Response(content=svg, media_type="image/svg+xml")
 
 
 @app.get("/api/v1/video/{dataset_id}")
 def get_video(dataset_id: str) -> Response:
-    """Serve dataset video stream for interactive visualization."""
     from fastapi.responses import FileResponse
 
-    for candidate in [
-        Path("data") / dataset_id / f"{dataset_id}.mp4",
-        Path("data") / dataset_id / "video.mp4",
-        Path("data") / dataset_id / f"{dataset_id.lower()}.mp4",
-    ]:
+    ds = _validated(dataset_id)
+    for candidate in (
+        Path("data") / ds / f"{ds}.mp4",
+        Path("data") / ds / "video.mp4",
+        Path("data") / ds / f"{ds.lower()}.mp4",
+    ):
         if candidate.exists():
             return FileResponse(candidate, media_type="video/mp4")
     return Response(content="Video not found", status_code=404)
 
 
 # ---------------------------------------------------------------------------
-# Dynamic Memory Simulation & Testing Endpoints
+# Live capture control (FR1.3). Configured by AEGIS_CAPTURE_DIR (the
+# aegis-ingest --output-root) and AEGIS_CAPTURE_PAUSE_FILE (its --pause-file).
+# TODO(M4 4.2): protect these mutating routes with caregiver auth.
 # ---------------------------------------------------------------------------
 
 
-@app.post("/api/v1/simulate_transition", response_model=SimulateTransitionResponse)
-def simulate_transition(
-    req: SimulateTransitionRequest,
-) -> SimulateTransitionResponse:
-    """Simulate a dynamic spatial state transition in real-time."""
-    ds = get_active_dataset(req.dataset_id)
-    data = load_scene_graph_data(ds)
-    anchors = data.get("anchors", [])
-    latest_states = find_latest_objects_state(data)
+class CaptureStatusModel(BaseModel):
+    available: bool
+    session_id: str | None = None
+    status: str | None = None
+    paused: bool = False
+    frame_count: int | None = None
+    last_frame_at: str | None = None
 
-    current_state = latest_states.get(req.instance_id)
 
-    # Dynamic anchor resolution
-    anchor_label = req.anchor_label
-    anchor_id = req.anchor_id
-    if not anchor_label and anchors:
-        if anchor_id is not None:
-            match = next(
-                (a for a in anchors if a.get("anchor_id") == anchor_id), anchors[0]
-            )
-        else:
-            match = anchors[0]
-        anchor_id = match.get("anchor_id", 1)
-        anchor_label = match.get("label", f"Anchor #{anchor_id}")
-    elif not anchor_label:
-        anchor_id = 1
-        anchor_label = "Room Anchor #1"
+def _capture_settings() -> tuple[Path, Path] | None:
+    capture_dir = os.getenv("AEGIS_CAPTURE_DIR")
+    pause_file = os.getenv("AEGIS_CAPTURE_PAUSE_FILE")
+    if not capture_dir or not pause_file:
+        return None
+    return Path(capture_dir), Path(pause_file)
 
-    old_relation = (
-        current_state.get("relation", "inside") if current_state else "inside"
-    )
-    old_anchor = (
-        current_state.get("anchor_label", anchor_label)
-        if current_state
-        else anchor_label
-    )
-    current_label = (
-        current_state.get(
-            "label",
-            "Bottle #1" if ds == "Demo06-Self" else f"Object #{req.instance_id}",
+
+def _capture_status() -> CaptureStatusModel:
+    settings = _capture_settings()
+    if settings is None:
+        return CaptureStatusModel(available=False)
+    capture_dir, pause_file = settings
+    from aegis.ingestion.contracts import ContractError, load_session_manifest
+    from aegis.ingestion.live_handoff import find_latest_live_session
+
+    paused = pause_file.exists()
+    session = find_latest_live_session(capture_dir)
+    if session is None:
+        return CaptureStatusModel(available=True, paused=paused)
+    try:
+        manifest = load_session_manifest(session)
+    except (ContractError, OSError, ValueError):
+        return CaptureStatusModel(
+            available=True, paused=paused, session_id=session.name
         )
-        if current_state
-        else ("Bottle #1" if ds == "Demo06-Self" else f"Object #{req.instance_id}")
+    state_path = session / "session_state.json"
+    updated = None
+    if state_path.exists():
+        try:
+            updated = json.loads(state_path.read_text(encoding="utf-8")).get(
+                "updated_at"
+            )
+        except (OSError, json.JSONDecodeError):
+            updated = None
+    return CaptureStatusModel(
+        available=True,
+        session_id=str(manifest.get("session_id")),
+        status=str(manifest.get("status")),
+        paused=paused,
+        frame_count=manifest.get("frame_count"),
+        last_frame_at=updated or manifest.get("ended_at"),
     )
 
-    timeline = data.setdefault("timeline", {})
-    existing_frame_keys = [int(k) for k in timeline if str(k).isdigit()]
-    max_frame = max(existing_frame_keys) if existing_frame_keys else 642
-    new_frame = max_frame + 1
-    new_timestamp = (
-        float(current_state.get("last_seen_timestamp", 42.0)) + 5.0
-        if current_state
-        else 45.0
+
+@app.get("/api/v1/capture/status", response_model=CaptureStatusModel)
+def capture_status() -> CaptureStatusModel:
+    return _capture_status()
+
+
+def _require_capture() -> tuple[Path, Path]:
+    settings = _capture_settings()
+    if settings is None:
+        raise HTTPException(
+            status_code=503,
+            detail="live capture control is not configured on this server "
+            "(set AEGIS_CAPTURE_DIR and AEGIS_CAPTURE_PAUSE_FILE)",
+        )
+    return settings
+
+
+@app.post("/api/v1/capture/pause", response_model=CaptureStatusModel)
+def capture_pause() -> CaptureStatusModel:
+    """Pause capture (the capture loop pauses while the pause file exists)."""
+
+    _capture_dir, pause_file = _require_capture()
+    pause_file.parent.mkdir(parents=True, exist_ok=True)
+    pause_file.touch()
+    return _capture_status()
+
+
+@app.post("/api/v1/capture/resume", response_model=CaptureStatusModel)
+def capture_resume() -> CaptureStatusModel:
+    _capture_dir, pause_file = _require_capture()
+    pause_file.unlink(missing_ok=True)
+    return _capture_status()
+
+
+# ---------------------------------------------------------------------------
+# Demo simulator (AEGIS_ENABLE_SIMULATOR=1 only; changes live in memory)
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/api/v1/simulate_transition",
+    response_model=SimulateTransitionResponse,
+    dependencies=[Depends(require_simulator)],
+)
+def simulate_transition(req: SimulateTransitionRequest) -> SimulateTransitionResponse:
+    ds = get_active_dataset(req.dataset_id)
+    repo = repository_for(ds)
+    current = repo.latest_states().get(req.instance_id)
+    if current is None:
+        raise HTTPException(
+            status_code=404, detail=f"Instance #{req.instance_id} is not in '{ds}'."
+        )
+
+    anchor_id, anchor_label = req.anchor_id, req.anchor_label
+    if anchor_label is None and anchor_id is not None:
+        match = next(
+            (a for a in repo.anchors() if a.get("anchor_id") == anchor_id), None
+        )
+        anchor_label = match.get("label") if match else None
+    old_relation = current.get("relation")
+    old_anchor = current.get("anchor_label")
+    timestamp = float(current.get("last_seen_timestamp") or 0.0) + 5.0
+
+    new_state = dict(current)
+    new_state.update(
+        anchor_id=anchor_id,
+        anchor_label=anchor_label,
+        relation=req.new_relation,
+        relation_certain=True,
+        relative_distance=req.relative_distance_m,
+        last_seen_timestamp=timestamp,
+        timestamp=timestamp,
+        is_active_view=req.is_active_view,
+        is_in_hand=req.is_in_hand,
     )
-
-    new_obj_state = {
-        "anchor_id": anchor_id,
-        "anchor_label": anchor_label,
-        "instance_id": req.instance_id,
-        "label": current_label,
-        "relation": req.new_relation,
-        "relative_distance": req.relative_distance_m,
-        "last_seen_timestamp": new_timestamp,
-        "timestamp": new_timestamp,
-        "is_active_view": req.is_active_view,
-        "is_in_hand": req.is_in_hand,
-    }
-
-    timeline[str(new_frame)] = [new_obj_state]
-
-    events = data.setdefault("events", [])
-    event_id = f"event_{len(events) + 1:04d}"
-    new_event = {
+    event_id = f"event_{len(repo.events()) + 1:04d}"
+    event = {
         "event_id": event_id,
         "event_type": "state_change",
         "instance_id": req.instance_id,
-        "object": current_label,
+        "object": current.get("label", f"Object #{req.instance_id}"),
         "source_relation": old_relation,
         "destination_relation": req.new_relation,
         "source_anchor": old_anchor,
         "destination_anchor": anchor_label,
-        "start_time": new_timestamp - 2.0,
-        "end_time": new_timestamp,
+        "source_room": current.get("room_label"),
+        "destination_room": current.get("room_label"),
+        "start_time": timestamp - 2.0,
+        "end_time": timestamp,
     }
-    events.append(new_event)
-
-    msg = (
-        f"Simulated {current_label} transition from {old_relation} "
-        f"to {req.new_relation} at {anchor_label}."
-    )
+    repo.apply_simulated_state(req.instance_id, new_state, event)
     return SimulateTransitionResponse(
-        status="ok",
-        message=msg,
+        message=(
+            f"Simulated {event['object']} transition from {old_relation} "
+            f"to {req.new_relation}."
+        ),
         event_id=event_id,
         instance_id=req.instance_id,
-        object_label=current_label,
+        object_label=str(event["object"]),
         new_relation=req.new_relation,
         anchor_label=anchor_label,
         relative_distance_m=req.relative_distance_m,
@@ -968,165 +952,109 @@ def simulate_transition(
     )
 
 
-@app.post("/api/v1/reset")
+@app.post("/api/v1/reset", dependencies=[Depends(require_simulator)])
 def reset_memory(dataset_id: str | None = None) -> dict[str, str]:
-    """Reset the in-memory scene graph back to the original baseline file."""
+    """Drop simulated changes: reload the graph from disk."""
+
     ds = get_active_dataset(dataset_id)
-    _GRAPH_CACHE.pop(ds, None)
-    load_scene_graph_data(ds)
-    return {
-        "status": "ok",
-        "message": f"Memory cache for {ds} reset to baseline.",
-    }
+    clear_cache(ds)
+    repository_for(ds)
+    return {"status": "ok", "message": f"Memory for {ds} reloaded from disk."}
 
 
-@app.get("/api/v1/simulate/floor", response_model=SimulateTransitionResponse)
-def quick_simulate_floor(
-    dataset_id: str | None = None,
+def _preset(
+    dataset_id: str | None,
+    relation: str,
+    *,
+    anchor_index: int | None = 0,
+    active: bool,
+    in_hand: bool = False,
+    distance: float = 0.2,
 ) -> SimulateTransitionResponse:
-    """Quick preset: Move active object onto the floor (hazard warning)."""
     ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    anchors = data.get("anchors", [])
-    first_anc = anchors[0] if anchors else {}
+    anchors = repository_for(ds).anchors()
+    anchor = (
+        anchors[anchor_index]
+        if anchor_index is not None and len(anchors) > anchor_index
+        else None
+    )
     return simulate_transition(
         SimulateTransitionRequest(
             instance_id=1,
-            new_relation="on_floor",
-            anchor_id=first_anc.get("anchor_id", 1),
-            anchor_label=first_anc.get("label", "Floor"),
-            relative_distance_m=0.42,
-            is_active_view=True,
-            is_in_hand=False,
+            new_relation=relation,
+            anchor_id=anchor.get("anchor_id") if anchor else None,
+            anchor_label=anchor.get("label") if anchor else None,
+            relative_distance_m=distance,
+            is_active_view=active,
+            is_in_hand=in_hand,
             dataset_id=ds,
         )
     )
 
 
-@app.get("/api/v1/simulate/cabinet", response_model=SimulateTransitionResponse)
-def quick_simulate_cabinet(
+_SIM = {
+    "response_model": SimulateTransitionResponse,
+    "dependencies": [Depends(require_simulator)],
+}
+
+
+@app.get("/api/v1/simulate/floor", **_SIM)
+def quick_simulate_floor(dataset_id: str | None = None) -> SimulateTransitionResponse:
+    return _preset(dataset_id, "on_floor", active=True, distance=0.42)
+
+
+@app.get("/api/v1/simulate/cabinet", **_SIM)
+def quick_simulate_cabinet(dataset_id: str | None = None) -> SimulateTransitionResponse:
+    return _preset(dataset_id, "inside", active=False, distance=0.09)
+
+
+@app.get("/api/v1/simulate/in_hand", **_SIM)
+def quick_simulate_in_hand(dataset_id: str | None = None) -> SimulateTransitionResponse:
+    return _preset(
+        dataset_id, "carried_by_user", anchor_index=None, active=False, in_hand=True
+    )
+
+
+@app.get("/api/v1/simulate/bottle_table1", **_SIM)
+def quick_simulate_bottle_table1(
     dataset_id: str | None = None,
 ) -> SimulateTransitionResponse:
-    """Quick preset: Store active object inside room anchor (occlusion persistence)."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    anchors = data.get("anchors", [])
-    first_anc = anchors[0] if anchors else {}
-    return simulate_transition(
-        SimulateTransitionRequest(
-            instance_id=1,
-            new_relation="inside",
-            anchor_id=first_anc.get("anchor_id", 1),
-            anchor_label=first_anc.get("label", "Storage Cabinet #1"),
-            relative_distance_m=0.09,
-            is_active_view=False,
-            is_in_hand=False,
-            dataset_id=ds,
-        )
-    )
+    return _preset(dataset_id, "on_surface", anchor_index=0, active=True, distance=0.09)
 
 
-@app.get("/api/v1/simulate/in_hand", response_model=SimulateTransitionResponse)
-def quick_simulate_in_hand(
+@app.get("/api/v1/simulate/bottle_occluded", **_SIM)
+def quick_simulate_bottle_occluded(
     dataset_id: str | None = None,
 ) -> SimulateTransitionResponse:
-    """Quick preset: Pick up active object in hands (kinematic tracking)."""
-    ds = get_active_dataset(dataset_id)
-    data = load_scene_graph_data(ds)
-    anchors = data.get("anchors", [])
-    first_anc = anchors[0] if anchors else {}
-    return simulate_transition(
-        SimulateTransitionRequest(
-            instance_id=1,
-            new_relation="carried_by_user",
-            anchor_id=first_anc.get("anchor_id", 1),
-            anchor_label=first_anc.get("label", "User Hands"),
-            relative_distance_m=0.25,
-            is_active_view=False,
-            is_in_hand=True,
-            dataset_id=ds,
-        )
+    return _preset(
+        dataset_id, "on_surface", anchor_index=0, active=False, distance=0.09
     )
 
 
-@app.get("/api/v1/simulate/bottle_table1", response_model=SimulateTransitionResponse)
-def quick_simulate_bottle_table1() -> SimulateTransitionResponse:
-    """Quick preset: Bottle #1 resting actively on Desk #1 (Source table)."""
-    return simulate_transition(
-        SimulateTransitionRequest(
-            instance_id=1,
-            new_relation="on_surface",
-            anchor_id=1,
-            anchor_label="Desk #1",
-            relative_distance_m=0.09,
-            is_active_view=True,
-            is_in_hand=False,
-            dataset_id="Demo06-Self",
-        )
-    )
-
-
-@app.get("/api/v1/simulate/bottle_occluded", response_model=SimulateTransitionResponse)
-def quick_simulate_bottle_occluded() -> SimulateTransitionResponse:
-    """Quick preset: Bottle #1 occluded on Desk #1 (object permanence active in memory)."""
-    return simulate_transition(
-        SimulateTransitionRequest(
-            instance_id=1,
-            new_relation="on_surface",
-            anchor_id=1,
-            anchor_label="Desk #1",
-            relative_distance_m=0.09,
-            is_active_view=False,
-            is_in_hand=False,
-            dataset_id="Demo06-Self",
-        )
-    )
-
-
-@app.get("/api/v1/simulate/bottle_table2", response_model=SimulateTransitionResponse)
-def quick_simulate_bottle_table2() -> SimulateTransitionResponse:
-    """Quick preset: Bottle #1 placed on Desk #2 (relocation transition complete)."""
-    return simulate_transition(
-        SimulateTransitionRequest(
-            instance_id=1,
-            new_relation="on_surface",
-            anchor_id=2,
-            anchor_label="Desk #2",
-            relative_distance_m=0.05,
-            is_active_view=True,
-            is_in_hand=False,
-            dataset_id="Demo06-Self",
-        )
-    )
+@app.get("/api/v1/simulate/bottle_table2", **_SIM)
+def quick_simulate_bottle_table2(
+    dataset_id: str | None = None,
+) -> SimulateTransitionResponse:
+    return _preset(dataset_id, "on_surface", anchor_index=1, active=True, distance=0.05)
 
 
 # ---------------------------------------------------------------------------
-# Modal Serverless Deployment Wrapper
+# Modal serverless wrapper
 # ---------------------------------------------------------------------------
 
 try:
     import modal
 
-    from aegis.remote.modal_app import (
-        CPU_IMAGE,
-        DATA_MOUNT,
-        data_volume,
-    )
-    from aegis.remote.modal_app import (
-        app as modal_app,
-    )
+    from aegis.remote.modal_app import CPU_IMAGE, DATA_MOUNT, data_volume
+    from aegis.remote.modal_app import app as modal_app
 
-    @modal_app.function(
-        image=CPU_IMAGE,
-        volumes={DATA_MOUNT: data_volume},
-    )
+    @modal_app.function(image=CPU_IMAGE, volumes={DATA_MOUNT: data_volume})
     @modal.asgi_app()
     def fastapi_gateway() -> FastAPI:
         """Modal ASGI entrypoint for serverless deployment."""
         return app
 
 except ImportError:
-    # Running outside Modal environment
     pass
 
 

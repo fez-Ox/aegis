@@ -4,17 +4,71 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-DEFAULT_DROID_WEIGHTS_URL = (
-    "https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh"
-)
-DEFAULT_DROID_CALIB_WEIGHTS_URL = (
-    "https://raw.githubusercontent.com/boschresearch/DroidCalib/main/droidcalib.pth"
-)
+from aegis.core.vocabulary import Vocabulary, default_vocabulary
+
+
+@lru_cache(maxsize=8)
+def _vocabulary_from_key(key: str) -> Vocabulary:
+    import json
+
+    return Vocabulary.from_mapping(json.loads(key))
+
+
+def _vocabulary_from_mapping(raw: Mapping[str, Any]) -> Vocabulary:
+    import json
+
+    return _vocabulary_from_key(json.dumps(raw, sort_keys=True, default=list))
+
+
+def _section(cls: type[Any], value: Any, name: str) -> Any:
+    """Build a flat frozen config dataclass from a mapping.
+
+    Each field is converted to the type of its default value; unknown keys are
+    rejected so a misspelt setting fails loudly instead of being ignored.
+    """
+
+    from dataclasses import MISSING, fields
+
+    raw = _mapping(value, name)
+    known = {item.name: item for item in fields(cls)}
+    unknown = sorted(set(raw) - set(known))
+    if unknown:
+        raise ValueError(f"{name}: unknown setting(s) {', '.join(unknown)}")
+    kwargs: dict[str, Any] = {}
+    for key, item in known.items():
+        if key not in raw:
+            continue
+        default = item.default if item.default is not MISSING else None
+        raw_value = raw[key]
+        if raw_value is None:
+            kwargs[key] = None
+        elif isinstance(default, bool):
+            kwargs[key] = bool(raw_value)
+        elif isinstance(default, int):
+            kwargs[key] = int(raw_value)
+        elif isinstance(default, float):
+            kwargs[key] = float(raw_value)
+        elif isinstance(default, str):
+            kwargs[key] = str(raw_value)
+        else:
+            kwargs[key] = raw_value
+    return cls(**kwargs)
+
+
+def _home_id(value: str) -> str:
+    import re
+
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value):
+        raise ValueError(
+            "memory.home_id may contain only letters, digits, '.', '_', '-'"
+        )
+    return value
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -73,7 +127,11 @@ class VideoConfig:
 
 @dataclass(frozen=True, slots=True)
 class CameraConfig:
-    """Camera calibration settings used by DROID-SLAM and lifting.
+    """Camera calibration settings for batch-video preprocessing.
+
+    VGGT-Ω estimates intrinsics itself; these settings only decide which
+    intrinsics are written to the dataset metadata. ``self_calibrated`` is
+    accepted for older configs and behaves like ``provided``.
 
     ``calibration_mode`` controls how missing intrinsics are handled. The
     default requires a supplied calibration file or configured intrinsics;
@@ -85,55 +143,6 @@ class CameraConfig:
     intrinsics_resolution: tuple[int, int] | None = None
     calibration_mode: str = "provided"
     allow_approximate: bool = False
-    self_calibration_weights_filename: str = "droidcalib.pth"
-    self_calibration_weights_url: str = DEFAULT_DROID_CALIB_WEIGHTS_URL
-    self_calibration_camera_model: str = "pinhole"
-    self_calibration_stride: int = 1
-    self_calibration_max_frames: int = 0
-    self_calibration_width: int = 517
-    self_calibration_height: int = 384
-
-
-@dataclass(frozen=True, slots=True)
-class DepthConfig:
-    """Depth Anything V2 inference settings."""
-
-    model_id: str = "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf"
-    mode: str = "metric"
-    batch_size: int = 2
-    fp16: bool = True
-
-
-@dataclass(frozen=True, slots=True)
-class PoseConfig:
-    """DROID-SLAM inference settings."""
-
-    weights_filename: str = "droid.pth"
-    weights_url: str = DEFAULT_DROID_WEIGHTS_URL
-    stride: int = 1
-    buffer: int = 512
-    filter_thresh: float = 2.4
-    beta: float = 0.3
-    frontend_thresh: float = 16.0
-    frontend_window: int = 25
-    frontend_radius: int = 2
-    frontend_nms: int = 1
-    backend_thresh: float = 22.0
-    backend_radius: int = 2
-    backend_nms: int = 3
-    asynchronous: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class GeometryConfig:
-    """Point-cloud construction settings."""
-
-    max_points_per_frame: int = 5000
-    max_total_points: int = 150000
-    depth_min: float = 0.1
-    depth_max: float = 20.0
-    depth_scale: float = 1.0
-    pose_scale: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,10 +160,14 @@ class VggtConfig:
     """VGGT-Ω feed-forward 3D reconstruction settings."""
 
     model_id: str = "facebook/VGGT-Omega"
-    image_size: int = 518
+    # Every run so far used 512 with the vggt_omega_1b_512 checkpoint.
+    image_size: int = 512
     keyframe_stride: int = 6
-    batch_size: int = 1
     dtype: str = "bfloat16"
+    # Hard limit per reconstruction; long captures are split into segments.
+    max_keyframes: int = 120
+    # Keep per-keyframe pointmaps after the detect stage (debugging only).
+    keep_pointmaps: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +177,10 @@ class Sam2Config:
     model_id: str = "facebook/sam2-hiera-large"
     prompt_confidence_threshold: float = 0.35
     multimask_output: bool = False
+    # always: refine every box; fallback: only when the detector's own mask
+    # is missing or covers < min_mask_area_ratio of its box; off: never.
+    mode: str = "fallback"
+    min_mask_area_ratio: float = 0.15
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +219,13 @@ class PerceptionConfig:
     track_smoothing: float = 0.65
     hand_contact_iou_threshold: float = 0.10
     hand_contact_max_distance: float = 0.35
+    # Same-label boxes overlapping more than this are duplicates.
+    duplicate_iou: float = 0.5
+    max_detections_per_frame: int = 30
+    batch_size: int = 8
+    # hsv (colour histogram) or dino (DINOv2 embedding) for dormant re-ID.
+    reid_backend: str = "hsv"
+    reid_embedding_threshold: float = 0.35
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,6 +279,8 @@ class LiveCaptureConfig:
     reconnect_timeout_seconds: float = 30.0
     buffer_capacity: int = 30
     checkpoint_every: int = 1
+    # Frames per promoted segment (0 = one dataset for the whole capture).
+    segment_frames: int = 120
     keyframe: KeyframeConfig = field(default_factory=KeyframeConfig)
 
     def __post_init__(self) -> None:
@@ -270,6 +296,110 @@ class LiveCaptureConfig:
             raise ValueError("live.buffer_capacity must be positive")
         if self.checkpoint_every <= 0:
             raise ValueError("live.checkpoint_every must be positive")
+        if self.segment_frames < 0:
+            raise ValueError("live.segment_frames must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class GravityConfig:
+    """Per-session gravity estimation (up direction and floor height)."""
+
+    enabled: bool = True
+    # Below this confidence, vertical relations (under/above/on_floor) are not
+    # asserted and thresholds are not rescaled.
+    min_confidence: float = 0.5
+    # Typical height of a chest-held phone, in reconstruction units.
+    assumed_camera_height: float = 1.4
+    ransac_iterations: int = 500
+
+    def __post_init__(self) -> None:
+        if not 0 < self.min_confidence <= 1:
+            raise ValueError("memory.gravity.min_confidence must be in (0, 1]")
+        if self.assumed_camera_height <= 0:
+            raise ValueError("memory.gravity.assumed_camera_height must be positive")
+        if self.ransac_iterations < 50:
+            raise ValueError("memory.gravity.ransac_iterations must be at least 50")
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryBuildConfig:
+    """Thresholds of the per-session memory builder.
+
+    Distances are multiplied by the session scale unit
+    (:meth:`aegis.geometry.gravity.GravityFrame.unit`).
+    """
+
+    anchor_cluster_radius: float = 0.40
+    association_radius: float = 0.45
+    appearance_threshold: float = 0.35
+    # An instance is confirmed (gets memory) after this many observations.
+    min_observations: int = 2
+    # A new state must be seen this many times in a row to replace the old.
+    min_run_observations: int = 2
+    # A single final observation may still commit a state above this
+    # detection confidence when its relation is certain.
+    trailing_single_confidence: float = 0.5
+    vertical_tolerance: float = 0.15
+
+    def __post_init__(self) -> None:
+        if (
+            self.anchor_cluster_radius <= 0
+            or self.association_radius <= 0
+            or not 0 < self.appearance_threshold <= 1
+            or self.min_observations < 1
+            or self.min_run_observations < 1
+            or not 0 <= self.trailing_single_confidence <= 1
+            or self.vertical_tolerance <= 0
+        ):
+            raise ValueError("memory.build values are outside their valid ranges")
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceConfig:
+    """Object-only evidence crops kept after raw frames are purged.
+
+    Keeping them past the 24-hour raw-frame rule is decision #9 and must be
+    confirmed with the supervisor; ``enabled: false`` turns them off.
+    """
+
+    enabled: bool = True
+    max_side: int = 320
+    quality: int = 85
+
+    def __post_init__(self) -> None:
+        if self.max_side < 32 or not 1 <= self.quality <= 100:
+            raise ValueError("memory.evidence values are outside their valid ranges")
+
+
+@dataclass(frozen=True, slots=True)
+class RetentionConfig:
+    """Tiered retention: full detail for ``hot_days``, then text summaries."""
+
+    hot_days: int = 3
+    # Vocabulary entries with importance: high keep detail longer.
+    important_hot_days: int = 7
+    # Calendar days of summaries (IANA zone name).
+    timezone: str = "Asia/Karachi"
+    # Keep the crop behind each object's last-known state after compaction.
+    keep_last_evidence: bool = True
+    weekly_rollup_after_days: int = 30
+    monthly_rollup_after_days: int = 365
+
+    def __post_init__(self) -> None:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        if self.hot_days < 1 or self.important_hot_days < self.hot_days:
+            raise ValueError(
+                "memory.retention needs hot_days >= 1 and important_hot_days >= hot_days"
+            )
+        if not 0 < self.weekly_rollup_after_days < self.monthly_rollup_after_days:
+            raise ValueError("memory.retention roll-up thresholds are inconsistent")
+        try:
+            ZoneInfo(self.timezone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(
+                f"memory.retention.timezone {self.timezone!r} is unknown"
+            ) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,24 +407,41 @@ class MemoryConfig:
     """Spatio-temporal memory construction settings."""
 
     rooms: RoomMemoryConfig = field(default_factory=RoomMemoryConfig)
+    gravity: GravityConfig = field(default_factory=GravityConfig)
+    build: MemoryBuildConfig = field(default_factory=MemoryBuildConfig)
+    evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
+    retention: RetentionConfig = field(default_factory=RetentionConfig)
+    # Durable per-home memory (laptop side): <store_root>/<home_id>/memory.db
+    home_id: str = "home01"
+    store_root: str = "outputs/_homes"
 
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    """Complete configuration passed from the local orchestrator to Modal."""
+    """Complete configuration passed from the local orchestrator to Modal.
+
+    ``vocabulary`` holds the serialised vocabulary (``Vocabulary.to_mapping``)
+    so that remote workers, which do not ship the YAML file, get the same
+    label roles as local code. Use :meth:`vocab` to obtain the object.
+    """
 
     storage: StorageConfig = field(default_factory=StorageConfig)
     video: VideoConfig = field(default_factory=VideoConfig)
     camera: CameraConfig = field(default_factory=CameraConfig)
-    depth: DepthConfig = field(default_factory=DepthConfig)
-    pose: PoseConfig = field(default_factory=PoseConfig)
     vggt: VggtConfig = field(default_factory=VggtConfig)
     sam2: Sam2Config = field(default_factory=Sam2Config)
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
-    geometry: GeometryConfig = field(default_factory=GeometryConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     live: LiveCaptureConfig = field(default_factory=LiveCaptureConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
+    vocabulary: Mapping[str, Any] = field(default_factory=dict)
+
+    def vocab(self) -> Vocabulary:
+        """Return the vocabulary carried in the config, else the repository file."""
+
+        if self.vocabulary:
+            return _vocabulary_from_mapping(self.vocabulary)
+        return default_vocabulary()
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> RuntimeConfig:
@@ -303,12 +450,9 @@ class RuntimeConfig:
         storage_raw = _mapping(raw.get("storage"), "storage")
         video_raw = _mapping(raw.get("video"), "video")
         camera_raw = _mapping(raw.get("camera"), "camera")
-        depth_raw = _mapping(raw.get("depth"), "depth")
-        pose_raw = _mapping(raw.get("pose"), "pose")
         vggt_raw = _mapping(raw.get("vggt"), "vggt")
         sam2_raw = _mapping(raw.get("sam2"), "sam2")
         perception_raw = _mapping(raw.get("perception"), "perception")
-        geometry_raw = _mapping(raw.get("geometry"), "geometry")
         memory_raw = _mapping(raw.get("memory"), "memory")
         live_raw = _mapping(raw.get("live"), "live")
         visualization_raw = _mapping(raw.get("visualization"), "visualization")
@@ -316,12 +460,9 @@ class RuntimeConfig:
         storage_defaults = StorageConfig()
         video_defaults = VideoConfig()
         camera_defaults = CameraConfig()
-        depth_defaults = DepthConfig()
-        pose_defaults = PoseConfig()
         vggt_defaults = VggtConfig()
         sam2_defaults = Sam2Config()
         perception_defaults = PerceptionConfig()
-        geometry_defaults = GeometryConfig()
         memory_defaults = MemoryConfig()
         live_defaults = LiveCaptureConfig()
         visualization_defaults = VisualizationConfig()
@@ -367,114 +508,25 @@ class RuntimeConfig:
             ),
             calibration_mode=calibration_mode,
             allow_approximate=calibration_mode == "approximate",
-            self_calibration_weights_filename=str(
-                camera_raw.get(
-                    "self_calibration_weights_filename",
-                    camera_defaults.self_calibration_weights_filename,
-                )
-            ),
-            self_calibration_weights_url=str(
-                camera_raw.get(
-                    "self_calibration_weights_url",
-                    camera_defaults.self_calibration_weights_url,
-                )
-            ),
-            self_calibration_camera_model=str(
-                camera_raw.get(
-                    "self_calibration_camera_model",
-                    camera_defaults.self_calibration_camera_model,
-                )
-            ).lower(),
-            self_calibration_stride=int(
-                camera_raw.get(
-                    "self_calibration_stride", camera_defaults.self_calibration_stride
-                )
-            ),
-            self_calibration_max_frames=int(
-                camera_raw.get(
-                    "self_calibration_max_frames",
-                    camera_defaults.self_calibration_max_frames,
-                )
-            ),
-            self_calibration_width=int(
-                camera_raw.get(
-                    "self_calibration_width", camera_defaults.self_calibration_width
-                )
-            ),
-            self_calibration_height=int(
-                camera_raw.get(
-                    "self_calibration_height", camera_defaults.self_calibration_height
-                )
-            ),
         )
-        if camera.self_calibration_camera_model not in {"pinhole", "focal", "mei"}:
-            raise ValueError(
-                "camera.self_calibration_camera_model must be 'pinhole', 'focal', "
-                "or 'mei'"
-            )
-        if (
-            camera.self_calibration_stride <= 0
-            or camera.self_calibration_max_frames < 0
-            or camera.self_calibration_width <= 0
-            or camera.self_calibration_height <= 0
-        ):
-            raise ValueError("self-calibration settings are outside their valid ranges")
-
-        depth = DepthConfig(
-            model_id=str(depth_raw.get("model_id", depth_defaults.model_id)),
-            mode=str(depth_raw.get("mode", depth_defaults.mode)).lower(),
-            batch_size=int(depth_raw.get("batch_size", depth_defaults.batch_size)),
-            fp16=bool(depth_raw.get("fp16", depth_defaults.fp16)),
-        )
-        if depth.mode not in {"metric", "relative"}:
-            raise ValueError("depth.mode must be either 'metric' or 'relative'")
-        if depth.batch_size <= 0:
-            raise ValueError("depth.batch_size must be positive")
-
-        pose = PoseConfig(
-            weights_filename=str(
-                pose_raw.get("weights_filename", pose_defaults.weights_filename)
-            ),
-            weights_url=str(pose_raw.get("weights_url", pose_defaults.weights_url)),
-            stride=int(pose_raw.get("stride", pose_defaults.stride)),
-            buffer=int(pose_raw.get("buffer", pose_defaults.buffer)),
-            filter_thresh=float(
-                pose_raw.get("filter_thresh", pose_defaults.filter_thresh)
-            ),
-            beta=float(pose_raw.get("beta", pose_defaults.beta)),
-            frontend_thresh=float(
-                pose_raw.get("frontend_thresh", pose_defaults.frontend_thresh)
-            ),
-            frontend_window=int(
-                pose_raw.get("frontend_window", pose_defaults.frontend_window)
-            ),
-            frontend_radius=int(
-                pose_raw.get("frontend_radius", pose_defaults.frontend_radius)
-            ),
-            frontend_nms=int(pose_raw.get("frontend_nms", pose_defaults.frontend_nms)),
-            backend_thresh=float(
-                pose_raw.get("backend_thresh", pose_defaults.backend_thresh)
-            ),
-            backend_radius=int(
-                pose_raw.get("backend_radius", pose_defaults.backend_radius)
-            ),
-            backend_nms=int(pose_raw.get("backend_nms", pose_defaults.backend_nms)),
-            asynchronous=bool(pose_raw.get("asynchronous", pose_defaults.asynchronous)),
-        )
-        if pose.stride <= 0 or pose.buffer <= 0:
-            raise ValueError("pose stride and buffer must be positive")
-
         vggt = VggtConfig(
             model_id=str(vggt_raw.get("model_id", vggt_defaults.model_id)),
             image_size=int(vggt_raw.get("image_size", vggt_defaults.image_size)),
             keyframe_stride=int(
                 vggt_raw.get("keyframe_stride", vggt_defaults.keyframe_stride)
             ),
-            batch_size=int(vggt_raw.get("batch_size", vggt_defaults.batch_size)),
             dtype=str(vggt_raw.get("dtype", vggt_defaults.dtype)),
+            max_keyframes=int(
+                vggt_raw.get("max_keyframes", vggt_defaults.max_keyframes)
+            ),
+            keep_pointmaps=bool(
+                vggt_raw.get("keep_pointmaps", vggt_defaults.keep_pointmaps)
+            ),
         )
-        if vggt.keyframe_stride <= 0 or vggt.image_size <= 0:
-            raise ValueError("vggt settings must be positive")
+        if vggt.keyframe_stride <= 0 or vggt.image_size <= 0 or vggt.max_keyframes < 2:
+            raise ValueError("vggt settings must be positive (max_keyframes >= 2)")
+        if vggt.dtype not in {"bfloat16", "float16", "float32"}:
+            raise ValueError("vggt.dtype must be 'bfloat16', 'float16' or 'float32'")
 
         sam2 = Sam2Config(
             model_id=str(sam2_raw.get("model_id", sam2_defaults.model_id)),
@@ -487,9 +539,28 @@ class RuntimeConfig:
             multimask_output=bool(
                 sam2_raw.get("multimask_output", sam2_defaults.multimask_output)
             ),
+            mode=str(sam2_raw.get("mode", sam2_defaults.mode)).lower(),
+            min_mask_area_ratio=float(
+                sam2_raw.get("min_mask_area_ratio", sam2_defaults.min_mask_area_ratio)
+            ),
         )
+        if sam2.mode not in {"always", "fallback", "off"}:
+            raise ValueError("sam2.mode must be 'always', 'fallback' or 'off'")
+        if not 0.0 <= sam2.min_mask_area_ratio <= 1.0:
+            raise ValueError("sam2.min_mask_area_ratio must be in [0, 1]")
+
+        vocabulary_raw = raw.get("vocabulary") or {}
+        if not isinstance(vocabulary_raw, Mapping):
+            raise TypeError("vocabulary must be a mapping")
+        if vocabulary_raw:
+            # Validate early so a broken vocabulary fails before any Modal call.
+            _vocabulary_from_mapping(vocabulary_raw)
 
         target_classes_raw = perception_raw.get("target_classes")
+        if target_classes_raw is None and vocabulary_raw:
+            target_classes_raw = list(
+                _vocabulary_from_mapping(vocabulary_raw).detector_prompts()
+            )
         if target_classes_raw is not None:
             if not isinstance(target_classes_raw, Sequence) or isinstance(
                 target_classes_raw, (str, bytes)
@@ -553,7 +624,37 @@ class RuntimeConfig:
                     perception_defaults.hand_contact_max_distance,
                 )
             ),
+            duplicate_iou=float(
+                perception_raw.get("duplicate_iou", perception_defaults.duplicate_iou)
+            ),
+            max_detections_per_frame=int(
+                perception_raw.get(
+                    "max_detections_per_frame",
+                    perception_defaults.max_detections_per_frame,
+                )
+            ),
+            batch_size=int(
+                perception_raw.get("batch_size", perception_defaults.batch_size)
+            ),
+            reid_backend=str(
+                perception_raw.get("reid_backend", perception_defaults.reid_backend)
+            ).lower(),
+            reid_embedding_threshold=float(
+                perception_raw.get(
+                    "reid_embedding_threshold",
+                    perception_defaults.reid_embedding_threshold,
+                )
+            ),
         )
+        if perception.reid_backend not in {"hsv", "dino"}:
+            raise ValueError("perception.reid_backend must be 'hsv' or 'dino'")
+        if (
+            not 0.0 < perception.duplicate_iou <= 1.0
+            or perception.max_detections_per_frame < 1
+            or perception.batch_size < 1
+            or not 0.0 < perception.reid_embedding_threshold <= 2.0
+        ):
+            raise ValueError("perception detection limits are out of valid range")
 
         if perception.detector_backend not in {"yoloe", "yolo_world"}:
             raise ValueError(
@@ -574,34 +675,6 @@ class RuntimeConfig:
             or perception.track_smoothing >= 1.0
         ):
             raise ValueError("perception parameters are out of valid range")
-
-        geometry = GeometryConfig(
-            max_points_per_frame=int(
-                geometry_raw.get(
-                    "max_points_per_frame", geometry_defaults.max_points_per_frame
-                )
-            ),
-            max_total_points=int(
-                geometry_raw.get("max_total_points", geometry_defaults.max_total_points)
-            ),
-            depth_min=float(geometry_raw.get("depth_min", geometry_defaults.depth_min)),
-            depth_max=float(geometry_raw.get("depth_max", geometry_defaults.depth_max)),
-            depth_scale=float(
-                geometry_raw.get("depth_scale", geometry_defaults.depth_scale)
-            ),
-            pose_scale=float(
-                geometry_raw.get("pose_scale", geometry_defaults.pose_scale)
-            ),
-        )
-        if (
-            geometry.max_points_per_frame <= 0
-            or geometry.max_total_points <= 0
-            or geometry.depth_min <= 0
-            or geometry.depth_max <= geometry.depth_min
-            or geometry.depth_scale <= 0
-            or geometry.pose_scale <= 0
-        ):
-            raise ValueError("geometry values are outside their valid ranges")
 
         visualization = VisualizationConfig(
             log_video=bool(
@@ -691,6 +764,9 @@ class RuntimeConfig:
             checkpoint_every=int(
                 live_raw.get("checkpoint_every", live_defaults.checkpoint_every)
             ),
+            segment_frames=int(
+                live_raw.get("segment_frames", live_defaults.segment_frames)
+            ),
             keyframe=keyframe,
         )
 
@@ -713,26 +789,52 @@ class RuntimeConfig:
             ),
             video=video,
             camera=camera,
-            depth=depth,
-            pose=pose,
             vggt=vggt,
             sam2=sam2,
             perception=perception,
-            geometry=geometry,
-            memory=MemoryConfig(rooms=rooms),
+            memory=MemoryConfig(
+                rooms=rooms,
+                gravity=_section(
+                    GravityConfig, memory_raw.get("gravity"), "memory.gravity"
+                ),
+                build=_section(
+                    MemoryBuildConfig, memory_raw.get("build"), "memory.build"
+                ),
+                evidence=_section(
+                    EvidenceConfig, memory_raw.get("evidence"), "memory.evidence"
+                ),
+                retention=_section(
+                    RetentionConfig, memory_raw.get("retention"), "memory.retention"
+                ),
+                home_id=_home_id(str(memory_raw.get("home_id", "home01"))),
+                store_root=str(memory_raw.get("store_root", "outputs/_homes")),
+            ),
             live=live,
             visualization=visualization,
+            vocabulary=dict(vocabulary_raw),
         )
 
 
 def load_config(path: str | Path) -> RuntimeConfig:
-    """Load a YAML runtime configuration from ``path``."""
+    """Load a YAML runtime configuration from ``path``.
+
+    The vocabulary file named by the optional top-level ``vocabulary_file`` key
+    (default ``vocabulary.yaml``, relative to the config file) is loaded and
+    embedded so it travels to remote workers with the rest of the config.
+    """
 
     config_path = Path(path)
     with config_path.open("r", encoding="utf-8") as handle:
         raw = yaml.safe_load(handle) or {}
     if not isinstance(raw, Mapping):
         raise TypeError("configuration root must be a mapping")
+    raw = dict(raw)
+    if not raw.get("vocabulary"):
+        vocabulary_name = str(raw.get("vocabulary_file") or "vocabulary.yaml")
+        vocabulary_path = Path(vocabulary_name)
+        if not vocabulary_path.is_absolute():
+            vocabulary_path = config_path.parent / vocabulary_path
+        raw["vocabulary"] = Vocabulary.load(vocabulary_path).to_mapping()
     return RuntimeConfig.from_mapping(raw)
 
 

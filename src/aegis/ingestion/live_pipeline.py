@@ -41,6 +41,10 @@ class LiveIngestionConfig:
     checkpoint_every: int = 1
     keyframe: KeyframeConfig | None = None
     pause_file: Path | None = None
+    # Debug (AC-29 protocol): make storage unavailable for a while so the
+    # bounded buffer and its backlog accounting are exercised for real.
+    inject_stall_at_seconds: float | None = None
+    inject_stall_for_seconds: float = 0.0
 
     def __post_init__(self) -> None:
         if self.sample_fps <= 0:
@@ -55,6 +59,8 @@ class LiveIngestionConfig:
             raise ValueError("buffer_capacity must be positive")
         if self.checkpoint_every <= 0:
             raise ValueError("checkpoint_every must be positive")
+        if self.inject_stall_for_seconds < 0:
+            raise ValueError("inject_stall_for_seconds must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,7 +141,16 @@ def ingest_live(
     )
     buffer = FrameBuffer(config.buffer_capacity)
 
-    deadline = clock() + config.max_duration_seconds
+    started_clock = clock()
+    deadline = started_clock + config.max_duration_seconds
+
+    def injected_stall() -> bool:
+        if config.inject_stall_at_seconds is None:
+            return False
+        elapsed = clock() - started_clock
+        start = config.inject_stall_at_seconds
+        return start <= elapsed < start + config.inject_stall_for_seconds
+
     next_emit = float("-inf")
     reconnect_deadline: float | None = None
     reconnects = 0
@@ -190,6 +205,8 @@ def ingest_live(
             if frame is None:
                 break
             try:
+                if injected_stall():
+                    raise OSError("injected storage stall (debug)")
                 writer.write(
                     frame.image,
                     received_at=frame.received_at,
@@ -356,7 +373,10 @@ def ingest_live(
         writer.manifest["reconnect_count"] = reconnects
         writer.manifest["dropped_frame_count"] = buffer.dropped
         writer.manifest["rejected_frame_count"] = rejected
-        writer.manifest["buffer"] = buffer.stats()
+        writer.manifest["buffer"] = {
+            **buffer.stats(),
+            "max_backlog_seconds": round(buffer.max_backlog / config.sample_fps, 3),
+        }
         writer.manifest["keyframe_selection"] = (
             selector.stats() if selector is not None else {"enabled": False}
         )

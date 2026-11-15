@@ -62,8 +62,8 @@ def test_promote_live_session_materialises_dataset(tmp_path) -> None:
     assert result.duration_sec == 3.0
     assert result.resolution == (40, 30)
     dataset = tmp_path / "data" / "live_session_1"
-    assert (dataset / "frames" / "frame_000000.png").exists()
-    assert (dataset / "frames" / "frame_000002.png").exists()
+    assert (dataset / "frames" / "frame_000000.jpg").exists()
+    assert (dataset / "frames" / "frame_000002.jpg").exists()
     assert (dataset / "source_metadata.json").exists()
     assert (dataset / "live_session.json").exists()
     assert (dataset / "live_timestamps.json").exists()
@@ -76,7 +76,7 @@ def test_promote_live_session_materialises_dataset(tmp_path) -> None:
     assert [frame["timestamp"] for frame in metadata["frames"]] == [0.0, 1.5, 3.0]
     assert metadata["live_session_id"] == "session-1"
 
-    image = cv2.imread(str(dataset / "frames" / "frame_000000.png"))
+    image = cv2.imread(str(dataset / "frames" / "frame_000000.jpg"))
     assert image is not None
     assert image.shape[:2] == (30, 40)
 
@@ -163,3 +163,36 @@ def test_promoted_session_manifest_is_copied(tmp_path) -> None:
         (tmp_path / "data" / "copy" / "live_session.json").read_text(encoding="utf-8")
     )
     assert copied["session_id"] == "session-1"
+
+
+def test_promotion_copies_bytes_when_no_resize(tmp_path) -> None:
+    import hashlib
+
+    session = _make_session(tmp_path / "captures")
+    promote_live_session(session, dataset_id="copy", data_root=tmp_path / "data")
+    metadata = json.loads((tmp_path / "data" / "copy" / "metadata.json").read_text())
+    index = [
+        json.loads(line)
+        for line in (session / "index.jsonl").read_text().splitlines()
+        if json.loads(line).get("record_type", "frame") == "frame"
+    ]
+    for frame, record in zip(metadata["frames"], index, strict=True):
+        promoted = tmp_path / "data" / "copy" / "frames" / frame["filename"]
+        original = session / record["frame_path"]
+        assert frame["filename"].endswith(".jpg")
+        assert (
+            hashlib.sha256(promoted.read_bytes()).digest()
+            == hashlib.sha256(original.read_bytes()).digest()
+        )
+
+
+def test_promotion_resizes_to_jpeg(tmp_path) -> None:
+    session = _make_session(tmp_path / "captures")
+    promote_live_session(
+        session,
+        dataset_id="small",
+        data_root=tmp_path / "data",
+        video=VideoConfig(width=16, height=12),
+    )
+    image = cv2.imread(str(tmp_path / "data" / "small" / "frames" / "frame_000001.jpg"))
+    assert image.shape[:2] == (12, 16)

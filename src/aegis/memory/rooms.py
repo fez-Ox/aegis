@@ -22,38 +22,12 @@ from typing import Any
 import numpy as np
 
 from aegis.core.models import BoundingBox3D
+from aegis.core.vocabulary import Vocabulary, default_vocabulary
+from aegis.geometry.gravity import GravityFrame
+from aegis.geometry.planar import convex_hull, point_in_convex
 
-# Horizontal axes of the raw VGGT-Ω world frame (OpenCV-style: X right,
-# Y down, Z forward). "Up" is therefore -Y and the floor plane is (X, Z).
-_HORIZONTAL_AXES = (0, 2)
-
-# Room-defining landmarks and the room type each one votes for. These are
-# architectural / room-level classes, never personal-object memories.
-ROOM_LANDMARK_ROOM_TYPES: dict[str, str] = {
-    "bed": "Bedroom",
-    "wardrobe": "Bedroom",
-    "nightstand": "Bedroom",
-    "sofa": "Living Room",
-    "couch": "Living Room",
-    "television": "Living Room",
-    "tv": "Living Room",
-    "coffee table": "Living Room",
-    "refrigerator": "Kitchen",
-    "fridge": "Kitchen",
-    "kitchen counter": "Kitchen",
-    "kitchen island": "Kitchen",
-    "stove": "Kitchen",
-    "oven": "Kitchen",
-    "toilet": "Bathroom",
-    "bathtub": "Bathroom",
-    "shower": "Bathroom",
-    "bathroom sink": "Bathroom",
-    "dining table": "Dining Room",
-    "door": "Entryway",
-    "front door": "Entryway",
-    "stairs": "Stairway",
-    "staircase": "Stairway",
-}
+# The floor plane comes from the session gravity frame. Without one, the
+# legacy assumption applies: up is -Y and the floor plane is (X, Z).
 
 
 @dataclass
@@ -84,30 +58,17 @@ class RoomRegion:
         }
 
 
-def normalise_landmark_label(label: str) -> str:
-    """Normalise a raw detection label for room-landmark matching."""
+def is_room_landmark_label(label: str, vocabulary: Vocabulary | None = None) -> bool:
+    """Return True when the label is a room landmark (door, window, stairs, ...).
 
-    normalized = " ".join(str(label).lower().strip().split())
-    if normalized in {"television", "tv"}:
-        return "television"
-    if normalized in {"sofa", "couch"}:
-        return "sofa"
-    if normalized in {"refrigerator", "fridge"}:
-        return "refrigerator"
-    if normalized in {"stairs", "staircase"}:
-        return "stairs"
-    return normalized
-
-
-def is_room_landmark_label(label: str) -> bool:
-    """Return True when the label is a room-defining landmark class.
-
-    Room landmarks are architectural evidence for room estimation. They are
-    intentionally excluded from the object-level memory timeline: a door is
-    context for "which room", not an item the patient can misplace.
+    Room landmarks are architectural evidence for room estimation only. They
+    are never anchors and never personal-object memories: a door is context
+    for "which room", not an item the patient can misplace. Furniture such as
+    a bed is an *anchor* that also votes for the room type.
     """
 
-    return normalise_landmark_label(label) in ROOM_LANDMARK_ROOM_TYPES
+    vocab = vocabulary or default_vocabulary()
+    return vocab.role(label) == "landmark"
 
 
 def parse_camera_positions(
@@ -160,57 +121,27 @@ def parse_camera_positions(
     return ordered
 
 
-def _horizontal_distance(first: np.ndarray, second: np.ndarray) -> float:
-    """Distance on the floor plane (X, Z) of the raw VGGT world frame."""
+def _horizontal_distance(
+    first: np.ndarray, second: np.ndarray, gravity: GravityFrame | None = None
+) -> float:
+    """Distance between two points projected onto the floor plane."""
 
-    dx = float(first[0] - second[0])
-    dz = float(first[2] - second[2])
-    return float(np.hypot(dx, dz))
+    frame = gravity or GravityFrame.assumed()
+    a1, a2 = frame.horizontal(first)
+    b1, b2 = frame.horizontal(second)
+    return float(np.hypot(a1 - b1, a2 - b2))
 
 
 def convex_hull_2d(points: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Andrew's monotone chain convex hull (counter-clockwise, no SciPy)."""
+    """Counter-clockwise convex hull (kept for backward compatibility)."""
 
-    unique_points = sorted(set(points))
-    if len(unique_points) <= 2:
-        return unique_points
-
-    def cross(
-        origin: tuple[float, float],
-        a: tuple[float, float],
-        b: tuple[float, float],
-    ) -> float:
-        return (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (
-            b[0] - origin[0]
-        )
-
-    lower: list[tuple[float, float]] = []
-    for point in unique_points:
-        while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
-            lower.pop()
-        lower.append(point)
-    upper: list[tuple[float, float]] = []
-    for point in reversed(unique_points):
-        while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
-            upper.pop()
-        upper.append(point)
-    return lower[:-1] + upper[:-1]
+    return convex_hull(points)
 
 
 def _point_in_footprint(
     point: tuple[float, float], footprint: Sequence[tuple[float, float]]
 ) -> bool:
-    """Inside test for a counter-clockwise convex hull on the floor plane."""
-
-    if len(footprint) < 3:
-        return False
-    px, pz = point
-    for index in range(len(footprint)):
-        ax, az = footprint[index]
-        bx, bz = footprint[(index + 1) % len(footprint)]
-        if (bx - ax) * (pz - az) - (bz - az) * (px - ax) < -1e-9:
-            return False
-    return True
+    return point_in_convex(point, footprint)
 
 
 class _Zone:
@@ -243,6 +174,9 @@ def extract_room_regions(
     *,
     zone_link_radius: float = 1.5,
     min_zone_keyframes: int = 3,
+    vocabulary: Vocabulary | None = None,
+    gravity: GravityFrame | None = None,
+    unit: float = 1.0,
 ) -> list[RoomRegion]:
     """Estimate room regions from the wearer trajectory and room landmarks.
 
@@ -251,9 +185,16 @@ def extract_room_regions(
        from every existing zone (doorway crossings create natural splits).
     2. Merge zones whose centroids are within ``zone_link_radius`` so
        revisits to the same room join one region.
-    3. Type each zone by majority vote of nearby room-defining landmarks;
-       untyped zones fall back to neutral "Room #N" labels.
+    3. Type each zone by majority vote of nearby labels that carry a
+       ``room_type`` in the vocabulary (landmarks and typed anchors such as a
+       bed); untyped zones fall back to neutral "Room #N" labels.
     """
+
+    vocab = vocabulary or default_vocabulary()
+    frame = gravity or GravityFrame.assumed()
+    link_radius = zone_link_radius * unit
+    frame = gravity or GravityFrame.assumed()
+    link_radius = zone_link_radius * unit
 
     if zone_link_radius <= 0:
         raise ValueError("zone_link_radius must be positive")
@@ -269,11 +210,11 @@ def extract_room_regions(
         best_zone: _Zone | None = None
         best_distance = float("inf")
         for zone in zones:
-            distance = _horizontal_distance(position, zone.centroid)
+            distance = _horizontal_distance(position, zone.centroid, frame)
             if distance < best_distance:
                 best_distance = distance
                 best_zone = zone
-        if best_zone is not None and best_distance <= zone_link_radius:
+        if best_zone is not None and best_distance <= link_radius:
             best_zone.add(position, frame_id, timestamp)
         else:
             zones.append(_Zone(position, frame_id, timestamp))
@@ -289,8 +230,8 @@ def extract_room_regions(
 
     for i in range(len(zones)):
         for j in range(i + 1, len(zones)):
-            if _horizontal_distance(zones[i].centroid, zones[j].centroid) <= (
-                zone_link_radius
+            if _horizontal_distance(zones[i].centroid, zones[j].centroid, frame) <= (
+                link_radius
             ):
                 merge_parent[_find(j)] = _find(i)
 
@@ -315,21 +256,21 @@ def extract_room_regions(
     votes: list[dict[str, int]] = [{} for _ in valid_zones]
     evidence: list[set[str]] = [set() for _ in valid_zones]
     for box in boxes_3d:
-        landmark = normalise_landmark_label(box.label)
-        if landmark not in ROOM_LANDMARK_ROOM_TYPES:
+        entry = vocab.entry(box.label)
+        if entry.room_type is None or entry.role not in {"landmark", "anchor"}:
             continue
         center = np.asarray(box.center, dtype=np.float64)
         best_index = -1
         best_distance = float("inf")
         for zone_index, zone in enumerate(valid_zones):
-            distance = _horizontal_distance(center, zone.centroid)
+            distance = _horizontal_distance(center, zone.centroid, frame)
             if distance < best_distance:
                 best_distance = distance
                 best_index = zone_index
-        if best_index >= 0 and best_distance <= max(zone_link_radius, 2.0):
-            room_type = ROOM_LANDMARK_ROOM_TYPES[landmark]
+        if best_index >= 0 and best_distance <= max(link_radius, 2.0 * unit):
+            room_type = entry.room_type
             votes[best_index][room_type] = votes[best_index].get(room_type, 0) + 1
-            evidence[best_index].add(landmark.title())
+            evidence[best_index].add(entry.display)
 
     # Deterministic room IDs in temporal order of first observation.
     valid_zones.sort(key=lambda zone: min(zone.timestamps))
@@ -339,12 +280,12 @@ def extract_room_regions(
     for zone_index, zone in enumerate(valid_zones):
         room_id = zone_index + 1
         centroid = np.median(np.asarray(zone.positions), axis=0)
-        ordered_positions = [
-            (float(position[0]), float(position[2])) for position in zone.positions
+        hull = convex_hull([frame.horizontal(position) for position in zone.positions])
+        plane = float(np.median([frame.elevation(p) for p in zone.positions]))
+        footprint = [
+            tuple(float(v) for v in frame.from_horizontal(h1, h2, plane))
+            for h1, h2 in hull
         ]
-        hull = convex_hull_2d(ordered_positions)
-        plane_y = float(np.median([float(position[1]) for position in zone.positions]))
-        footprint = [(float(x), plane_y, float(z)) for x, z in hull]
 
         if votes[zone_index]:
             room_type = min(
@@ -382,6 +323,7 @@ def room_for_point(
     rooms: Sequence[RoomRegion],
     *,
     max_distance: float | None = None,
+    gravity: GravityFrame | None = None,
 ) -> RoomRegion | None:
     """Assign a 3D point to a room by footprint containment or nearest centroid.
 
@@ -393,27 +335,31 @@ def room_for_point(
 
     if not rooms:
         return None
+    frame = gravity or GravityFrame.assumed()
     center = np.asarray(point, dtype=np.float64)
-    horizontal = (float(center[0]), float(center[2]))
+    horizontal = frame.horizontal(center)
 
     for room in rooms:
-        footprint = [(point_3d[0], point_3d[2]) for point_3d in room.footprint]
-        if _point_in_footprint(horizontal, footprint):
+        footprint = [frame.horizontal(point_3d) for point_3d in room.footprint]
+        if point_in_convex(horizontal, footprint):
             return room
 
     best = min(
         rooms,
-        key=lambda room: _horizontal_distance(center, np.asarray(room.centroid)),
+        key=lambda room: _horizontal_distance(center, np.asarray(room.centroid), frame),
     )
     if max_distance is None:
         return best
-    if _horizontal_distance(center, np.asarray(best.centroid)) <= max_distance:
+    if _horizontal_distance(center, np.asarray(best.centroid), frame) <= max_distance:
         return best
     return None
 
 
 def implicit_room_from_anchors(
     anchor_centers: Sequence[tuple[float, float, float]],
+    *,
+    gravity: GravityFrame | None = None,
+    unit: float = 1.0,
 ) -> list[RoomRegion]:
     """Fallback single room when no trajectory is available (e.g. static tests).
 
@@ -426,17 +372,17 @@ def implicit_room_from_anchors(
         return []
     centers = np.asarray(anchor_centers, dtype=np.float64)
     centroid = np.median(centers, axis=0)
-    margin = 1.0
-    horizontal = [(float(c[0]), float(c[2])) for c in centers]
-    min_x = min(x for x, _ in horizontal) - margin
-    max_x = max(x for x, _ in horizontal) + margin
-    min_z = min(z for _, z in horizontal) - margin
-    max_z = max(z for _, z in horizontal) + margin
+    frame = gravity or GravityFrame.assumed()
+    margin = 1.0 * unit
+    horizontal = [frame.horizontal(c) for c in centers]
+    min_1 = min(h for h, _ in horizontal) - margin
+    max_1 = max(h for h, _ in horizontal) + margin
+    min_2 = min(h for _, h in horizontal) - margin
+    max_2 = max(h for _, h in horizontal) + margin
+    plane = frame.elevation(centroid)
     footprint = [
-        (min_x, float(centroid[1]), min_z),
-        (max_x, float(centroid[1]), min_z),
-        (max_x, float(centroid[1]), max_z),
-        (min_x, float(centroid[1]), max_z),
+        tuple(float(v) for v in frame.from_horizontal(h1, h2, plane))
+        for h1, h2 in ((min_1, min_2), (max_1, min_2), (max_1, max_2), (min_1, max_2))
     ]
     return [
         RoomRegion(

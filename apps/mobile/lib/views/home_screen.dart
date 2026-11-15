@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../models/dataset_info.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'capture_control.dart';
 import 'caregiver/caregiver_view.dart';
 import 'patient/patient_view.dart';
 
@@ -71,13 +72,15 @@ class _HomeScreenState extends State<HomeScreen> {
             color: AppTheme.royalAmethyst,
             onPressed: _showDatasetSelectorSheet,
           ),
-          const SizedBox(width: 6),
-          _buildIosBarAction(
-            icon: Icons.science_outlined,
-            tooltip: "Simulate Spatial Transition",
-            color: AppTheme.primaryTeal,
-            onPressed: _showSimulationSheet,
-          ),
+          if (widget.apiService.simulatorEnabled) ...[
+            const SizedBox(width: 6),
+            _buildIosBarAction(
+              icon: Icons.science_outlined,
+              tooltip: "Simulate Spatial Transition",
+              color: AppTheme.primaryTeal,
+              onPressed: _showSimulationSheet,
+            ),
+          ],
           const SizedBox(width: 6),
           _buildIosBarAction(
             icon: Icons.settings_outlined,
@@ -128,19 +131,26 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      body: IndexedStack(
-        key: ValueKey('${widget.apiService.activeDatasetId}_$_selectedModeIndex'),
-        index: _selectedModeIndex,
+      body: Column(
         children: [
-          PatientView(
-            key: ValueKey('patient_${widget.apiService.activeDatasetId}'),
-            apiService: widget.apiService,
-            onSwitchDataset: _showDatasetSelectorSheet,
-          ),
-          CaregiverView(
-            key: ValueKey('caregiver_${widget.apiService.activeDatasetId}'),
-            apiService: widget.apiService,
-            onSwitchDataset: _showDatasetSelectorSheet,
+          CaptureControl(apiService: widget.apiService),
+          Expanded(
+            child: IndexedStack(
+              key: ValueKey('${widget.apiService.activeDatasetId}_$_selectedModeIndex'),
+              index: _selectedModeIndex,
+              children: [
+                PatientView(
+                  key: ValueKey('patient_${widget.apiService.activeDatasetId}'),
+                  apiService: widget.apiService,
+                  onSwitchDataset: _showDatasetSelectorSheet,
+                ),
+                CaregiverView(
+                  key: ValueKey('caregiver_${widget.apiService.activeDatasetId}'),
+                  apiService: widget.apiService,
+                  onSwitchDataset: _showDatasetSelectorSheet,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -539,9 +549,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showSimulationSheet() {
-    final activeId = (widget.apiService.activeDatasetId ?? 'demo01').toLowerCase();
-    final isKitchen = activeId.contains('demo03') || activeId.contains('kitchen') || activeId.contains('fridge');
-    final isOffice = activeId.contains('demo06') || activeId.contains('self') || activeId.contains('desk');
+    final activeId = widget.apiService.activeDatasetId ?? 'demo01';
 
     showModalBottomSheet(
       context: context,
@@ -599,73 +607,36 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(color: AppTheme.textMuted, fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: 18),
-              if (isOffice) ...[
-                _buildSimTile(
-                  title: "Bottle on Desk 1",
-                  subtitle: "Resting actively on primary desk",
-                  icon: Icons.table_restaurant_rounded,
-                  color: AppTheme.tealAccent,
-                  onTap: () => _triggerSim(ctx, "bottle_table1", "Bottle placed on Desk 1"),
-                ),
-                _buildSimTile(
-                  title: "Bottle Occluded",
-                  subtitle: "Triggers Occlusion & Spatial Permanence",
-                  icon: Icons.visibility_off_rounded,
-                  color: AppTheme.royalAmethyst,
-                  onTap: () => _triggerSim(ctx, "bottle_occluded", "Bottle occluded behind monitor"),
-                ),
-                _buildSimTile(
-                  title: "Bottle on Desk 2",
-                  subtitle: "Triggers Relocation Memory Transition",
-                  icon: Icons.desk_rounded,
-                  color: AppTheme.alertAmber,
-                  onTap: () => _triggerSim(ctx, "bottle_table2", "Bottle relocated to Desk 2"),
-                ),
-              ] else if (isKitchen) ...[
-                _buildSimTile(
-                  title: "Cooking Pot on Sink",
-                  subtitle: "Resting on Sink counter surface",
-                  icon: Icons.soup_kitchen_rounded,
-                  color: AppTheme.tealAccent,
-                  onTap: () => _triggerSim(ctx, "floor", "Cooking Pot placed near Sink"),
-                ),
-                _buildSimTile(
-                  title: "Hold Pot in Hands",
-                  subtitle: "Triggers In-Hand Kinematic Tracking",
-                  icon: Icons.pan_tool_rounded,
-                  color: AppTheme.systemIndigo,
-                  onTap: () => _triggerSim(ctx, "in_hand", "Cooking Pot picked up by user"),
-                ),
-                _buildSimTile(
-                  title: "Store Pot in Refrigerator",
-                  subtitle: "Triggers Occlusion & Enclosure Persistence",
-                  icon: Icons.kitchen_rounded,
-                  color: AppTheme.systemGreen,
-                  onTap: () => _triggerSim(ctx, "cabinet", "Cooking Pot placed in Refrigerator"),
-                ),
-              ] else ...[
-                _buildSimTile(
-                  title: "Move Object to Floor",
-                  subtitle: "Triggers Caregiver Displaced Item Alert",
-                  icon: Icons.warning_amber_rounded,
-                  color: AppTheme.alertAmber,
-                  onTap: () => _triggerSim(ctx, "floor", "Object moved to floor"),
-                ),
-                _buildSimTile(
-                  title: "Pick up Object in Hand",
-                  subtitle: "Triggers In-Hand Kinematic Tracking",
-                  icon: Icons.pan_tool_rounded,
-                  color: AppTheme.systemIndigo,
-                  onTap: () => _triggerSim(ctx, "in_hand", "Object picked up by user"),
-                ),
-                _buildSimTile(
-                  title: "Store in Room Anchor",
-                  subtitle: "Triggers Occlusion & Spatial Permanence",
-                  icon: Icons.inventory_2_rounded,
-                  color: AppTheme.systemGreen,
-                  onTap: () => _triggerSim(ctx, "cabinet", "Object safely stored in anchor"),
-                ),
-              ],
+              // Generic presets: the server applies them to object #1 and the
+              // dataset's first or second anchor.
+              _buildSimTile(
+                title: "Move Object to Floor",
+                subtitle: "Shows a displaced-item alert",
+                icon: Icons.warning_amber_rounded,
+                color: AppTheme.alertAmber,
+                onTap: () => _triggerSim(ctx, "floor", "Object moved to floor"),
+              ),
+              _buildSimTile(
+                title: "Pick up Object",
+                subtitle: "Object carried by the wearer",
+                icon: Icons.pan_tool_rounded,
+                color: AppTheme.systemIndigo,
+                onTap: () => _triggerSim(ctx, "in_hand", "Object picked up"),
+              ),
+              _buildSimTile(
+                title: "Store in First Anchor",
+                subtitle: "Out of view inside the first anchor",
+                icon: Icons.inventory_2_rounded,
+                color: AppTheme.systemGreen,
+                onTap: () => _triggerSim(ctx, "cabinet", "Object stored in first anchor"),
+              ),
+              _buildSimTile(
+                title: "Move to Second Anchor",
+                subtitle: "Relocation between anchors",
+                icon: Icons.swap_horiz_rounded,
+                color: AppTheme.tealAccent,
+                onTap: () => _triggerSim(ctx, "bottle_table2", "Object moved to second anchor"),
+              ),
               const Divider(color: AppTheme.cardBorder, height: 20),
               TextButton.icon(
                 icon: const Icon(Icons.refresh_rounded, color: AppTheme.textMuted, size: 18),

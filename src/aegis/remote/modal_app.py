@@ -107,6 +107,8 @@ PERCEPTION_IMAGE = (
         "ultralytics>=8.3,<9",
         "pyyaml>=6.0,<7",
         "huggingface_hub>=0.23,<1",
+        # DINOv2 re-ID embeddings (perception.reid_backend: dino).
+        "transformers>=4.48,<5",
     )
     .run_commands(
         "pip install git+https://github.com/facebookresearch/sam2.git || true"
@@ -134,49 +136,97 @@ def preprocess_video_remote(dataset_id: str, config: dict[str, Any]) -> dict[str
 
     from aegis.remote.workers import run_preprocess
 
+    data_volume.reload()
+
     result = run_preprocess(dataset_id, config)
     data_volume.commit()
     return result
 
 
-@app.function(
+# GPU stages are classes: a warm container keeps the model loaded between
+# calls (one call per live segment) instead of reloading weights every time.
+WARM_SECONDS = 300
+
+
+@app.cls(
     image=VGGT_IMAGE,
     volumes={DATA_MOUNT: data_volume, MODEL_MOUNT: model_cache_volume},
     secrets=SECRETS,
     timeout=7200,
-    **_compute(gpu_memory_mb=24576, cpu_memory_mb=40960),
+    scaledown_window=WARM_SECONDS,
 )
-def vggt_reconstruct_remote(dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
-    """Run VGGT-Ω feed-forward 3D reconstruction remotely on an L4 GPU (or CPU)."""
+class Reconstructor:
+    """VGGT-Ω reconstruction on an L4 GPU."""
 
-    from aegis.remote.workers import run_vggt
+    @modal.enter()
+    def setup(self) -> None:
+        self.model = None
+        self.model_key = ""
 
-    result = run_vggt(dataset_id, config)
-    data_volume.commit()
-    model_cache_volume.commit()
-    return result
+    @modal.method()
+    def run(self, dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
+        from aegis.core.config import RuntimeConfig
+        from aegis.geometry.vggt_runner import load_model
+        from aegis.remote.workers import run_vggt
+
+        # Frames were committed by another container; see them first.
+        data_volume.reload()
+        vggt = RuntimeConfig.from_mapping(config).vggt
+        key = f"{vggt.model_id}"
+        if self.model is None or self.model_key != key:
+            self.model = load_model(vggt, hf_token=config.get("hf_token"))
+            self.model_key = key
+        result = run_vggt(dataset_id, config, model=self.model)
+        data_volume.commit()
+        model_cache_volume.commit()
+        return result
 
 
-# Backwards compatibility alias
-dust3r_reconstruct_remote = vggt_reconstruct_remote
-
-
-@app.function(
+@app.cls(
     image=PERCEPTION_IMAGE,
     volumes={DATA_MOUNT: data_volume, MODEL_MOUNT: model_cache_volume},
     secrets=SECRETS,
     timeout=7200,
-    **_compute(gpu_memory_mb=16384, cpu_memory_mb=40960),
+    scaledown_window=WARM_SECONDS,
 )
-def detect_and_lift_remote(dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
-    """Run open-vocabulary perception, SAM 2 masking, and 3D lifting (GPU or CPU)."""
+class Perception:
+    """Detection, SAM 2 masks, 3D lifting and the memory graph on an L4 GPU."""
 
-    from aegis.remote.workers import run_detect_and_lift
+    @modal.enter()
+    def setup(self) -> None:
+        self.models = None
+        self.models_key = ""
 
-    result = run_detect_and_lift(dataset_id, config)
-    data_volume.commit()
-    model_cache_volume.commit()
-    return result
+    @modal.method()
+    def run(self, dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
+        from pathlib import Path
+
+        from aegis.core.config import RuntimeConfig
+        from aegis.perception.detector import load_models
+        from aegis.remote.workers import run_detect_and_lift
+
+        data_volume.reload()
+        runtime = RuntimeConfig.from_mapping(config)
+        key = "|".join(
+            (
+                runtime.perception.detector_backend,
+                runtime.perception.detector_model,
+                runtime.sam2.model_id if runtime.sam2 else "",
+                runtime.sam2.mode if runtime.sam2 else "",
+                runtime.perception.reid_backend,
+            )
+        )
+        if self.models is None or self.models_key != key:
+            self.models = load_models(
+                runtime.perception,
+                sam2_config=runtime.sam2,
+                weights_dir=Path(runtime.storage.model_mount) / "yolo",
+            )
+            self.models_key = key
+        result = run_detect_and_lift(dataset_id, config, models=self.models)
+        data_volume.commit()
+        model_cache_volume.commit()
+        return result
 
 
 @app.function(
@@ -190,6 +240,8 @@ def rerun_remote(dataset_id: str, config: dict[str, Any]) -> dict[str, Any]:
     """Generate an offline Rerun recording from cached artifacts."""
 
     from aegis.remote.workers import run_rerun
+
+    data_volume.reload()
 
     result = run_rerun(dataset_id, config)
     data_volume.commit()

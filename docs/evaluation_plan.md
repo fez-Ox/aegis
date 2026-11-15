@@ -47,8 +47,10 @@ a short development pilot and then measured on Demo04.
 ### 3D and scene graph
 
 - Object 3D center error in metres against measured/annotated reference points.
-- Anchor center error and relation accuracy (`inside`, `on_surface`,
-  `on_floor`, `carried_by_user`).
+- Anchor center error and relation accuracy over the relations the memory
+  now produces (`inside`, `on_surface`, `under`, `above`, `next_to`,
+  `on_floor`, `near`, `in_room`, `carried_by_user`); report `under` and
+  `on_floor` separately because they depend on the gravity estimate.
 - Event precision/recall/F1 using a +/-1 second boundary tolerance.
 - Multi-instance identity accuracy through the sequence.
 - Occlusion persistence recall: fraction of deliberately occluded objects that
@@ -252,3 +254,27 @@ The persistence acceptance target is: re-identification recall >= 0.90,
 false merge rate <= 0.05, IDF1 >= 0.75, and zero cross-dataset memory leakage.
 Freeze these targets before inspecting the held-out Demo04 results and report
 all failures qualitatively.
+
+
+## 8. Scripts for each protocol (context/plan.md, WP15)
+
+Every script writes `outputs/evaluation/<name>.json` with a provenance header
+(commit, dirty flag, config hash, model ids, laptop, phone, GPU). A result from
+a working tree with uncommitted changes is flagged as not valid evidence.
+
+| Protocol | Script |
+|---|---|
+| One-hour soak, disconnect recovery, backlog (AC-01, AC-03, AC-29) | `scripts/summarise_live_session.py captures/<session>`; for AC-29 capture with `aegis-ingest --inject-stall-at 300 --inject-stall-for 10` |
+| Keyframe selection (AC-02) | `scripts/evaluate_keyframes.py captures/<session>` with `scene_changes.json` |
+| Reconstruction window and throughput | `uv run modal run scripts/measure_vggt_window.py --dataset-id <id>` |
+| Object placement (AC-04, Iteration 1) | `scripts/evaluate_placements.py --home-id <home> --ground-truth <json>` |
+| Rooms (AC-22, SC9) | `scripts/evaluate_rooms.py --dataset-id <id> --ground-truth rooms_ground_truth.json` |
+| Activity order (AC-05) | `scripts/evaluate_activity_order.py --dataset-id <id> --ground-truth actions.json --tolerance 2` |
+| Storage growth (AC-07) | `scripts/measure_store_growth.py` (synthetic stream; label it as such) |
+| Mask comparison (M1) | `uv run modal run scripts/compare_masks.py --dataset-id <id>` |
+| Hand contact events (M6) | `scripts/evaluate_hand_contact.py --dataset-id <id> --ground-truth <json>` |
+
+Room metric definitions are implemented in `aegis.evaluation.room_metrics`
+(half-open ground-truth intervals; predicted rooms mapped one-to-one to the
+ground-truth room they overlap most; `room_change` matched one-to-one within
+the tolerance).

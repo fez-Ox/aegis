@@ -19,7 +19,7 @@ def test_baseline_occlusion_persistence() -> None:
     assert "Shoes #1" in data["instance_label"]
     assert data["relation"] == "inside"
     assert data["is_persistent_memory"] is True
-    assert "safely put away inside Storage Cabinet #1" in data["location_summary"]
+    assert "last seen inside Storage Cabinet #1" in data["location_summary"]
 
 
 def test_dynamic_transition_to_floor() -> None:

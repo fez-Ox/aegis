@@ -140,9 +140,13 @@ def test_no_poses_returns_no_rooms_and_implicit_fallback() -> None:
 
 
 def test_room_landmark_label_gate() -> None:
-    assert is_room_landmark_label("bed")
+    # Pure landmarks are room evidence only.
+    assert is_room_landmark_label("door")
     assert is_room_landmark_label("Television")
-    assert is_room_landmark_label("fridge")
+    assert is_room_landmark_label("window")
+    # Furniture is an anchor (it still votes for the room type).
+    assert not is_room_landmark_label("bed")
+    assert not is_room_landmark_label("fridge")
     assert not is_room_landmark_label("shoes")
     assert not is_room_landmark_label("storage cabinet")
 

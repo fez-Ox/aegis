@@ -63,7 +63,14 @@ def main() -> None:
         help="Dataset identifier to load as primary scene graph (e.g. Demo06-Self, demo01, demo03)",
     )
     parser.add_argument("--port", type=int, default=8000, help="Port to bind server")
+    parser.add_argument(
+        "--enable-simulator",
+        action="store_true",
+        help="Expose the demo simulator routes (/simulate/*, /reset); changes stay in memory",
+    )
     args = parser.parse_args()
+    if args.enable_simulator:
+        os.environ["AEGIS_ENABLE_SIMULATOR"] = "1"
 
     dataset_id = args.dataset_id
     set_active_dataset(dataset_id)
@@ -101,15 +108,17 @@ def main() -> None:
     )
     print("-" * 68)
     print(f"  PRESETS FOR [{dataset_id.upper()}]:")
-    if dataset_id == "Demo06-Self":
+    if os.getenv("AEGIS_ENABLE_SIMULATOR") != "1":
+        print("  • Simulator disabled (start with --enable-simulator)")
+    elif dataset_id == "Demo06-Self":
         print(
-            f"  • [Bottle on Desk 1]: http://{host_ip}:{port}/api/v1/simulate/bottle_table1"
+            f"  • [Bottle on Desk 1]: http://{host_ip}:{port}/api/v1/simulate/bottle_table1?dataset_id={dataset_id}"
         )
         print(
-            f"  • [Bottle Occluded]:  http://{host_ip}:{port}/api/v1/simulate/bottle_occluded"
+            f"  • [Bottle Occluded]:  http://{host_ip}:{port}/api/v1/simulate/bottle_occluded?dataset_id={dataset_id}"
         )
         print(
-            f"  • [Bottle on Desk 2]: http://{host_ip}:{port}/api/v1/simulate/bottle_table2"
+            f"  • [Bottle on Desk 2]: http://{host_ip}:{port}/api/v1/simulate/bottle_table2?dataset_id={dataset_id}"
         )
     else:
         print(

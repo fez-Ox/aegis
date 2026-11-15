@@ -112,7 +112,10 @@ class _PatientViewState extends State<PatientView> {
     });
 
     final res = await widget.apiService.queryItem(trimmed);
-    widget.apiService.recordSearch(res);
+    // An unreachable server consulted no memory: nothing to remember.
+    if (!res.unreachable) {
+      widget.apiService.recordSearch(res);
+    }
 
     if (mounted) {
       setState(() {
@@ -577,7 +580,7 @@ class _PatientViewState extends State<PatientView> {
                 const Icon(Icons.access_time_rounded, color: AppTheme.textMuted, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  result.lastSeenTimeAgo,
+                  result.lastSeenTimeAgo ?? result.lastSeenAt ?? 'Time not recorded',
                   style: const TextStyle(color: AppTheme.textMuted, fontSize: 13, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(width: 14),

@@ -61,7 +61,7 @@ def test_reasoning_synonyms_and_grammar() -> None:
         },
         [],
     )
-    assert "is currently resting on Sink #2" in explanation_single["explanation"]
+    assert explanation_single["explanation"] == "Your cooking pot is on Sink #2."
 
     explanation_plural = QueryReasoningEngine.reason_spatio_temporal_state(
         "shoes",
@@ -74,9 +74,8 @@ def test_reasoning_synonyms_and_grammar() -> None:
         },
         [],
     )
-    assert (
-        "are safely put away inside Storage Cabinet #1"
-        in explanation_plural["explanation"]
+    assert explanation_plural["explanation"] == (
+        "Your shoes were last seen inside Storage Cabinet #1."
     )
 
 

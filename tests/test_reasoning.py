@@ -41,8 +41,9 @@ def test_reason_occluded_object_permanence_edge_case() -> None:
     )
     assert reasoning["is_persistent_memory"] is True
     assert reasoning["edge_case_handled"] == "occlusion_object_permanence"
-    assert "safely put away inside Storage Cabinet #1" in reasoning["explanation"]
-    assert "Aegis remembers" in reasoning["explanation"]
+    assert reasoning["explanation"] == (
+        "Your shoes were last seen inside Storage Cabinet #1."
+    )
 
 
 def test_reason_visible_item() -> None:
@@ -56,7 +57,9 @@ def test_reason_visible_item() -> None:
     }
     reasoning = QueryReasoningEngine.reason_spatio_temporal_state("keys", primary, [])
     assert reasoning["is_persistent_memory"] is False
-    assert "on the floor right near Entrance Console Table" in reasoning["explanation"]
+    assert reasoning["explanation"] == (
+        "Your keys are on the floor beside Entrance Console Table."
+    )
 
 
 def test_extract_target_item_ignores_room_words() -> None:
@@ -127,3 +130,115 @@ def test_reason_neutral_room_label_grammar() -> None:
     }
     reasoning = QueryReasoningEngine.reason_spatio_temporal_state("bottle", primary, [])
     assert "on Desk #1 in Room #2" in reasoning["explanation"]
+
+
+def _state(relation, anchor="Desk #1", *, in_view=True, room=None, certain=None):
+    return {
+        "label": "Keys #1",
+        "anchor_label": anchor,
+        "relation": relation,
+        "is_active_view": in_view,
+        "room_label": room,
+        "relation_certain": certain,
+    }
+
+
+def _say(item, state):
+    return QueryReasoningEngine.reason_spatio_temporal_state(item, state, [])[
+        "explanation"
+    ]
+
+
+def test_templates_for_every_relation() -> None:
+    assert _say("keys", _state("under", "Bed #1")) == "Your keys are under Bed #1."
+    assert _say("keys", _state("above", in_view=False)) == (
+        "Your keys were last seen above Desk #1."
+    )
+    assert _say("mug", _state("next_to")) == "Your mug is next to Desk #1."
+    assert _say("mug", _state("near", in_view=False)) == (
+        "Your mug was last seen near Desk #1."
+    )
+    assert _say("keys", _state("on_floor", None, room="Kitchen")) == (
+        "Your keys are on the floor in the Kitchen."
+    )
+    assert _say("keys", _state("in_room", None, room="Room #2")) == (
+        "Your keys are in Room #2."
+    )
+    assert _say("mug", _state("in_room", None)) == (
+        "I have seen your mug, but I can't tell where it is."
+    )
+    assert _say("keys", _state("carried_by_user", None)) == "You are holding your keys."
+    assert _say("keys", _state("carried_by_user", None, in_view=False)) == (
+        "You were last seen carrying your keys."
+    )
+
+
+def test_uncertain_relation_says_so() -> None:
+    answer = _say("keys", _state("near", certain=False))
+    assert answer.endswith("I'm not fully sure about the exact spot.")
+
+
+def test_no_answer_exceeds_two_sentences_or_overclaims() -> None:
+    relations = [
+        "inside",
+        "on_surface",
+        "under",
+        "above",
+        "next_to",
+        "on_floor",
+        "near",
+        "in_room",
+        "carried_by_user",
+    ]
+    for relation in relations:
+        for in_view in (True, False):
+            for certain in (True, False):
+                answer = _say(
+                    "keys",
+                    _state(relation, in_view=in_view, room="Kitchen", certain=certain),
+                )
+                assert answer.count(".") <= 2, answer
+                assert "safely" not in answer and "securely" not in answer
+
+
+def test_event_summaries() -> None:
+    from aegis.memory.reasoning import event_summary
+
+    assert (
+        event_summary(
+            {"event_type": "pickup", "object": "Keys #1", "source_anchor": "Desk #1"}
+        )
+        == "Keys #1 was picked up from Desk #1."
+    )
+    assert (
+        event_summary(
+            {
+                "event_type": "placement",
+                "object": "Keys #1",
+                "destination_anchor": "Drawer #2",
+                "destination_relation": "inside",
+                "destination_room": "Kitchen",
+            }
+        )
+        == "Keys #1 was placed inside Drawer #2 in the Kitchen."
+    )
+    assert (
+        event_summary(
+            {
+                "event_type": "placement",
+                "object": "Keys #1",
+                "destination_relation": "in_room",
+            }
+        )
+        == "Keys #1 was put down."
+    )
+    assert (
+        event_summary(
+            {
+                "event_type": "room_change",
+                "source_room": "Room #1",
+                "destination_room": "Kitchen",
+            }
+        )
+        == "You moved from Room #1 to the Kitchen."
+    )

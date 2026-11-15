@@ -1,6 +1,5 @@
-# Modal-first Aegis geometry PoC configuration.
-# Upload demo01/video.mp4 to aegis-poc-data before running. The default demo
-# estimates intrinsics with DroidCalib; a measured calib.txt is optional.
+# Generic Aegis configuration (prompts come from config/vocabulary.yaml).
+# VGGT-Ω estimates camera intrinsics; a measured calib.txt is optional.
 
 storage:
   data_volume: aegis-poc-data
@@ -16,51 +15,18 @@ video:
 
 camera:
   calibration_filename: calib.txt
-  # Use "provided" for a measured calibration file, or "self_calibrated"
-  # to estimate intrinsics from the normalized video with DroidCalib.
-  calibration_mode: self_calibrated
+  # "provided" uses calib.txt or the intrinsics below when present.
+  calibration_mode: provided
   # Intrinsics are [fx, fy, cx, cy] for the source video. Leave null when
   # demo01/calib.txt is uploaded to the data Volume.
   intrinsics: null
   intrinsics_resolution: null
   allow_approximate: false
-  self_calibration_weights_filename: droidcalib.pth
-  self_calibration_weights_url: https://raw.githubusercontent.com/boschresearch/DroidCalib/main/droidcalib.pth
-  self_calibration_camera_model: pinhole
-  self_calibration_stride: 1
-  self_calibration_max_frames: 0
-  self_calibration_width: 517
-  self_calibration_height: 384
-
-depth:
-  model_id: depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf
-  mode: metric
-  batch_size: 2
-  fp16: true
-
-pose:
-  weights_filename: droid.pth
-  # The default is the official DROID-SLAM checkpoint. It is downloaded once
-  # into the model-cache Volume by the remote pose worker.
-  weights_url: https://drive.google.com/uc?id=1PpqVt1H4maBa_GbPJp4NwxRsd9jk-elh
-  stride: 1
-  buffer: 512
-  filter_thresh: 2.4
-  beta: 0.3
-  frontend_thresh: 16.0
-  frontend_window: 25
-  frontend_radius: 2
-  frontend_nms: 1
-  backend_thresh: 22.0
-  backend_radius: 2
-  backend_nms: 3
-  asynchronous: false
 
 vggt:
   model_id: facebook/VGGT-Omega
-  image_size: 518
+  image_size: 512
   keyframe_stride: 6
-  batch_size: 1
   dtype: bfloat16
 
 sam2:
@@ -72,25 +38,8 @@ perception:
   # YOLOE-seg provides open-vocabulary masks; SAM 2 refines them from the box.
   detector_backend: yoloe
   detector_model: yoloe-11l-seg.pt
-  target_classes:
-    - shoes
-    - shoe
-    - storage cabinet
-    - cabinet
-    - shelf
-    - hand
-    - human hand
-    # Room-defining landmarks: room-level evidence for the memory layer.
-    # They are never stored as personal-object memories.
-    - door
-    - sofa
-    - bed
-    - television
-    - toilet
-    - kitchen counter
-    - dining table
-    - stairs
-    - window
+  # target_classes is generated from config/vocabulary.yaml when omitted.
+  # Task-scoped configs (demo01/03/04/06.yaml) list their own prompts.
   confidence_threshold: 0.45
   iou_threshold: 0.45
   min_points_in_box: 25
@@ -102,17 +51,6 @@ perception:
   hand_contact_iou_threshold: 0.10
   hand_contact_max_distance: 0.35
 
-
-geometry:
-  max_points_per_frame: 5000
-  max_total_points: 150000
-  depth_min: 0.1
-  depth_max: 20.0
-  # Metric depth is retained as-is by default. DROID translation remains
-  # monocular/arbitrary-scale; tune these values only for visualization.
-  depth_scale: 1.0
-  pose_scale: 1.0
-
 memory:
   rooms:
     # Room-level spatial memory (Rooms -> Anchors -> Objects hierarchy).
@@ -122,6 +60,14 @@ memory:
     zone_link_radius: 1.5
     # Minimum keyframes observed in a zone before it becomes a room region.
     min_zone_keyframes: 3
+  gravity:
+    # Up direction and floor height from a RANSAC floor-plane fit.
+    enabled: true
+    # Below this confidence, under/above/on-the-floor are not asserted.
+    min_confidence: 0.5
+    # Typical chest-held phone height, in reconstruction units.
+    assumed_camera_height: 1.4
+    ransac_iterations: 500
 
 live:
   # Local FR1/FR2 capture defaults for `aegis-ingest` and the `live` stage.

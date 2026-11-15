@@ -9,10 +9,15 @@ class QueryResult {
   final double? relativeDistanceM;
   final String locationSummary;
   final double? lastSeenTimestampS;
-  final String lastSeenTimeAgo;
+  final String? lastSeenAt;
+  final String? lastSeenTimeAgo;
   final bool isPersistentMemory;
   final String? cropUrl;
-  final double confidence;
+  final double? confidence;
+  final String? roomLabel;
+
+  /// True when the server could not be reached (no memory was consulted).
+  final bool unreachable;
 
   const QueryResult({
     required this.query,
@@ -25,10 +30,13 @@ class QueryResult {
     this.relativeDistanceM,
     required this.locationSummary,
     this.lastSeenTimestampS,
-    this.lastSeenTimeAgo = 'Today',
+    this.lastSeenAt,
+    this.lastSeenTimeAgo,
     this.isPersistentMemory = false,
     this.cropUrl,
-    this.confidence = 0.95,
+    this.confidence,
+    this.roomLabel,
+    this.unreachable = false,
   });
 
   factory QueryResult.fromJson(Map<String, dynamic> json) {
@@ -43,10 +51,12 @@ class QueryResult {
       relativeDistanceM: (json['relative_distance_m'] as num?)?.toDouble(),
       locationSummary: json['location_summary'] as String? ?? 'Object location unknown.',
       lastSeenTimestampS: (json['last_seen_timestamp_s'] as num?)?.toDouble(),
-      lastSeenTimeAgo: json['last_seen_time_ago'] as String? ?? 'Recently',
+      lastSeenAt: json['last_seen_at'] as String?,
+      lastSeenTimeAgo: json['last_seen_time_ago'] as String?,
       isPersistentMemory: json['is_persistent_memory'] as bool? ?? false,
       cropUrl: json['crop_url'] as String?,
-      confidence: (json['confidence'] as num?)?.toDouble() ?? 0.95,
+      confidence: (json['confidence'] as num?)?.toDouble(),
+      roomLabel: json['room_label'] as String?,
     );
   }
 
@@ -62,10 +72,12 @@ class QueryResult {
       'relative_distance_m': relativeDistanceM,
       'location_summary': locationSummary,
       'last_seen_timestamp_s': lastSeenTimestampS,
+      'last_seen_at': lastSeenAt,
       'last_seen_time_ago': lastSeenTimeAgo,
       'is_persistent_memory': isPersistentMemory,
       'crop_url': cropUrl,
       'confidence': confidence,
+      'room_label': roomLabel,
     };
   }
 }

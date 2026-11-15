@@ -1,0 +1,361 @@
+# Aegis vocabulary: the single source of truth for detector prompts, label
+# roles, query synonyms and grammar. Every other label list is generated from
+# this file (see src/aegis/core/vocabulary.py).
+#
+# Fields
+#   id               canonical label (lower case, single spaces, unique)
+#   display          human label used in names such as "Shoes #1"
+#   prompts          text prompts sent to the open-vocabulary detector;
+#                    each prompt belongs to exactly one entry
+#   synonyms         extra words accepted in user queries only
+#   role             object | anchor | landmark | hand
+#                    - object:   a personal item that gets a memory
+#                    - anchor:   furniture an object can be in/on/under/next to
+#                    - landmark: room evidence only, never an anchor or object
+#                    - hand:     the wearer's hands (pick-up cues)
+#   plural           grammar: "are" instead of "is"
+#   importance       normal | high (high = kept in detail longer)
+#   max_extent       largest plausible box dimension (scale units); null = none
+#   room_type        this entry votes for the room type
+#   container        anchors only: objects can be "inside"
+#   support_surface  anchors only: objects can rest "on" it
+#   open_underneath  anchors only: objects can be "under" it
+
+version: 1
+entries:
+  # --------------------------------------------------------------- anchors
+  - id: storage cabinet
+    display: Storage Cabinet
+    prompts: [storage cabinet, cabinet, cupboard, shelf]
+    role: anchor
+    container: true
+    support_surface: true
+    max_extent: 4.5
+  - id: refrigerator
+    display: Refrigerator
+    prompts: [refrigerator, fridge]
+    role: anchor
+    container: true
+    room_type: Kitchen
+    max_extent: 4.5
+  - id: kitchen counter
+    display: Kitchen Counter
+    prompts: [kitchen counter, counter]
+    role: anchor
+    support_surface: true
+    room_type: Kitchen
+    max_extent: 4.5
+  - id: desk
+    display: Desk
+    prompts: [desk, table]
+    role: anchor
+    support_surface: true
+    open_underneath: true
+    max_extent: 4.5
+  - id: dining table
+    display: Dining Table
+    prompts: [dining table]
+    role: anchor
+    support_surface: true
+    open_underneath: true
+    room_type: Dining Room
+    max_extent: 4.5
+  - id: coffee table
+    display: Coffee Table
+    prompts: [coffee table]
+    role: anchor
+    support_surface: true
+    open_underneath: true
+    room_type: Living Room
+    max_extent: 4.5
+  - id: drawer
+    display: Drawer
+    prompts: [drawer]
+    role: anchor
+    container: true
+    max_extent: 4.5
+  - id: sink
+    display: Sink
+    prompts: [sink]
+    role: anchor
+    container: true
+    max_extent: 4.5
+  - id: podium
+    display: Podium
+    prompts: [podium, lectern, rostrum, stand]
+    role: anchor
+    support_surface: true
+    max_extent: 4.5
+  - id: bed
+    display: Bed
+    prompts: [bed]
+    role: anchor
+    support_surface: true
+    open_underneath: true
+    room_type: Bedroom
+    max_extent: 4.5
+  - id: sofa
+    display: Sofa
+    prompts: [sofa, couch]
+    role: anchor
+    support_surface: true
+    room_type: Living Room
+    max_extent: 4.5
+  - id: chair
+    display: Chair
+    prompts: [chair]
+    role: anchor
+    support_surface: true
+    open_underneath: true
+    max_extent: 4.5
+  - id: wardrobe
+    display: Wardrobe
+    prompts: [wardrobe]
+    role: anchor
+    container: true
+    room_type: Bedroom
+    max_extent: 4.5
+  - id: nightstand
+    display: Nightstand
+    prompts: [nightstand]
+    role: anchor
+    support_surface: true
+    room_type: Bedroom
+    max_extent: 4.5
+  - id: stove
+    display: Stove
+    prompts: [stove, oven]
+    role: anchor
+    support_surface: true
+    room_type: Kitchen
+    max_extent: 4.5
+  - id: kitchen island
+    display: Kitchen Island
+    prompts: [kitchen island]
+    role: anchor
+    support_surface: true
+    room_type: Kitchen
+    max_extent: 4.5
+
+  # ------------------------------------------------------------- landmarks
+  - id: door
+    display: Door
+    prompts: [door, front door]
+    role: landmark
+    room_type: Entryway
+  - id: stairs
+    display: Stairs
+    prompts: [stairs, staircase]
+    role: landmark
+    room_type: Stairway
+  - id: television
+    display: Television
+    prompts: [television, tv]
+    role: landmark
+    room_type: Living Room
+  - id: toilet
+    display: Toilet
+    prompts: [toilet]
+    role: landmark
+    room_type: Bathroom
+  - id: bathtub
+    display: Bathtub
+    prompts: [bathtub]
+    role: landmark
+    room_type: Bathroom
+  - id: shower
+    display: Shower
+    prompts: [shower]
+    role: landmark
+    room_type: Bathroom
+  - id: bathroom sink
+    display: Bathroom Sink
+    prompts: [bathroom sink]
+    role: landmark
+    room_type: Bathroom
+  - id: window
+    display: Window
+    prompts: [window]
+    role: landmark
+
+  # ------------------------------------------------------------------ hand
+  - id: hand
+    display: Hand
+    prompts: [hand, human hand, hands]
+    role: hand
+
+  # --------------------------------------------------------------- objects
+  - id: shoes
+    display: Shoes
+    prompts: [shoes, shoe]
+    synonyms: [sneaker, sneakers, boots, footwear, slippers]
+    role: object
+    plural: true
+    max_extent: 0.85
+  - id: bottle
+    display: Bottle
+    prompts: [bottle, water bottle, plastic bottle]
+    synonyms: [flask, tumbler]
+    role: object
+    max_extent: 0.85
+  - id: mug
+    display: Mug
+    prompts: [mug, cup]
+    synonyms: [drink]
+    role: object
+    max_extent: 0.85
+  - id: keys
+    display: Keys
+    prompts: [keys, keychain]
+    synonyms: [key, car key, house key]
+    role: object
+    plural: true
+    importance: high
+  - id: glasses
+    display: Glasses
+    prompts: [glasses, reading glasses, sunglasses]
+    synonyms: [spectacles, specs, eyewear]
+    role: object
+    plural: true
+    importance: high
+  - id: cell phone
+    display: Cell Phone
+    prompts: [cell phone, phone]
+    synonyms: [mobile phone, smartphone, mobile]
+    role: object
+    importance: high
+  - id: wallet
+    display: Wallet
+    prompts: [wallet]
+    synonyms: [billfold]
+    role: object
+    importance: high
+  - id: purse
+    display: Purse
+    prompts: [purse, handbag]
+    synonyms: [bag]
+    role: object
+    importance: high
+  - id: backpack
+    display: Backpack
+    prompts: [backpack]
+    synonyms: [rucksack, pack]
+    role: object
+  - id: medicine
+    display: Medicine
+    prompts: [medicine, pill bottle]
+    synonyms: [pills, meds, prescription, vitamins, medication, tablets]
+    role: object
+    importance: high
+  - id: remote control
+    display: Remote Control
+    prompts: [remote control]
+    synonyms: [remote, tv remote]
+    role: object
+  - id: hearing aid
+    display: Hearing Aid
+    prompts: [hearing aid]
+    synonyms: [hearing aids]
+    role: object
+    importance: high
+  - id: walking stick
+    display: Walking Stick
+    prompts: [walking stick]
+    synonyms: [cane]
+    role: object
+    importance: high
+  - id: watch
+    display: Watch
+    prompts: [watch]
+    synonyms: [wristwatch]
+    role: object
+  - id: charger
+    display: Charger
+    prompts: [charger]
+    synonyms: [phone charger]
+    role: object
+  - id: laptop
+    display: Laptop
+    prompts: [laptop]
+    synonyms: [computer, notebook]
+    role: object
+  - id: book
+    display: Book
+    prompts: [book]
+    synonyms: [books, novel, magazine]
+    role: object
+  - id: cooking pot
+    display: Cooking Pot
+    prompts: [cooking pot, pot, pan]
+    synonyms: [pots, pans, saucepan, cookware]
+    role: object
+    max_extent: 0.85
+  - id: bowl
+    display: Bowl
+    prompts: [bowl]
+    synonyms: [bowls, basin]
+    role: object
+    max_extent: 0.85
+  - id: plate
+    display: Plate
+    prompts: [plate, dish]
+    synonyms: [plates, dishes]
+    role: object
+    max_extent: 0.85
+  - id: cutlery
+    display: Cutlery
+    prompts: [fork, spoon, knife]
+    synonyms: [cutlery]
+    role: object
+  - id: food
+    display: Food
+    prompts: [food]
+    synonyms: [leftover, leftovers, meal, snack, groceries]
+    role: object
+  - id: food container
+    display: Food Container
+    prompts: [food container, container]
+    synonyms: [lunch box, tupperware]
+    role: object
+    max_extent: 0.85
+  - id: clothes
+    display: Clothes
+    prompts: [clothes, shirt, pants]
+    synonyms: [clothing, laundry, garment, garments]
+    role: object
+    plural: true
+  - id: towel
+    display: Towel
+    prompts: [towel]
+    synonyms: [towels]
+    role: object
+  - id: trash bin
+    display: Trash Bin
+    prompts: [trash bin, trash can, wastebasket]
+    synonyms: [bin, dustbin]
+    role: object
+  - id: garbage bag
+    display: Garbage Bag
+    prompts: [garbage bag]
+    synonyms: [trash bag, bin bag]
+    role: object
+  - id: rubbish
+    display: Rubbish
+    prompts: [rubbish]
+    synonyms: [trash, garbage, waste]
+    role: object
+  - id: paper
+    display: Paper
+    prompts: [paper]
+    synonyms: [papers, letter, letters, documents]
+    role: object
+  - id: basket
+    display: Basket
+    prompts: [basket]
+    role: object
+    max_extent: 0.85
+  - id: box
+    display: Box
+    prompts: [box, cardboard box]
+    synonyms: [carton]
+    role: object

@@ -36,8 +36,8 @@ jobs:
       - name: Formatting Compliance (Ruff Format)
         run: uvx ruff format --check src tests run_pipeline.py run_server.py
 
-      - name: Run Pytest Test Suite
-        run: uv run pytest -v tests/
+      - name: Run Pytest Test Suite (with coverage floor)
+        run: uv run pytest -v tests/ --cov=aegis --cov-report=term-missing --cov-fail-under=75
 
   flutter-ci:
     name: Flutter Mobile CI (Analyze & Test)

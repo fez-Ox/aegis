@@ -134,7 +134,21 @@ class Detection2D:
 
 @dataclass(frozen=True, slots=True)
 class BoundingBox3D:
-    """A lifted 3D bounding box associated with an identified object."""
+    """A lifted 3D bounding box associated with an identified object.
+
+    Boxes are oriented in the session's gravity frame (see
+    :class:`aegis.geometry.gravity.GravityFrame`):
+
+    * ``size = (length, width, height)``: ``length`` along the box's major
+      horizontal axis ``a``, ``width`` along ``b`` and ``height`` along ``up``.
+    * ``yaw``: angle of ``a`` in the floor-plane basis, from ``e1`` toward
+      ``e2``, in ``(-pi/2, pi/2]``.
+    * ``rotation``: ``(x, y, z, w)`` quaternion of the matrix with columns
+      ``[a, b, up]`` (world-from-box).
+    * ``center``: the middle of the three fitted extents.
+    * ``up_min``/``up_max``: elevation (``dot(p, up)``) of bottom and top.
+    * ``support_up``: elevation of a fitted support surface (anchors only).
+    """
 
     frame_id: int
     timestamp: float
@@ -147,12 +161,16 @@ class BoundingBox3D:
     spatial_state: str = "on_surface"
     container_relation: str | None = None
     rotation: tuple[float, float, float, float] | None = None  # Quaternion (x, y, z, w)
-    yaw: float | None = None  # Yaw angle in radians around vertical Z axis
+    yaw: float | None = None  # Yaw in the gravity floor plane, radians
     is_hand: bool = False
     is_in_hand: bool = False
     carrier: str | None = None
     held_by_hand_track_id: int | None = None
     appearance: tuple[float, ...] | None = None
+    up_min: float | None = None
+    up_max: float | None = None
+    support_up: float | None = None
+    point_count: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable 3D bounding box record."""
@@ -180,4 +198,8 @@ class BoundingBox3D:
             data["rotation"] = list(self.rotation)
         if self.yaw is not None:
             data["yaw"] = self.yaw
+        for name in ("up_min", "up_max", "support_up", "point_count"):
+            value = getattr(self, name)
+            if value is not None:
+                data[name] = value
         return data

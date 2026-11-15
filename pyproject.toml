@@ -21,6 +21,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.0,<9",
+    "pytest-cov>=7.1.0",
 ]
 viewer = [
     "rerun-sdk>=0.23,<0.30",
@@ -32,6 +33,7 @@ testpaths = ["tests"]
 [project.scripts]
 aegis = "aegis:main"
 aegis-ingest = "aegis.ingestion.live_cli:main"
+aegis-memory = "aegis.memory.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]

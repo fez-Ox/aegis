@@ -6,7 +6,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from aegis.remote.api import app
+from aegis.remote.api import API_VERSION, app
 
 client = TestClient(app)
 
@@ -17,7 +17,8 @@ def test_health_endpoint() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert data["version"] == "0.1.0"
+    assert data["version"] == API_VERSION
+    assert data["scene_graph_ready"] is True
     assert data["num_anchors"] >= 1
     assert data["num_events"] >= 1
 
@@ -109,7 +110,8 @@ def test_query_bottle_occlusion_endpoint() -> None:
 
 def test_simulate_bottle_occlusion() -> None:
     """Test simulating bottle occlusion updates state to persistent memory."""
-    response = client.get("/api/v1/simulate/bottle_occluded")
+    client.post("/api/v1/reset?dataset_id=Demo06-Self")
+    response = client.get("/api/v1/simulate/bottle_occluded?dataset_id=Demo06-Self")
     assert response.status_code == 200
     res = response.json()
     assert res["status"] == "ok"
@@ -120,7 +122,8 @@ def test_simulate_bottle_occlusion() -> None:
     q_res = client.get("/api/v1/query?item=bottle&dataset_id=Demo06-Self").json()
     assert q_res["found"] is True
     assert q_res["is_persistent_memory"] is True
-    assert "remembers" in q_res["location_summary"].lower()
+    assert "last seen on desk #1" in q_res["location_summary"].lower()
+    client.post("/api/v1/reset?dataset_id=Demo06-Self")
 
 
 def test_unprocessed_demo04_has_no_foreign_memories() -> None:
@@ -284,7 +287,9 @@ def test_rename_room_endpoint_persists(tmp_path, monkeypatch) -> None:
     target = target_dir / "r4d_scene_graph.json"
     target.write_text(source.read_text())
 
-    api_module._GRAPH_CACHE.pop("demo01", None)
+    from aegis.memory.repository import clear_cache
+
+    clear_cache("demo01")
     monkeypatch.setattr(
         api_module, "get_search_paths", lambda ds: [target_dir / "r4d_scene_graph.json"]
     )
@@ -311,39 +316,170 @@ def test_rename_room_endpoint_persists(tmp_path, monkeypatch) -> None:
     # Unknown rooms return a clean 404.
     missing = client.post("/api/v1/rooms/rename?room_id=99&label=X&dataset_id=demo01")
     assert missing.status_code == 404
+    clear_cache("demo01")
 
 
-def test_search_paths_include_modal_pipeline_outputs() -> None:
-    """The API must find graphs written by the Modal pipeline under outputs/objects."""
-    from pathlib import Path
+def _write_graph(tmp_path, monkeypatch, dataset_id: str, graph: dict):
+    import json as json_module
 
     import aegis.remote.api as api_module
+    from aegis.memory.repository import clear_cache
 
-    paths = [str(path) for path in api_module.get_search_paths("nlq_sample")]
-    assert "/data/nlq_sample/outputs/objects/r4d_scene_graph.json" in paths
-    assert "outputs/nlq_sample/outputs/objects/r4d_scene_graph.json" in paths
-    # The canonical volume layout still has priority.
-    assert paths.index("/data/nlq_sample/objects/r4d_scene_graph.json") < paths.index(
-        "/data/nlq_sample/outputs/objects/r4d_scene_graph.json"
+    target_dir = tmp_path / dataset_id / "objects"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / "r4d_scene_graph.json"
+    target.write_text(json_module.dumps(graph))
+    clear_cache(dataset_id)
+    monkeypatch.setattr(api_module, "get_search_paths", lambda ds: [target])
+    return target
+
+
+def _two_room_v1_graph() -> dict:
+    return {
+        "dataset_id": "tworooms",
+        "anchors": [],
+        "rooms": [
+            {"room_id": 1, "label": "Room #1", "room_type": "Room"},
+            {"room_id": 2, "label": "Room #2", "room_type": "Room"},
+        ],
+        "timeline": {},
+        "events": [
+            {
+                "event_type": "room_change",
+                "object": "Camera Wearer",
+                "source_room": "Room #1",
+                "destination_room": "Room #2",
+                "start_time": 0.0,
+                "end_time": 1.0,
+            },
+            {
+                "event_type": "room_change",
+                "object": "Camera Wearer",
+                "source_room": "Room #2",
+                "destination_room": "Room #2",
+                "start_time": 2.0,
+                "end_time": 3.0,
+            },
+        ],
+    }
+
+
+def test_rename_only_touches_the_renamed_room(tmp_path, monkeypatch) -> None:
+    """Regression (C3): renaming Room #1 must not relabel Room #2's events."""
+    import json as json_module
+
+    target = _write_graph(tmp_path, monkeypatch, "tworooms", _two_room_v1_graph())
+    res = client.post(
+        "/api/v1/rooms/rename?room_id=1&label=Hallway&dataset_id=tworooms"
     )
-    assert Path("/data/nlq_sample/objects/r4d_scene_graph.json") in [
-        Path(path) for path in paths
-    ]
+    assert res.status_code == 200
+    saved = json_module.loads(target.read_text())
+    assert saved["events"][0]["source_room"] == "Hallway"
+    assert saved["events"][0]["destination_room"] == "Room #2"
+    assert saved["events"][1]["source_room"] == "Room #2"
+    assert saved["rooms"][1]["label"] == "Room #2"
 
 
-def test_list_datasets_detects_pipeline_outputs(tmp_path, monkeypatch) -> None:
-    """Datasets whose graph lives in the Modal-style outputs tree are discovered."""
-    import aegis.remote.api as api_module
+def test_rename_matches_events_by_room_id(tmp_path, monkeypatch) -> None:
+    import json as json_module
 
-    graph = (
-        tmp_path
-        / "outputs"
-        / "nlq_sample"
-        / "outputs"
-        / "objects"
-        / "r4d_scene_graph.json"
-    )
-    graph.parent.mkdir(parents=True)
-    graph.write_text("{}", encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
-    assert "nlq_sample" in api_module.list_available_datasets()
+    graph = {
+        "schema_version": 2,
+        "dataset_id": "v2rooms",
+        "anchors": [],
+        "rooms": [
+            {"room_id": 1, "label": "Kitchen"},
+            {"room_id": 2, "label": "Kitchen #2"},
+        ],
+        "latest_states": [
+            {
+                "instance_id": 1,
+                "label": "Keys #1",
+                "canonical": "keys",
+                "relation": "in_room",
+                "room_id": 2,
+                "room_label": "Kitchen #2",
+                "confidence": 0.8,
+                "last_seen_timestamp": 3.0,
+            }
+        ],
+        "events": [
+            {
+                "event_type": "room_change",
+                "object": "Camera Wearer",
+                "source_room": "Kitchen",
+                "source_room_id": 1,
+                "destination_room": "Kitchen #2",
+                "destination_room_id": 2,
+                "start_time": 0.0,
+                "end_time": 1.0,
+            }
+        ],
+    }
+    target = _write_graph(tmp_path, monkeypatch, "v2rooms", graph)
+    res = client.post("/api/v1/rooms/rename?room_id=2&label=Pantry&dataset_id=v2rooms")
+    assert res.status_code == 200
+    saved = json_module.loads(target.read_text())
+    assert saved["events"][0]["source_room"] == "Kitchen"
+    assert saved["events"][0]["destination_room"] == "Pantry"
+    assert saved["latest_states"][0]["room_label"] == "Pantry"
+    query = client.get("/api/v1/query?item=my keys&dataset_id=v2rooms").json()
+    assert query["found"] is True
+    assert query["room_label"] == "Pantry"
+    # Stored confidence is returned, never a constant.
+    assert query["confidence"] == 0.8
+    assert query["last_seen_time_ago"] is None
+
+
+def test_new_graph_is_visible_without_restart(tmp_path, monkeypatch) -> None:
+    import json as json_module
+    import os
+
+    graph = _two_room_v1_graph()
+    target = _write_graph(tmp_path, monkeypatch, "tworooms", graph)
+    assert len(client.get("/api/v1/rooms?dataset_id=tworooms").json()) == 2
+    graph["rooms"].append({"room_id": 3, "label": "Room #3"})
+    target.write_text(json_module.dumps(graph))
+    stat = target.stat()
+    os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+    assert len(client.get("/api/v1/rooms?dataset_id=tworooms").json()) == 3
+
+
+def test_corrupt_graph_returns_not_found_not_500(tmp_path, monkeypatch) -> None:
+    target = _write_graph(tmp_path, monkeypatch, "broken", {})
+    target.write_text("{not json")
+    res = client.get("/api/v1/query?item=keys&dataset_id=broken")
+    assert res.status_code == 200
+    assert res.json()["found"] is False
+    assert "not been generated" in res.json()["location_summary"]
+    health = client.get("/api/v1/health?dataset_id=broken").json()
+    assert health["scene_graph_ready"] is False
+
+
+def test_invalid_dataset_id_is_rejected() -> None:
+    for url in (
+        "/api/v1/query?item=keys&dataset_id=../../etc",
+        "/api/v1/video/..%2F..%2Fetc",
+        "/api/v1/rooms/rename?room_id=1&label=X&dataset_id=a/b",
+        "/api/v1/timeline?dataset_id=..",
+    ):
+        method = client.post if "rename" in url else client.get
+        assert method(url).status_code in {400, 404}, url
+    assert client.get("/api/v1/query?item=keys&dataset_id=../x").status_code == 400
+
+
+def test_query_confidence_is_not_a_constant() -> None:
+    res = client.get("/api/v1/query?item=shoes").json()
+    assert res["confidence"] is None
+
+
+def test_simulator_routes_absent_without_flag(monkeypatch) -> None:
+    monkeypatch.delenv("AEGIS_ENABLE_SIMULATOR", raising=False)
+    assert client.get("/api/v1/simulate/floor").status_code == 404
+    assert client.post("/api/v1/reset").status_code == 404
+    assert client.get("/api/v1/health").json()["simulator_enabled"] is False
+
+
+def test_query_does_not_match_inside_words() -> None:
+    res = client.get("/api/v1/query?item=cup&dataset_id=Demo06-Self").json()
+    assert res["found"] is False

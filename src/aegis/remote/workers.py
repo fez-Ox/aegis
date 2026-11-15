@@ -88,12 +88,13 @@ def _clear_downstream_artifacts(paths: DatasetPaths) -> None:
     """Remove artifacts derived from a previous run, keeping frames/metadata."""
 
     for stale_file in (
-        paths.depth_manifest,
         paths.poses,
         paths.pointcloud_npz,
         paths.pointcloud_ply,
         paths.pointcloud_metadata,
         paths.pointmaps_npz,
+        paths.pointmaps_index,
+        paths.gravity,
         paths.objects_json,
         paths.events_json,
         paths.rerun_recording,
@@ -101,11 +102,15 @@ def _clear_downstream_artifacts(paths: DatasetPaths) -> None:
         paths.benchmark_stats,
         paths.objects_json.parent / "r4d_scene_graph.json",
         paths.objects_json.parent / "spatial_memory_graph.json",
+        paths.objects_json.parent / "r4d_timeline.json",
     ):
         if stale_file.exists():
             stale_file.unlink()
-    if paths.depth.exists():
-        shutil.rmtree(paths.depth)
+    if paths.pointmaps_dir.exists():
+        shutil.rmtree(paths.pointmaps_dir)
+    evidence_dir = paths.objects_json.parent / "evidence"
+    if evidence_dir.exists():
+        shutil.rmtree(evidence_dir)
 
 
 def _live_dataset_metadata(paths: DatasetPaths) -> dict[str, Any] | None:
@@ -132,6 +137,44 @@ def _live_dataset_metadata(paths: DatasetPaths) -> dict[str, Any] | None:
             f"live dataset frames are missing ({len(missing)}): {preview}"
         )
     return metadata
+
+
+def _wallclock_by_frame(
+    paths: DatasetPaths, frame_records: Sequence[Mapping[str, Any]]
+) -> tuple[dict[int, str], str]:
+    """Absolute capture time per frame, and where it came from.
+
+    Live datasets carry ``capture_timestamp`` per frame. Batch videos use
+    ``recorded_at`` from ``source_metadata.json`` plus the frame offset when
+    the operator supplied it. Otherwise no wall-clock time exists.
+    """
+
+    from aegis.core.timeutil import shift_iso, to_utc_iso
+
+    captured = {
+        int(rec["frame_id"]): to_utc_iso(str(rec["capture_timestamp"]))
+        for rec in frame_records
+        if rec.get("capture_timestamp")
+    }
+    if captured and len(captured) == len(frame_records):
+        return captured, "capture"
+    recorded_at = None
+    if paths.source_metadata.exists():
+        try:
+            recorded_at = _read_json(paths.source_metadata).get("recorded_at")
+        except (ValueError, TypeError, OSError):
+            recorded_at = None
+    if recorded_at:
+        return (
+            {
+                int(rec["frame_id"]): shift_iso(
+                    str(recorded_at), float(rec["timestamp"])
+                )
+                for rec in frame_records
+            },
+            "recorded_at",
+        )
+    return {}, "none"
 
 
 def run_preprocess(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
@@ -183,22 +226,93 @@ def run_preprocess(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, 
 
 
 def _write_ply(path: Path, points: np.ndarray, colors: np.ndarray) -> None:
+    """Binary little-endian PLY (x, y, z as float32; red, green, blue as uint8)."""
+
     if points.shape != (len(colors), 3):
         raise ValueError("point and color arrays have incompatible shapes")
-    with path.open("w", encoding="utf-8") as handle:
-        handle.write("ply\nformat ascii 1.0\n")
-        handle.write(f"element vertex {len(points)}\n")
-        handle.write("property float x\nproperty float y\nproperty float z\n")
-        handle.write("property uchar red\nproperty uchar green\nproperty uchar blue\n")
-        handle.write("end_header\n")
-        for point, color in zip(points, colors, strict=True):
-            handle.write(
-                f"{point[0]:.6f} {point[1]:.6f} {point[2]:.6f} "
-                f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
+    vertices = np.empty(
+        len(points),
+        dtype=[
+            ("x", "<f4"),
+            ("y", "<f4"),
+            ("z", "<f4"),
+            ("red", "u1"),
+            ("green", "u1"),
+            ("blue", "u1"),
+        ],
+    )
+    vertices["x"], vertices["y"], vertices["z"] = points.astype(np.float32).T
+    rgb = np.asarray(colors).astype(np.uint8)
+    vertices["red"], vertices["green"], vertices["blue"] = rgb.T
+    header = (
+        "ply\nformat binary_little_endian 1.0\n"
+        f"element vertex {len(points)}\n"
+        "property float x\nproperty float y\nproperty float z\n"
+        "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+        "end_header\n"
+    )
+    with path.open("wb") as handle:
+        handle.write(header.encode("ascii"))
+        vertices.tofile(handle)
+
+
+def write_pointmaps(
+    paths: DatasetPaths,
+    keyframe_ids: Sequence[int],
+    pointmaps: np.ndarray,
+    confmaps: np.ndarray,
+) -> None:
+    """One compressed file per keyframe, so readers never load them all."""
+
+    if paths.pointmaps_dir.exists():
+        shutil.rmtree(paths.pointmaps_dir)
+    paths.pointmaps_dir.mkdir(parents=True, exist_ok=True)
+    for frame_id, points, conf in zip(keyframe_ids, pointmaps, confmaps, strict=True):
+        np.savez_compressed(
+            paths.pointmaps_dir / f"{int(frame_id)}.npz",
+            points=points.astype(np.float32),
+            conf=conf.astype(np.float32),
+        )
+    _write_json(
+        paths.pointmaps_index,
+        {"schema_version": 1, "keyframe_ids": [int(f) for f in keyframe_ids]},
+    )
+
+
+class PointmapReader:
+    """Per-keyframe pointmaps; falls back to the legacy single ``.npz``."""
+
+    def __init__(self, paths: DatasetPaths) -> None:
+        self.paths = paths
+        if paths.pointmaps_index.exists():
+            self.keyframe_ids = [
+                int(f) for f in _read_json(paths.pointmaps_index)["keyframe_ids"]
+            ]
+            self._legacy = None
+        elif paths.pointmaps_npz.exists():
+            data = np.load(paths.pointmaps_npz)
+            self.keyframe_ids = [int(f) for f in data["keyframe_ids"].tolist()]
+            self._legacy = data
+        else:
+            raise FileNotFoundError(
+                f"pointmaps are missing; run the vggt stage first: {paths.pointmaps_dir}"
             )
+        self._index = {fid: i for i, fid in enumerate(self.keyframe_ids)}
+
+    def __contains__(self, frame_id: int) -> bool:
+        return int(frame_id) in self._index
+
+    def get(self, frame_id: int) -> tuple[np.ndarray, np.ndarray]:
+        if self._legacy is not None:
+            index = self._index[int(frame_id)]
+            return self._legacy["pointmaps"][index], self._legacy["confmaps"][index]
+        with np.load(self.paths.pointmaps_dir / f"{int(frame_id)}.npz") as data:
+            return data["points"], data["conf"]
 
 
-def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
+def run_vggt(
+    dataset_id: str, raw_config: Mapping[str, Any], *, model: Any = None
+) -> dict[str, Any]:
     """Execute VGGT-Ω feed-forward 3D reconstruction on keyframes."""
 
     t0 = time.perf_counter()
@@ -213,6 +327,12 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     keyframe_records = frames[:: config.vggt.keyframe_stride]
     if len(keyframe_records) < 2:
         keyframe_records = frames[: min(len(frames), 2)]
+    if len(keyframe_records) > config.vggt.max_keyframes:
+        raise ValueError(
+            f"{len(keyframe_records)} keyframes exceed vggt.max_keyframes="
+            f"{config.vggt.max_keyframes}; lower video.sample_fps, raise "
+            "vggt.keyframe_stride, or process the capture with --segment-frames"
+        )
     image_paths = [paths.frames / str(rec["filename"]) for rec in keyframe_records]
 
     gpu_device = "CPU"
@@ -233,15 +353,17 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         or os.getenv("HUGGING_FACE_HUB_TOKEN")
         or os.getenv("hf_token")
     )
-    rec_result = run_vggt_reconstruction(image_paths, config.vggt, hf_token=hf_token)
+    rec_result = run_vggt_reconstruction(
+        image_paths, config.vggt, hf_token=hf_token, model=model
+    )
 
-    # Save pointmaps and confidence maps
+    # Save pointmaps and confidence maps (one file per keyframe)
     paths.pointmaps_npz.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        paths.pointmaps_npz,
-        pointmaps=rec_result["pointmaps"],
-        confmaps=rec_result["confmaps"],
-        keyframe_ids=np.array([int(rec["frame_id"]) for rec in keyframe_records]),
+    write_pointmaps(
+        paths,
+        [int(rec["frame_id"]) for rec in keyframe_records],
+        rec_result["pointmaps"],
+        rec_result["confmaps"],
     )
 
     # Save global point cloud
@@ -256,6 +378,7 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
     )
 
     # Save camera poses
+    pose_source = "synthetic" if rec_result.get("synthetic", False) else "VGGT-Omega"
     pose_records: list[dict[str, Any]] = []
     poses = rec_result["poses"]
     for matrix, rec in zip(poses, keyframe_records, strict=True):
@@ -266,7 +389,7 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
                 "filename": str(rec["filename"]),
                 "matrix": matrix.tolist(),
                 "convention": "T_world_camera",
-                "source": "VGGT-Omega",
+                "source": pose_source,
             }
         )
 
@@ -275,11 +398,29 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         {
             "schema_version": 1,
             "dataset_id": dataset_id,
-            "source": "VGGT-Omega",
+            "source": pose_source,
             "convention": "T_world_camera",
             "frame_count": len(pose_records),
             "poses": pose_records,
         },
+    )
+
+    # Gravity frame (up direction + floor height), stored beside the raw
+    # coordinates; the coordinates themselves are never rotated.
+    from aegis.geometry.gravity import GravityFrame, estimate_gravity
+
+    if config.memory.gravity.enabled and not rec_result.get("synthetic", False):
+        gravity = estimate_gravity(
+            rec_result["global_points"],
+            poses[:, :3, 3],
+            poses[:, :3, :3],
+            iterations=config.memory.gravity.ransac_iterations,
+        )
+    else:
+        gravity = GravityFrame.assumed()
+    _write_json(
+        paths.gravity,
+        {"schema_version": 1, "dataset_id": dataset_id, **gravity.as_dict()},
     )
 
     _write_json(
@@ -320,17 +461,17 @@ def run_vggt(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         "throughput_fps": kf_fps,
         "pointcloud": str(paths.pointcloud_ply),
         "poses": str(paths.poses),
+        "pose_source": pose_source,
+        "gravity_source": gravity.source,
+        "gravity_confidence": round(gravity.confidence, 3),
+        "camera_height": gravity.camera_height,
     }
     _record_benchmark_stats(paths, dataset_id, "vggt", stage_result)
     return stage_result
 
 
-# Backwards compatibility alias
-run_dust3r = run_vggt
-
-
 def run_detect_and_lift(
-    dataset_id: str, raw_config: Mapping[str, Any]
+    dataset_id: str, raw_config: Mapping[str, Any], *, models: Any = None
 ) -> dict[str, Any]:
     """Run open-vocabulary object perception and lift 2D detections to 3D bounding boxes."""
 
@@ -338,20 +479,12 @@ def run_detect_and_lift(
     config = _config(raw_config)
     paths = dataset_paths(config, dataset_id)
     metadata = _require_metadata(paths)
-    if not paths.pointmaps_npz.exists():
-        raise FileNotFoundError(
-            f"pointmaps artifact is missing; run dust3r/vggt reconstruction first: {paths.pointmaps_npz}"
-        )
-
+    pointmap_reader = PointmapReader(paths)
     frames = metadata.get("frames", [])
-    data = np.load(paths.pointmaps_npz)
-    pointmaps = data["pointmaps"]
-    confmaps = data["confmaps"]
-    keyframe_ids = data["keyframe_ids"].tolist()
+    keyframe_ids = pointmap_reader.keyframe_ids
 
     keyframe_id_set = set(keyframe_ids)
     keyframe_records = [f for f in frames if int(f["frame_id"]) in keyframe_id_set]
-    keyframe_index_map = {int(kid): idx for idx, kid in enumerate(keyframe_ids)}
 
     gpu_device = "CPU"
     try:
@@ -372,42 +505,63 @@ def run_detect_and_lift(
     from aegis.perception.detector import detect_and_track_objects
 
     weights_dir = Path(config.storage.model_mount) / "yolo"
+    track_embeddings: dict[int, tuple[float, ...]] = {}
     detections_2d = detect_and_track_objects(
         keyframe_records,
         paths.frames,
         config.perception,
         sam2_config=config.sam2,
         weights_dir=weights_dir,
+        vocabulary=config.vocab(),
+        models=models,
+        track_embeddings=track_embeddings,
     )
 
-    frame_res = tuple(
-        metadata.get("resolution", (pointmaps[0].shape[1], pointmaps[0].shape[0]))
+    frame_res = tuple(metadata["resolution"])
+    from aegis.geometry.gravity import GravityFrame
+
+    gravity = (
+        GravityFrame.from_dict(_read_json(paths.gravity))
+        if paths.gravity.exists()
+        else GravityFrame.assumed()
     )
+    gravity_cfg = config.memory.gravity
+    unit = gravity.unit(gravity_cfg.assumed_camera_height, gravity_cfg.min_confidence)
+    vocabulary = config.vocab()
     raw_lifted_boxes: list[BoundingBox3D] = []
     masks_generated = sum(1 for det in detections_2d if det.mask is not None)
 
+    by_frame: dict[int, list[Any]] = {}
     for det in detections_2d:
-        kf_idx = keyframe_index_map.get(det.frame_id)
-        if kf_idx is None:
-            continue
-        pm = pointmaps[kf_idx]
-        cm = confmaps[kf_idx]
-        box_3d = lift_detection_to_3d(
-            det,
-            pm,
-            mask=det.mask,
-            confmap=cm,
-            min_conf_thr=0.01,
-            min_points=config.perception.min_points_in_box,
-            frame_size=(int(frame_res[0]), int(frame_res[1])),
-        )
-        if box_3d is not None:
-            raw_lifted_boxes.append(box_3d)
+        if det.frame_id in pointmap_reader:
+            by_frame.setdefault(int(det.frame_id), []).append(det)
+    # One pointmap in memory at a time.
+    for frame_id, frame_detections in sorted(by_frame.items()):
+        pm, cm = pointmap_reader.get(frame_id)
+        for det in frame_detections:
+            box_3d = lift_detection_to_3d(
+                det,
+                pm,
+                mask=det.mask,
+                confmap=cm,
+                min_conf_thr=0.01,
+                min_points=config.perception.min_points_in_box,
+                frame_size=(int(frame_res[0]), int(frame_res[1])),
+                gravity=gravity,
+                vocabulary=vocabulary,
+                unit=unit,
+            )
+            if box_3d is not None:
+                raw_lifted_boxes.append(box_3d)
+        del pm, cm
 
     # Layer 2: Evaluate 3D spatial containment and dynamic motion states
     lifted_boxes = evaluate_spatial_containment_and_states(
         raw_lifted_boxes,
         smoothing_alpha=config.perception.track_smoothing,
+        vocabulary=vocabulary,
+        unit=unit,
+        hand_distance=config.perception.hand_contact_max_distance,
     )
     motion_trails = compute_motion_trails(lifted_boxes)
 
@@ -422,6 +576,7 @@ def run_detect_and_lift(
         pose_data = _read_json(paths.poses)
         pose_records = pose_data.get("poses", [])
 
+    wallclock_by_frame, time_source = _wallclock_by_frame(paths, keyframe_records)
     scene_graph = build_relative_4d_scene_graph(
         lifted_boxes,
         all_kf_ids,
@@ -430,14 +585,22 @@ def run_detect_and_lift(
         estimate_rooms=config.memory.rooms.enabled,
         zone_link_radius=config.memory.rooms.zone_link_radius,
         min_zone_keyframes=config.memory.rooms.min_zone_keyframes,
+        vocabulary=vocabulary,
+        gravity=gravity,
+        wallclock_by_frame=wallclock_by_frame,
+        settings=config.memory.build,
+        assumed_camera_height=gravity_cfg.assumed_camera_height,
+        min_gravity_confidence=gravity_cfg.min_confidence,
     )
+    scene_graph.session.update(dataset_id=dataset_id, time_source=time_source)
 
     paths.objects_json.parent.mkdir(parents=True, exist_ok=True)
     _write_json(
         paths.objects_json,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "dataset_id": dataset_id,
+            "gravity": gravity.as_dict(),
             "total_detections_2d": len(detections_2d),
             "total_boxes_3d": len(lifted_boxes),
             "boxes_3d": serialize_boxes_3d(lifted_boxes),
@@ -445,13 +608,48 @@ def run_detect_and_lift(
         },
     )
 
+    evidence_dir = paths.objects_json.parent / "evidence"
+    if evidence_dir.exists():
+        shutil.rmtree(evidence_dir)
+    crops_written = 0
+    if config.memory.evidence.enabled:
+        from aegis.memory.evidence import write_run_crops
+
+        crops_written = write_run_crops(
+            scene_graph.state_runs,
+            paths.frames,
+            {int(f["frame_id"]): str(f["filename"]) for f in frames},
+            evidence_dir,
+            max_side=config.memory.evidence.max_side,
+            quality=config.memory.evidence.quality,
+        )
+
+    if track_embeddings:
+        ids = sorted(track_embeddings)
+        np.savez_compressed(
+            paths.objects_json.parent / "track_embeddings.npz",
+            track_ids=np.asarray(ids, dtype=np.int64),
+            embeddings=np.asarray([track_embeddings[i] for i in ids], dtype=np.float32),
+        )
+
     r4d_path = paths.objects_json.parent / "r4d_scene_graph.json"
     scene_graph_data = scene_graph.as_dict()
     # Store ownership in the artifact so the API can reject a stale graph
     # copied from another video instead of serving cross-scene memories.
     scene_graph_data["dataset_id"] = dataset_id
-    scene_graph_data["schema_version"] = 1
     _write_json(r4d_path, scene_graph_data)
+
+    # The per-keyframe view grows with video length; it exists only for the
+    # Rerun recording and is never downloaded or served.
+    timeline_path = paths.objects_json.parent / "r4d_timeline.json"
+    _write_json(
+        timeline_path,
+        {
+            "schema_version": 1,
+            "dataset_id": dataset_id,
+            "timeline": scene_graph.timeline_dict(),
+        },
+    )
 
     _write_json(
         paths.events_json,
@@ -462,29 +660,33 @@ def run_detect_and_lift(
         },
     )
 
-    # Save Structured Spatial Memory Graph
+    # Small manifest pointing at the artifacts (no embedded copies).
     memory_graph_path = paths.objects_json.parent / "spatial_memory_graph.json"
     _write_json(
         memory_graph_path,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "dataset_id": dataset_id,
-            "layer_1": {
-                "description": "Static Voxelized 3D Room Canvas",
-                "pointcloud_file": str(paths.pointcloud_ply),
-            },
-            "layer_2": {
-                "description": "R4DSG Persistent Object Tracker & Relational States "
-                "(Rooms -> Anchors -> Objects hierarchy)",
-                "room_count": len(scene_graph.rooms),
-                "total_instances": len(motion_trails),
-                "total_boxes_3d": len(lifted_boxes),
-                "objects": serialize_boxes_3d(lifted_boxes),
-                "motion_trails": {str(k): v for k, v in motion_trails.items()},
-                "r4d_scene_graph": scene_graph.as_dict(),
-            },
+            "pointcloud_file": paths.pointcloud_ply.name,
+            "objects_file": paths.objects_json.name,
+            "scene_graph_file": r4d_path.name,
+            "timeline_file": timeline_path.name,
+            "events_file": paths.events_json.name,
+            "room_count": len(scene_graph.rooms),
+            "anchor_count": len(scene_graph.anchors),
+            "instance_count": len(scene_graph.latest_states),
+            "state_run_count": len(scene_graph.state_runs),
+            "event_count": len(scene_graph.events),
+            "total_boxes_3d": len(lifted_boxes),
         },
     )
+
+    # Pointmaps are transient (~4 MB per keyframe): drop them once lifted.
+    if not config.vggt.keep_pointmaps:
+        if paths.pointmaps_dir.exists():
+            shutil.rmtree(paths.pointmaps_dir)
+        paths.pointmaps_index.unlink(missing_ok=True)
+        paths.pointmaps_npz.unlink(missing_ok=True)
 
     elapsed = time.perf_counter() - t0
     peak_vram_gb = 0.0
@@ -517,6 +719,7 @@ def run_detect_and_lift(
         "objects_file": str(paths.objects_json),
         "r4d_scene_graph": str(r4d_path),
         "events": len(scene_graph.events),
+        "evidence_crops": crops_written,
         "events_file": str(paths.events_json),
         "spatial_memory_graph": str(memory_graph_path),
     }
@@ -524,794 +727,9 @@ def run_detect_and_lift(
     return stage_result
 
 
-TRACK_PALETTE = [
-    [34, 197, 94],  # Emerald Green
-    [59, 130, 246],  # Vibrant Blue
-    [239, 68, 68],  # Red
-    [234, 179, 8],  # Amber
-    [168, 85, 247],  # Purple
-    [236, 72, 153],  # Pink
-    [20, 184, 166],  # Teal
-    [249, 115, 22],  # Orange
-]
-
-
-def _track_color(track_id: int) -> list[int]:
-    return TRACK_PALETTE[(track_id - 1) % len(TRACK_PALETTE)]
-
-
-ROOM_PALETTE = [
-    [59, 130, 246],  # Blue
-    [234, 179, 8],  # Amber
-    [16, 185, 129],  # Emerald
-    [236, 72, 153],  # Pink
-    [168, 85, 247],  # Purple
-    [20, 184, 166],  # Teal
-    [249, 115, 22],  # Orange
-    [148, 163, 184],  # Slate
-]
-
-
-def _room_color(room_id: int) -> list[int]:
-    return ROOM_PALETTE[(room_id - 1) % len(ROOM_PALETTE)]
-
-
-def _room_colored_trajectory(
-    pose_records: Sequence[Mapping[str, Any]],
-    trajectory_points: np.ndarray,
-    rooms: Sequence[Mapping[str, Any]],
-) -> tuple[list[np.ndarray], list[list[int]]] | None:
-    """Split the camera trajectory into per-room colored line strips.
-
-    Returns None when no room information is available so callers can fall
-    back to the single-color trajectory.
-    """
-
-    from aegis.memory.rooms import RoomRegion, room_for_point
-
-    if not rooms or len(trajectory_points) != len(pose_records):
-        return None
-    room_regions = [
-        RoomRegion(
-            room_id=int(room.get("room_id", 0)),
-            label=str(room.get("label", "Room")),
-            room_type=str(room.get("room_type", "Room")),
-            centroid=tuple(float(v) for v in room.get("centroid", (0.0, 0.0, 0.0))),
-            footprint=[
-                tuple(float(v) for v in point) for point in room.get("footprint", [])
-            ],
-        )
-        for room in rooms
-    ]
-    strips: list[np.ndarray] = []
-    colors: list[list[int]] = []
-    current_points: list[np.ndarray] = []
-    current_room_id: int | None = None
-    for index, record in enumerate(pose_records):
-        position = trajectory_points[index]
-        matrix = record.get("matrix")
-        if matrix is None:
-            room_region = None
-        else:
-            translation = np.asarray(matrix, dtype=np.float64)[:3, 3]
-            room_region = room_for_point(translation, room_regions)
-        room_id = room_region.room_id if room_region is not None else None
-        if room_id != current_room_id and current_points:
-            strips.append(np.asarray(current_points, dtype=np.float32))
-            colors.append(
-                _room_color(current_room_id)
-                if current_room_id is not None
-                else [251, 191, 36]
-            )
-            current_points = []
-        current_points.append(
-            [float(position[0]), float(position[1]), float(position[2])]
-        )
-        current_room_id = room_id
-    if current_points:
-        strips.append(np.asarray(current_points, dtype=np.float32))
-        colors.append(
-            _room_color(current_room_id)
-            if current_room_id is not None
-            else [251, 191, 36]
-        )
-    if not strips:
-        return None
-    return strips, colors
-
-
-def _memory_label_key(label: str) -> str:
-    """Normalize raw detection and persistent-memory labels for visualization."""
-    key = " ".join(str(label).lower().strip().split())
-    if "#" in key:
-        key = key.split("#", 1)[0].strip()
-    aliases = {
-        "shoe": "shoes",
-        "water bottle": "bottle",
-        "rubbish": "garbage bag",
-        "trash bag": "garbage bag",
-    }
-    return aliases.get(key, key)
-
-
-def _associate_boxes_with_memory(
-    boxes: Sequence[Mapping[str, Any]],
-    memory_entries: Sequence[Mapping[str, Any]],
-) -> dict[int, Mapping[str, Any]]:
-    """Associate current detections with active R4DSG instances.
-
-    Rerun must show semantic instance IDs rather than transient detector track
-    IDs. The scene graph keeps only the best observation for each instance, so
-    unmatched duplicate detections are intentionally omitted from the clean
-    supervisor-facing overlay.
-    """
-    candidates: list[tuple[float, int, int]] = []
-    active_entries = [
-        entry for entry in memory_entries if bool(entry.get("is_active_view", False))
-    ]
-    for box_index, box in enumerate(boxes):
-        if bool(box.get("is_hand", False)):
-            continue
-        box_center = np.asarray(box.get("center", ()), dtype=np.float64)
-        if box_center.shape != (3,):
-            continue
-        box_label = _memory_label_key(str(box.get("label", "")))
-        for entry_index, entry in enumerate(active_entries):
-            if _memory_label_key(str(entry.get("label", ""))) != box_label:
-                continue
-            entry_center = np.asarray(entry.get("center", ()), dtype=np.float64)
-            if entry_center.shape != (3,):
-                continue
-            distance = float(np.linalg.norm(box_center - entry_center))
-            candidates.append((distance, box_index, entry_index))
-
-    associations: dict[int, Mapping[str, Any]] = {}
-    used_boxes: set[int] = set()
-    used_entries: set[int] = set()
-    # Greedy nearest-neighbour matching is deterministic and sufficient here:
-    # boxes and memory entries originate from the same lifted 3D observation.
-    for distance, box_index, entry_index in sorted(candidates):
-        if box_index in used_boxes or entry_index in used_entries:
-            continue
-        associations[box_index] = active_entries[entry_index]
-        used_boxes.add(box_index)
-        used_entries.add(entry_index)
-    return associations
-
-
 def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
-    """Create an offline Rerun recording containing video, geometry, 3D boxes, and motion trails."""
+    """Build the Rerun recording (see :mod:`aegis.visualization.rerun_scene`)."""
 
-    t0 = time.perf_counter()
-    config = _config(raw_config)
-    paths = dataset_paths(config, dataset_id)
-    metadata = _require_metadata(paths)
-    if not paths.poses.exists():
-        raise FileNotFoundError(f"pose artifact is missing: {paths.poses}")
-    if not paths.pointcloud_npz.exists():
-        raise FileNotFoundError(
-            f"point-cloud artifact is missing: {paths.pointcloud_npz}"
-        )
+    from aegis.visualization.rerun_scene import run_rerun as build_recording
 
-    import rerun as rr
-    import rerun.blueprint as rrb
-
-    pose_data = _read_json(paths.poses)
-    pose_records = pose_data.get("poses", [])
-    pose_by_frame = {int(record["frame_id"]): record for record in pose_records}
-    pointcloud = np.load(paths.pointcloud_npz)
-    points = pointcloud["points"]
-    colors = pointcloud["colors"]
-    trajectory = np.asarray(
-        [
-            np.asarray(record["matrix"], dtype=np.float32)[:3, 3]
-            for record in pose_records
-        ]
-    )
-
-    def to_scene(pt: Sequence[float]) -> list[float]:
-        """Raw VGGT-Ω world point (single source of truth for scale)."""
-
-        return [float(pt[0]), float(pt[1]), float(pt[2])]
-
-    def to_scene_size(sz: Sequence[float]) -> list[float]:
-        return [float(sz[0]), float(sz[1]), float(sz[2])]
-
-    def raw_rotation(rotation: Sequence[float] | None) -> list[float]:
-        """Pass-through quaternion (xyzw) with a neutral identity fallback."""
-
-        if rotation is None or len(rotation) != 4:
-            return [0.0, 0.0, 0.0, 1.0]
-        return [float(value) for value in rotation]
-
-    def camera_frustum(record: Mapping[str, Any], depth: float) -> np.ndarray:
-        matrix = np.asarray(record["matrix"], dtype=np.float64)
-        rotation = matrix[:3, :3]
-        origin = matrix[:3, 3]
-        half_width = depth * 0.62
-        half_height = depth * 0.40
-        corners_camera = np.asarray(
-            [
-                [-half_width, -half_height, depth],
-                [half_width, -half_height, depth],
-                [half_width, half_height, depth],
-                [-half_width, half_height, depth],
-            ],
-            dtype=np.float64,
-        )
-        corners_world = corners_camera @ rotation.T + origin
-        points = [to_scene(origin)]
-        points.extend(to_scene(point) for point in corners_world)
-        # A closed pyramid wireframe with rays to two additional corners.
-        return np.asarray(
-            [
-                points[0],
-                points[1],
-                points[2],
-                points[3],
-                points[4],
-                points[1],
-                points[0],
-                points[3],
-                points[0],
-                points[2],
-                points[0],
-                points[4],
-            ],
-            dtype=np.float32,
-        )
-
-    # Precompute smooth camera trajectory positions across all frames
-    all_frame_records = metadata.get("frames", [])
-    all_fids = [int(f["frame_id"]) for f in all_frame_records]
-    interp_positions: dict[int, list[float]] = {}
-    if len(pose_records) > 0 and len(all_fids) > 0:
-        kf_ids = np.array([int(r["frame_id"]) for r in pose_records], dtype=np.float32)
-        kf_pos = np.array(
-            [np.asarray(r["matrix"], dtype=np.float32)[:3, 3] for r in pose_records]
-        )
-        all_fid_arr = np.array(all_fids, dtype=np.float32)
-        ix = np.interp(all_fid_arr, kf_ids, kf_pos[:, 0])
-        iy = np.interp(all_fid_arr, kf_ids, kf_pos[:, 1])
-        iz = np.interp(all_fid_arr, kf_ids, kf_pos[:, 2])
-        for fid, x, y, z in zip(all_fids, ix, iy, iz, strict=True):
-            interp_positions[fid] = to_scene([float(x), float(y), float(z)])
-
-    # Load 3D object detections, motion trails, events, and R4DSG.
-    motion_trails_by_track: dict[int, list[list[float]]] = {}
-    boxes_by_frame: dict[int, list[dict[str, Any]]] = {}
-    r4d_anchors: list[dict[str, Any]] = []
-    r4d_rooms: list[dict[str, Any]] = []
-    r4d_timeline: dict[str, list[dict[str, Any]]] = {}
-    r4d_events: list[dict[str, Any]] = []
-
-    r4d_path = paths.objects_json.parent / "r4d_scene_graph.json"
-    if r4d_path.exists():
-        r4d_data = _read_json(r4d_path)
-        r4d_anchors = r4d_data.get("anchors", [])
-        r4d_rooms = r4d_data.get("rooms", [])
-        r4d_timeline = r4d_data.get("timeline", {})
-        r4d_events = r4d_data.get("events", [])
-
-    if paths.objects_json.exists():
-        obj_data = _read_json(paths.objects_json)
-        for tid_str, trail in obj_data.get("motion_trails", {}).items():
-            motion_trails_by_track[int(tid_str)] = trail
-        for box in obj_data.get("boxes_3d", []):
-            boxes_by_frame.setdefault(int(box["frame_id"]), []).append(box)
-
-    paths.rerun_recording.parent.mkdir(parents=True, exist_ok=True)
-    rr.init(f"aegis-{dataset_id}", spawn=False)
-    rr.save(str(paths.rerun_recording))
-
-    # Send a video/3D blueprint with a compact event panel.
-    blueprint = rrb.Blueprint(
-        rrb.Horizontal(
-            rrb.Spatial2DView(
-                name="Egocentric Video",
-                origin="video",
-            ),
-            rrb.Vertical(
-                rrb.Spatial3DView(
-                    name="R4DSG 3D Spatial Memory",
-                    origin="spatial_memory",
-                    line_grid=True,
-                ),
-                rrb.TextDocumentView(
-                    name="R4DSG Memory Events",
-                    origin="memory/events",
-                ),
-                row_shares=[3.0, 1.0],
-            ),
-            column_shares=[1.0, 1.35],
-        ),
-        collapse_panels=True,
-    )
-    rr.send_blueprint(blueprint)
-
-    # Set View Coordinates to the raw VGGT-Ω world convention (OpenCV-style:
-    # +X right, +Y down, +Z forward). Display hint only — no data transform.
-    rr.log("spatial_memory", rr.ViewCoordinates.RIGHT_HAND_Y_DOWN, static=True)
-
-    # 1. Log Spatial Anchors (The Room's Permanent Reference Frame)
-    if r4d_anchors:
-        anc_centers = [to_scene(a["center"]) for a in r4d_anchors]
-        anc_sizes = [to_scene_size(a["size"]) for a in r4d_anchors]
-        anc_labels = [
-            (
-                f"Anchor: {a['label']} #{a['anchor_id']}"
-                + (f" · {a['room_label']}" if a.get("room_label") else "")
-            )
-            for a in r4d_anchors
-        ]
-        rr.log(
-            "spatial_memory/anchors",
-            rr.Boxes3D(
-                centers=anc_centers,
-                sizes=anc_sizes,
-                labels=anc_labels,
-                colors=[[59, 130, 246] for _ in r4d_anchors],  # Clean Blue
-            ),
-            static=True,
-        )
-
-    # 1B. Log Room-Level Depictions (Rooms -> Anchors -> Objects hierarchy)
-    # One entity group per room so the viewer can toggle rooms individually:
-    # a translucent floor slab (triangulated mesh), a closed outline,
-    # corner wall pillars, and a labeled centroid marker.
-    if r4d_rooms:
-        for room in r4d_rooms:
-            footprint = room.get("footprint") or []
-            if len(footprint) < 3:
-                continue
-            room_id = int(room.get("room_id", 1))
-            room_label = str(room.get("label", f"Room #{room_id}"))
-            room_entity = f"spatial_memory/rooms/room_{room_id}"
-            color = _room_color(room_id)
-            polygon = np.asarray(
-                [to_scene(point) for point in footprint], dtype=np.float32
-            )
-
-            # Translucent convex floor slab: fan-triangulate the convex hull.
-            triangles = np.asarray(
-                [[0, i, i + 1] for i in range(1, len(polygon) - 1)],
-                dtype=np.uint32,
-            )
-            slab_alpha = 46  # ~18% opacity keeps the room readable as a zone
-            rr.log(
-                f"{room_entity}/floor",
-                rr.Mesh3D(
-                    vertex_positions=polygon,
-                    triangle_indices=triangles,
-                    vertex_colors=[[(*color, slab_alpha)] for _ in polygon],
-                ),
-                static=True,
-            )
-
-            # Closed outline on the room plane.
-            closed_loop = np.vstack([polygon, polygon[:1]])
-            rr.log(
-                f"{room_entity}/outline",
-                rr.LineStrips3D(
-                    [closed_loop],
-                    radii=0.02,
-                    colors=[color],
-                    labels=[f"Room: {room_label}"],
-                ),
-                static=True,
-            )
-
-            # Corner wall pillars rising from the room plane ("up" is -Y).
-            pillar_height = 1.2
-            pillars = np.asarray(
-                [
-                    [
-                        [point[0], point[1], point[2]],
-                        [point[0], point[1] - pillar_height, point[2]],
-                    ]
-                    for point in polygon
-                ],
-                dtype=np.float32,
-            )
-            rr.log(
-                f"{room_entity}/walls",
-                rr.LineStrips3D(pillars, radii=0.02, colors=[color]),
-                static=True,
-            )
-
-            # Labeled centroid marker: the summoning point for each room.
-            centroid = room.get("centroid")
-            if centroid:
-                keyframe_count = int(room.get("keyframe_count", 0) or 0)
-                room_type = str(room.get("room_type", "Room"))
-                observation_note = (
-                    f"{keyframe_count} obs" if keyframe_count else "no trajectory"
-                )
-                rr.log(
-                    f"{room_entity}/label",
-                    rr.Points3D(
-                        [to_scene(centroid)],
-                        radii=0.05,
-                        colors=[color],
-                        labels=[
-                            f"Room: {room_label} · {room_type} · {observation_note}"
-                        ],
-                    ),
-                    static=True,
-                )
-
-    # 2. Log Camera Trajectory in VGGT World Coordinates, colored by room
-    if len(trajectory) > 0:
-        trajectory_zup = np.asarray(
-            [to_scene(pt) for pt in trajectory], dtype=np.float32
-        )
-        trajectory_strips = _room_colored_trajectory(
-            pose_records, trajectory_zup, r4d_rooms
-        )
-        if trajectory_strips is not None:
-            strips, colors = trajectory_strips
-            rr.log(
-                "spatial_memory/camera_trajectory",
-                rr.LineStrips3D(strips, radii=0.015, colors=colors),
-                static=True,
-            )
-        else:
-            rr.log(
-                "spatial_memory/camera_trajectory",
-                rr.LineStrips3D(
-                    [trajectory_zup], radii=0.015, colors=[[251, 191, 36]]
-                ),  # Amber
-                static=True,
-            )
-
-    # 2C. Add a minimal visual reference frame and clean ground grid.
-    if len(points) > 0:
-        point_extent = np.ptp(points, axis=0)
-        reference_extent = max(float(np.max(point_extent)) * 0.6, 1.0)
-    else:
-        reference_extent = 2.5
-    axis_length = max(reference_extent * 0.18, 0.25)
-    rr.log(
-        "spatial_memory/reference_axes",
-        rr.Arrows3D(
-            vectors=[
-                [axis_length, 0.0, 0.0],
-                [0.0, axis_length, 0.0],
-                [0.0, 0.0, axis_length],
-            ],
-            origins=[[0.0, 0.0, 0.0]] * 3,
-            colors=[[239, 68, 68], [239, 68, 68], [59, 130, 246]],
-            labels=["X right", "Y down", "Z forward"],
-        ),
-        static=True,
-    )
-
-    # In the Y-down VGGT convention "up" is -Y, so the floor plane sits at the
-    # largest trajectory height value.
-    if len(trajectory) > 0:
-        floor_y = float(np.max(trajectory[:, 1]))
-    else:
-        floor_y = 0.0
-    grid_values = np.linspace(-reference_extent, reference_extent, 9)
-    grid_strips = []
-    for value in grid_values:
-        grid_strips.append(
-            np.asarray(
-                [
-                    [-reference_extent, floor_y, float(value)],
-                    [reference_extent, floor_y, float(value)],
-                ],
-                dtype=np.float32,
-            )
-        )
-        grid_strips.append(
-            np.asarray(
-                [
-                    [float(value), floor_y, -reference_extent],
-                    [float(value), floor_y, reference_extent],
-                ],
-                dtype=np.float32,
-            )
-        )
-    rr.log(
-        "spatial_memory/reference_grid",
-        rr.LineStrips3D(
-            grid_strips,
-            radii=0.003,
-            colors=[[120, 130, 145]],
-        ),
-        static=True,
-    )
-
-    if not r4d_events and paths.events_json.exists():
-        r4d_events = _read_json(paths.events_json).get("events", [])
-    event_lines = ["# R4DSG memory events", ""]
-    if r4d_events:
-        for event in r4d_events:
-            ev_type = str(event.get("event_type", "transition")).upper()
-            if ev_type == "ROOM_CHANGE":
-                event_lines.append(
-                    f"- **[{ev_type}] {event['object']}**: "
-                    f"{event.get('source_room', 'unknown')} → {event.get('destination_room', 'unknown')} "
-                    f"({event['start_time']:.2f}s–{event['end_time']:.2f}s)"
-                )
-                continue
-            source_room = event.get("source_room")
-            destination_room = event.get("destination_room")
-            room_badges = ""
-            if source_room or destination_room:
-                room_badges = (
-                    f", rooms {source_room or '?'} → {destination_room or '?'}"
-                )
-            event_lines.append(
-                f"- **[{ev_type}] {event['object']}**: "
-                f"{event.get('source_relation', 'unknown')} → {event.get('destination_relation', 'unknown')} "
-                f"({event['start_time']:.2f}s–{event['end_time']:.2f}s)"
-                f"{room_badges}, "
-                f"evidence frames {event.get('evidence_frames', [])}"
-            )
-    else:
-        event_lines.append("No stable relation transitions were detected.")
-    rr.log(
-        "memory/events",
-        rr.TextDocument("\n".join(event_lines), media_type=rr.MediaType.MARKDOWN),
-        static=True,
-    )
-
-    # 3. Log All Video Frames, Camera Motion, and 4D Object Memory
-    keyframe_id_set = set(pose_by_frame.keys())
-    for frame in all_frame_records:
-        frame_id = int(frame["frame_id"])
-
-        rr.set_time("frame", sequence=frame_id)
-        if "timestamp" in frame:
-            rr.set_time("time", duration=float(frame["timestamp"]))
-
-        # 3A. Log Pristine Egocentric Video Frame (compressed to JPEG for compact RRD size)
-        if config.visualization.log_video and (
-            frame_id % config.visualization.video_stride == 0
-        ):
-            image_path = paths.frames / str(frame["filename"])
-            if image_path.exists():
-                try:
-                    import cv2
-
-                    img = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-                    if img is not None:
-                        ok, buf = cv2.imencode(
-                            ".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80]
-                        )
-                        if ok:
-                            rr.log(
-                                "video/egocentric_stream",
-                                rr.EncodedImage(
-                                    contents=buf.tobytes(), media_type="image/jpeg"
-                                ),
-                            )
-                        else:
-                            rr.log(
-                                "video/egocentric_stream",
-                                rr.EncodedImage(path=image_path),
-                            )
-                    else:
-                        rr.log(
-                            "video/egocentric_stream", rr.EncodedImage(path=image_path)
-                        )
-                except ImportError:
-                    try:
-                        import io
-
-                        from PIL import Image
-
-                        with Image.open(image_path) as pil_img:
-                            buf = io.BytesIO()
-                            pil_img.convert("RGB").save(buf, format="JPEG", quality=80)
-                            rr.log(
-                                "video/egocentric_stream",
-                                rr.EncodedImage(
-                                    contents=buf.getvalue(), media_type="image/jpeg"
-                                ),
-                            )
-                    except (OSError, ValueError):
-                        rr.log(
-                            "video/egocentric_stream", rr.EncodedImage(path=image_path)
-                        )
-
-        # 3B. Show only lifted detections represented by active R4DSG
-        # instances. The overlay must use persistent instance IDs, not the
-        # detector's short-term track IDs.
-        frame_boxes = boxes_by_frame.get(frame_id, [])
-        mem_entries = r4d_timeline.get(str(frame_id), [])
-        box_associations = _associate_boxes_with_memory(frame_boxes, mem_entries)
-        display_boxes: list[dict[str, Any]] = []
-        for box_index, box in enumerate(frame_boxes):
-            if bool(box.get("is_hand", False)):
-                display_box = dict(box)
-                display_box["_memory_entry"] = None
-                display_boxes.append(display_box)
-            elif box_index in box_associations:
-                display_box = dict(box)
-                display_box["_memory_entry"] = box_associations[box_index]
-                display_boxes.append(display_box)
-
-        if display_boxes:
-            sorted_boxes = sorted(
-                display_boxes,
-                key=lambda b: float(b.get("confidence", 0.0)),
-                reverse=True,
-            )
-            clean_boxes: list[dict[str, Any]] = []
-            for b in sorted_boxes:
-                b_xyxy = b["bbox_2d"]
-                is_overlap = False
-                for c in clean_boxes:
-                    c_xyxy = c["bbox_2d"]
-                    iw = max(0.0, min(b_xyxy[2], c_xyxy[2]) - max(b_xyxy[0], c_xyxy[0]))
-                    ih = max(0.0, min(b_xyxy[3], c_xyxy[3]) - max(b_xyxy[1], c_xyxy[1]))
-                    inter = iw * ih
-                    union = (
-                        (b_xyxy[2] - b_xyxy[0]) * (b_xyxy[3] - b_xyxy[1])
-                        + (c_xyxy[2] - c_xyxy[0]) * (c_xyxy[3] - c_xyxy[1])
-                        - inter
-                    )
-                    if union > 0 and (inter / union) > 0.35:
-                        is_overlap = True
-                        break
-                if not is_overlap:
-                    clean_boxes.append(b)
-                if len(clean_boxes) >= 3:
-                    break
-
-            clean_labels: list[str] = []
-            clean_colors: list[list[int]] = []
-            for box in clean_boxes:
-                memory_entry = box.get("_memory_entry")
-                if memory_entry is not None:
-                    lbl = str(memory_entry["label"])
-                    if memory_entry.get("is_in_hand", False):
-                        lbl += " [In Hand]"
-                        clean_colors.append([245, 158, 11])  # Amber #F59E0B
-                    else:
-                        clean_colors.append(
-                            _track_color(int(memory_entry["instance_id"]))
-                        )
-                else:
-                    # Hands are not R4DSG object instances; hide their
-                    # transient detector track IDs in the supervisor view.
-                    lbl = "Hand"
-                    clean_colors.append([244, 63, 94])  # Rose
-                clean_labels.append(lbl)
-
-            rr.log(
-                "video/detections",
-                rr.Boxes2D(
-                    array=np.asarray(
-                        [box["bbox_2d"] for box in clean_boxes], dtype=np.float32
-                    ),
-                    array_format=rr.Box2DFormat.XYXY,
-                    colors=clean_colors,
-                    labels=clean_labels,
-                ),
-            )
-
-        # 3C. Smooth Camera Pose in Z-Up
-        if frame_id in interp_positions:
-            cam_position = interp_positions[frame_id]
-            rr.log(
-                "spatial_memory/camera",
-                rr.Points3D(
-                    [cam_position],
-                    colors=[[255, 64, 64]],
-                    radii=0.035,
-                ),
-            )
-
-        # 4D. Log R4DSG Persistent Object Memory and Relational Edges
-        if frame_id in keyframe_id_set:
-            mem_entries = r4d_timeline.get(str(frame_id), [])
-            if mem_entries:
-                centers = [to_scene(e["center"]) for e in mem_entries]
-                sizes = [to_scene_size(e["size"]) for e in mem_entries]
-                labels = []
-                colors = []
-                in_hand_links = []
-                cam_pos = interp_positions.get(frame_id)
-
-                for e in mem_entries:
-                    is_in_hand = e.get("is_in_hand", False)
-                    relation = e.get("relation", "")
-                    anchor_lbl = e.get("anchor_label", "Anchor")
-                    base_lbl = e["label"]
-                    obj_center = to_scene(e["center"])
-                    room_lbl = e.get("room_label")
-                    # Room badge for placed / persisted objects: the label
-                    # becomes "Keys #1 · [Inside Desk #1 · Living Room]".
-                    if room_lbl and not is_in_hand:
-                        base_lbl = f"{base_lbl} · {room_lbl}"
-
-                    if is_in_hand:
-                        labels.append(f"{base_lbl} · [Carried by User]")
-                        colors.append([245, 158, 11])  # Amber #F59E0B
-                        if cam_pos is not None:
-                            in_hand_links.append(
-                                np.asarray([cam_pos, obj_center], dtype=np.float32)
-                            )
-                    elif relation == "inside":
-                        labels.append(f"{base_lbl} · [Inside {anchor_lbl}]")
-                        colors.append([16, 185, 129])  # Emerald #10B981
-                    elif e["is_active_view"]:
-                        labels.append(f"{base_lbl} · ACTIVE")
-                        colors.append(_track_color(int(e["instance_id"])))
-                    else:
-                        labels.append(f"{base_lbl} · ✦ PERSISTENT MEMORY")
-                        colors.append([20, 184, 166])  # Teal #14B8A6
-
-                quats = [raw_rotation(e.get("rotation")) for e in mem_entries]
-
-                rr.log(
-                    "spatial_memory/persistent_objects",
-                    rr.Boxes3D(
-                        centers=centers,
-                        sizes=sizes,
-                        labels=labels,
-                        colors=colors,
-                        quaternions=quats,
-                    ),
-                )
-
-                if in_hand_links:
-                    rr.log(
-                        "spatial_memory/in_hand_link",
-                        rr.LineStrips3D(
-                            in_hand_links,
-                            radii=0.015,
-                            colors=[[245, 158, 11]],  # Amber
-                            labels=["Carried Link"],
-                        ),
-                    )
-                else:
-                    rr.log("spatial_memory/in_hand_link", rr.Clear.flat())
-
-            else:
-                rr.log("spatial_memory/persistent_objects", rr.Clear.flat())
-                rr.log("spatial_memory/in_hand_link", rr.Clear.flat())
-
-    _write_json(
-        paths.viewer_manifest,
-        {
-            "schema_version": 1,
-            "dataset_id": dataset_id,
-            "recording": str(paths.rerun_recording),
-            "frame_count": len(all_frame_records),
-            "keyframe_count": len(pose_records),
-            "point_count": len(points),
-            "total_anchors": len(r4d_anchors),
-            "total_rooms": len(r4d_rooms),
-            "total_tracks": len(motion_trails_by_track),
-            "total_events": len(r4d_events),
-            "open_command": f"rerun outputs/{dataset_id}/viewer/demo.rrd",
-        },
-    )
-    elapsed = time.perf_counter() - t0
-    file_size_mb = (
-        round(paths.rerun_recording.stat().st_size / (1024**2), 2)
-        if paths.rerun_recording.exists()
-        else 0.0
-    )
-
-    stage_result = {
-        "stage": "rerun",
-        "dataset_id": dataset_id,
-        "frame_count": len(all_frame_records),
-        "keyframe_count": len(pose_records),
-        "point_count": len(points),
-        "total_anchors": len(r4d_anchors),
-        "total_rooms": len(r4d_rooms),
-        "total_tracks": len(motion_trails_by_track),
-        "total_events": len(r4d_events),
-        "recording": str(paths.rerun_recording),
-        "recording_size_mb": file_size_mb,
-        "elapsed_seconds": round(elapsed, 2),
-    }
-    _record_benchmark_stats(paths, dataset_id, "rerun", stage_result)
-    return stage_result
+    return build_recording(dataset_id, raw_config)

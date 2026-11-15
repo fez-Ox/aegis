@@ -8,3 +8,6 @@ from pathlib import Path
 os.environ.setdefault(
     "AEGIS_TEST_FIXTURE_ROOT", str(Path(__file__).parent / "fixtures")
 )
+
+# The demo simulator routes are opt-in; the prototype tests exercise them.
+os.environ.setdefault("AEGIS_ENABLE_SIMULATOR", "1")

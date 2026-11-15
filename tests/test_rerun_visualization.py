@@ -1,6 +1,6 @@
 """Tests for persistent-ID Rerun overlay association."""
 
-from aegis.remote.workers import _associate_boxes_with_memory
+from aegis.visualization.rerun_scene import _associate_boxes_with_memory
 
 
 def test_overlay_uses_nearest_r4dsg_instance_for_aliases() -> None:

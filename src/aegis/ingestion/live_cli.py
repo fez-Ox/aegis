@@ -117,6 +117,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Override live.buffer_capacity from the config",
     )
     parser.add_argument(
+        "--inject-stall-at",
+        type=float,
+        default=None,
+        help="Debug (AC-29): make storage unavailable this many seconds into the run",
+    )
+    parser.add_argument(
+        "--inject-stall-for",
+        type=float,
+        default=0.0,
+        help="Debug (AC-29): length of the injected storage stall in seconds",
+    )
+    parser.add_argument(
         "--checkpoint-every",
         type=int,
         default=None,
@@ -233,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
             checkpoint_every=checkpoint_every,
             keyframe=keyframe,
             pause_file=args.pause_file,
+            inject_stall_at_seconds=args.inject_stall_at,
+            inject_stall_for_seconds=args.inject_stall_for,
         ),
         session_id=args.session_id,
         resume=args.resume,
