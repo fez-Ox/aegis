@@ -21,6 +21,9 @@ class DatasetPaths:
     calibration_normalized: Path
     frames: Path
     metadata: Path
+    source_metadata: Path
+    live_timestamps: Path
+    live_session: Path
     depth: Path
     depth_manifest: Path
     poses: Path
@@ -69,6 +72,9 @@ def dataset_paths(config: RuntimeConfig, dataset_id: str) -> DatasetPaths:
         calibration_normalized=root / "calib_normalized.txt",
         frames=root / "frames",
         metadata=root / "metadata.json",
+        source_metadata=root / "source_metadata.json",
+        live_timestamps=root / "live_timestamps.json",
+        live_session=root / "live_session.json",
         depth=outputs / "depth",
         depth_manifest=outputs / "depth_manifest.json",
         poses=geometry / "poses.json",

@@ -271,6 +271,29 @@ def ingest_video(
     return info
 
 
+def upload_dataset_to_modal_volume(
+    dataset_dir: Path | str,
+    dataset_id: str,
+    volume_name: str = "aegis-poc-data",
+    force: bool = True,
+) -> bool:
+    """Upload a promoted dataset directory (frames + metadata) to a Volume.
+
+    ``modal volume put`` uploads the *contents* of a local directory when the
+    remote path does not end in ``/``. Using the bare ``dataset_id`` therefore
+    maps ``data/<dataset_id>/*`` onto ``/<dataset_id>/*`` on the Volume, which
+    is exactly the layout :func:`aegis.core.paths.dataset_paths` expects.
+    """
+
+    from aegis.core.paths import validate_dataset_id
+
+    source = Path(dataset_dir)
+    if not source.is_dir():
+        raise FileNotFoundError(f"dataset directory does not exist: {source}")
+    safe_id = validate_dataset_id(dataset_id)
+    return upload_to_modal_volume(source, safe_id, volume_name=volume_name, force=force)
+
+
 def upload_to_modal_volume(
     local_path: Path,
     remote_path: str,

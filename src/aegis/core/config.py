@@ -216,6 +216,63 @@ class RoomMemoryConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class KeyframeConfig:
+    """Live keyframe selection criteria (FR2.1).
+
+    A frame is kept only when it is bright enough, sharp enough, and visually
+    different from the last accepted frame. ``max_interval_seconds`` forces a
+    keyframe after a quiet period so a static scene is still represented.
+    """
+
+    enabled: bool = True
+    min_sharpness: float = 15.0
+    min_brightness: float = 20.0
+    max_brightness: float = 245.0
+    min_visual_change: float = 0.008
+    max_interval_seconds: float = 2.0
+
+    def __post_init__(self) -> None:
+        if self.min_sharpness < 0:
+            raise ValueError("live.keyframe.min_sharpness must be non-negative")
+        if not 0 <= self.min_brightness < self.max_brightness <= 255:
+            raise ValueError(
+                "live.keyframe brightness bounds must satisfy "
+                "0 <= min_brightness < max_brightness <= 255"
+            )
+        if not 0 <= self.min_visual_change <= 1:
+            raise ValueError("live.keyframe.min_visual_change must be in [0, 1]")
+        if self.max_interval_seconds <= 0:
+            raise ValueError("live.keyframe.max_interval_seconds must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class LiveCaptureConfig:
+    """Live FR1/FR2 capture defaults loaded from the runtime YAML."""
+
+    sample_fps: float = 2.0
+    max_duration_seconds: float = 600.0
+    reconnect_interval_seconds: float = 3.0
+    reconnect_timeout_seconds: float = 30.0
+    buffer_capacity: int = 30
+    checkpoint_every: int = 1
+    keyframe: KeyframeConfig = field(default_factory=KeyframeConfig)
+
+    def __post_init__(self) -> None:
+        if self.sample_fps <= 0:
+            raise ValueError("live.sample_fps must be positive")
+        if self.max_duration_seconds < 0:
+            raise ValueError("live.max_duration_seconds must be non-negative")
+        if self.reconnect_interval_seconds < 0:
+            raise ValueError("live.reconnect_interval_seconds must be non-negative")
+        if self.reconnect_timeout_seconds < 0:
+            raise ValueError("live.reconnect_timeout_seconds must be non-negative")
+        if self.buffer_capacity <= 0:
+            raise ValueError("live.buffer_capacity must be positive")
+        if self.checkpoint_every <= 0:
+            raise ValueError("live.checkpoint_every must be positive")
+
+
+@dataclass(frozen=True, slots=True)
 class MemoryConfig:
     """Spatio-temporal memory construction settings."""
 
@@ -236,6 +293,7 @@ class RuntimeConfig:
     perception: PerceptionConfig = field(default_factory=PerceptionConfig)
     geometry: GeometryConfig = field(default_factory=GeometryConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
+    live: LiveCaptureConfig = field(default_factory=LiveCaptureConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
 
     @classmethod
@@ -252,6 +310,7 @@ class RuntimeConfig:
         perception_raw = _mapping(raw.get("perception"), "perception")
         geometry_raw = _mapping(raw.get("geometry"), "geometry")
         memory_raw = _mapping(raw.get("memory"), "memory")
+        live_raw = _mapping(raw.get("live"), "live")
         visualization_raw = _mapping(raw.get("visualization"), "visualization")
 
         storage_defaults = StorageConfig()
@@ -264,6 +323,7 @@ class RuntimeConfig:
         perception_defaults = PerceptionConfig()
         geometry_defaults = GeometryConfig()
         memory_defaults = MemoryConfig()
+        live_defaults = LiveCaptureConfig()
         visualization_defaults = VisualizationConfig()
 
         video = VideoConfig(
@@ -584,6 +644,56 @@ class RuntimeConfig:
         if rooms.zone_link_radius <= 0 or rooms.min_zone_keyframes < 1:
             raise ValueError("memory.rooms thresholds are outside their valid ranges")
 
+        keyframe_defaults = live_defaults.keyframe
+        keyframe_raw = _mapping(live_raw.get("keyframe"), "live.keyframe")
+        keyframe = KeyframeConfig(
+            enabled=bool(keyframe_raw.get("enabled", keyframe_defaults.enabled)),
+            min_sharpness=float(
+                keyframe_raw.get("min_sharpness", keyframe_defaults.min_sharpness)
+            ),
+            min_brightness=float(
+                keyframe_raw.get("min_brightness", keyframe_defaults.min_brightness)
+            ),
+            max_brightness=float(
+                keyframe_raw.get("max_brightness", keyframe_defaults.max_brightness)
+            ),
+            min_visual_change=float(
+                keyframe_raw.get(
+                    "min_visual_change", keyframe_defaults.min_visual_change
+                )
+            ),
+            max_interval_seconds=float(
+                keyframe_raw.get(
+                    "max_interval_seconds", keyframe_defaults.max_interval_seconds
+                )
+            ),
+        )
+        live = LiveCaptureConfig(
+            sample_fps=float(live_raw.get("sample_fps", live_defaults.sample_fps)),
+            max_duration_seconds=float(
+                live_raw.get("max_duration_seconds", live_defaults.max_duration_seconds)
+            ),
+            reconnect_interval_seconds=float(
+                live_raw.get(
+                    "reconnect_interval_seconds",
+                    live_defaults.reconnect_interval_seconds,
+                )
+            ),
+            reconnect_timeout_seconds=float(
+                live_raw.get(
+                    "reconnect_timeout_seconds",
+                    live_defaults.reconnect_timeout_seconds,
+                )
+            ),
+            buffer_capacity=int(
+                live_raw.get("buffer_capacity", live_defaults.buffer_capacity)
+            ),
+            checkpoint_every=int(
+                live_raw.get("checkpoint_every", live_defaults.checkpoint_every)
+            ),
+            keyframe=keyframe,
+        )
+
         return cls(
             storage=StorageConfig(
                 data_volume=str(
@@ -610,6 +720,7 @@ class RuntimeConfig:
             perception=perception,
             geometry=geometry,
             memory=MemoryConfig(rooms=rooms),
+            live=live,
             visualization=visualization,
         )
 

@@ -17,10 +17,16 @@ from urllib.parse import urlsplit, urlunsplit
 
 @dataclass(frozen=True, slots=True)
 class DecodedFrame:
-    """A decoded image frame and the laptop receive/decode timestamp."""
+    """A decoded image frame and the laptop receive/decode timestamp.
+
+    ``captured_at`` is optional. When a source can expose the phone-side
+    capture clock it becomes the authoritative timestamp; otherwise
+    ``received_at`` (laptop receive/decode) is authoritative.
+    """
 
     image: Any
     received_at: datetime
+    captured_at: datetime | None = None
 
 
 class FrameSource(Protocol):

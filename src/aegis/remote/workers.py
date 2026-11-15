@@ -23,6 +23,7 @@ from aegis.core.paths import (
     DatasetPaths,
     dataset_paths,
 )
+from aegis.ingestion.contracts import validate_normalized_metadata
 from aegis.ingestion.video import preprocess_video as preprocess_video_file
 
 
@@ -83,12 +84,9 @@ def _record_benchmark_stats(
     _write_json(paths.benchmark_stats, current)
 
 
-def run_preprocess(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalize a video and write frame metadata to the data Volume."""
+def _clear_downstream_artifacts(paths: DatasetPaths) -> None:
+    """Remove artifacts derived from a previous run, keeping frames/metadata."""
 
-    t0 = time.perf_counter()
-    config = _config(raw_config)
-    paths = dataset_paths(config, dataset_id)
     for stale_file in (
         paths.depth_manifest,
         paths.poses,
@@ -109,15 +107,57 @@ def run_preprocess(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, 
     if paths.depth.exists():
         shutil.rmtree(paths.depth)
 
-    metadata = preprocess_video_file(
-        paths.input_video,
-        paths.frames,
-        paths.metadata,
-        paths.calibration_normalized,
-        config.video,
-        config.camera,
-        dataset_id=dataset_id,
-    )
+
+def _live_dataset_metadata(paths: DatasetPaths) -> dict[str, Any] | None:
+    """Return validated live-promoted metadata, or ``None`` for a batch video."""
+
+    if not paths.metadata.exists():
+        return None
+    try:
+        candidate = _read_json(paths.metadata)
+    except (ValueError, TypeError, OSError):
+        # A corrupt metadata file is recreated by the normal preprocess path.
+        return None
+    if candidate.get("preprocess_source") != "live_session":
+        return None
+    metadata = validate_normalized_metadata(candidate)
+    missing = [
+        str(frame["filename"])
+        for frame in metadata["frames"]
+        if not (paths.frames / str(frame["filename"])).is_file()
+    ]
+    if missing:
+        preview = ", ".join(missing[:5])
+        raise FileNotFoundError(
+            f"live dataset frames are missing ({len(missing)}): {preview}"
+        )
+    return metadata
+
+
+def run_preprocess(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize a video, or accept a pre-materialized live dataset."""
+
+    t0 = time.perf_counter()
+    config = _config(raw_config)
+    paths = dataset_paths(config, dataset_id)
+    live_metadata = _live_dataset_metadata(paths)
+    _clear_downstream_artifacts(paths)
+
+    if live_metadata is None:
+        metadata = preprocess_video_file(
+            paths.input_video,
+            paths.frames,
+            paths.metadata,
+            paths.calibration_normalized,
+            config.video,
+            config.camera,
+            dataset_id=dataset_id,
+        )
+        preprocess_source = "source_video"
+    else:
+        metadata = live_metadata
+        preprocess_source = "live_session"
+
     elapsed = time.perf_counter() - t0
     frame_count = int(metadata["frame_count"])
     fps = round(frame_count / max(elapsed, 0.001), 1)
@@ -128,10 +168,14 @@ def run_preprocess(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, 
         "frame_count": frame_count,
         "elapsed_seconds": round(elapsed, 2),
         "throughput_fps": fps,
+        "preprocess_source": preprocess_source,
+        "timebase": metadata.get("timebase", "source_video"),
+        "live_session_id": metadata.get("live_session_id"),
+        "gap_count": int(metadata.get("gap_count", 0)),
         "metadata": str(paths.metadata),
         "frames": str(paths.frames),
         "calibration": str(paths.calibration_normalized)
-        if metadata["calibration_values"] is not None
+        if metadata.get("calibration_values") is not None
         else None,
     }
     _record_benchmark_stats(paths, dataset_id, "preprocess", stage_result)

@@ -123,6 +123,27 @@ memory:
     # Minimum keyframes observed in a zone before it becomes a room region.
     min_zone_keyframes: 3
 
+live:
+  # Local FR1/FR2 capture defaults for `aegis-ingest` and the `live` stage.
+  sample_fps: 2
+  # One hour is the NFR-R1 soak target; raise for longer sessions.
+  max_duration_seconds: 3600
+  reconnect_interval_seconds: 3
+  reconnect_timeout_seconds: 30
+  # Bounded outbound queue for short storage stalls (FR2.4 / AC-29).
+  buffer_capacity: 30
+  # Persist a crash-recovery checkpoint every N accepted frames.
+  checkpoint_every: 5
+  keyframe:
+    # Keep sharp, exposed, visually novel frames (FR2.1 / TC3).
+    enabled: true
+    min_sharpness: 15.0
+    min_brightness: 20.0
+    max_brightness: 245.0
+    min_visual_change: 0.008
+    # Force a keyframe during a static scene.
+    max_interval_seconds: 2.0
+
 visualization:
   log_video: true
   video_stride: 1
