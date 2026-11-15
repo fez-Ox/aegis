@@ -1,0 +1,5 @@
+# One held-out question per line. expected_found=false marks a negative probe
+# (unknown item or wrong room). Fields left null are not checked.
+{"query_id": "q001", "query": "Where are my shoes?", "expected_found": true, "expected_instance_label": "Shoes #1", "expected_anchor": "Storage Cabinet #1", "expected_room": "Room #1", "expected_relation": "inside", "negative": false}
+{"query_id": "q002", "query": "Where are the keys in the kitchen?", "expected_found": false, "negative": true, "notes": "No keys exist in this session."}
+{"query_id": "q003", "query": "Where are my glasses?", "expected_found": false, "negative": true, "notes": "Unknown item probe; must not borrow another dataset's memory."}

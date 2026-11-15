@@ -1,5 +1,15 @@
 # Aegis Pipeline Evaluation Plan
 
+> **Superseded design note.** The single source of truth for evaluation is now
+> [`docs/evaluation_suite.md`](evaluation_suite.md). It supersedes the protocol,
+> splits, metrics, and commands in Sections 1–6 below. In particular, the
+> held-out clip is now `demo05`, not `demo04`, and the runnable harness lives in
+> `src/aegis/evaluation/`.
+>
+> Section 7 is retained because it documents the object-persistence diagnosis
+> and the implemented re-identification fix. It is engineering history, not the
+> evaluation protocol.
+
 This plan turns the FYP-1 rubric's **Testing & Early Validation** requirement into
 reproducible measurements. It is intentionally small: one annotated subset,
 one fixed baseline, one ablation, and one live API check.
