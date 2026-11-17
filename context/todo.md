@@ -5,6 +5,7 @@
 **Implementation pass:** 2026-11-15 on `feat/memory-plan` (work packages WP01–WP15 of `context/plan.md`) — **326 passed**, Ruff clean, coverage 80%. Items below are ticked only where a test or artifact exists; physical measurements are still open.
 **Milestones (proposal):** M1 Ingestion · M2 Graph & History · M3 Voice Agent · M4 Portal & Testing.
 **Companion document:** `context/answer.md` (retention/memory budget, elevation fix, vocabulary).
+**Plan for the open Milestone 3, Milestone 4 and §5 items:** `context/plan.md` Part II (WP16–WP35; every item is mapped in its Appendix C).
 
 This is the only todo list. `fyp_report/todo.md` was merged into §5 and deleted.
 
