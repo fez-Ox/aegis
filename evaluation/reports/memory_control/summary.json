@@ -1,0 +1,1328 @@
+{
+  "datasets": [
+    {
+      "audit": {
+        "anchors": 1,
+        "bytes_per_frame": 1560.6239316239316,
+        "bytes_per_instance": 36518.6,
+        "canonical_json_bytes": 182593,
+        "dataset_id": "demo04",
+        "duration_s": 46.412556,
+        "entries": 268,
+        "entries_per_frame": 2.2905982905982905,
+        "entries_per_instance": 53.6,
+        "entries_per_state_run": 20.615384615384617,
+        "events": 6,
+        "frames": 117,
+        "gzip_bytes": 17751,
+        "instances": 5,
+        "path": "outputs/demo04/objects/r4d_scene_graph.json",
+        "projection": {
+          "basis": "linear projection from 46.4 s observed duration",
+          "caution": "Projection assumes a constant activity/state-change rate; it is not a measured long-term run.",
+          "entries_per_hour": 20787.478284970988,
+          "original_bytes_24h": 339908778.1332276,
+          "original_bytes_8h": 113302926.04440919,
+          "original_bytes_per_hour": 14162865.755551148,
+          "state_runs_per_hour": 1008.3478272560554
+        },
+        "rooms": 2,
+        "source_file_bytes": 296852,
+        "state_runs": 13
+      },
+      "dataset_id": "demo04",
+      "evaluations": [
+        {
+          "bytes": {
+            "compacted_canonical": 25405,
+            "compacted_gzip": 5543,
+            "compression_ratio": 7.187285967329266,
+            "gzip_compression_ratio": 3.2024174634674365,
+            "original_canonical": 182593,
+            "original_gzip": 17751,
+            "space_saved_pct": 86.08654220041294
+          },
+          "center_error": {
+            "max": 0.5581173404726364,
+            "mean": 0.14121762453674364,
+            "median": 0.11205850208514742,
+            "p95": 0.36344214272860753,
+            "within_0_01": 0.2873134328358209,
+            "within_0_05": 0.3805970149253731,
+            "within_0_10": 0.48507462686567165
+          },
+          "counts": {
+            "entries": 268,
+            "frames": 117,
+            "instances": 5,
+            "snapshots": 0,
+            "state_runs": 13
+          },
+          "latest_state": {
+            "exact_semantic_matches": 5,
+            "exact_semantic_rate": 1.0,
+            "instances": 5,
+            "mean_center_error": 0.0
+          },
+          "projection": {
+            "basis": "linear projection from 46.4 s observed duration",
+            "caution": "Projection, not a measured long-term session. Real state-change rates may differ.",
+            "compacted_bytes_24h": 47293064.40265863,
+            "compacted_bytes_8h": 15764354.800886208,
+            "compacted_bytes_per_hour": 1970544.350110776,
+            "original_bytes_24h": 339908778.1332276,
+            "original_bytes_8h": 113302926.04440919,
+            "original_bytes_per_hour": 14162865.755551148,
+            "state_runs_per_hour": 1008.3478272560554
+          },
+          "query_agreement": {
+            "agree": 5,
+            "agreement_rate": 1.0,
+            "queries": [
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Food Container #2",
+                  "relation": "inside",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Food Container #2",
+                  "relation": "inside",
+                  "room": "Room #1"
+                },
+                "query": "Where are my food container?",
+                "query_id": "auto_001",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "query": "Where are my garbage bag?",
+                "query_id": "auto_002",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Plastic Bottle #3",
+                  "relation": "on_surface",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Plastic Bottle #3",
+                  "relation": "on_surface",
+                  "room": "Room #1"
+                },
+                "query": "Where are my plastic bottle?",
+                "query_id": "auto_003",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "query": "Where are my rubbish?",
+                "query_id": "auto_004",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "before": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "query": "Where are my keys?",
+                "query_id": "auto_negative",
+                "same": true
+              }
+            ],
+            "source": "auto-generated label probes",
+            "total": 5
+          },
+          "relative_distance_error": {
+            "mean": 0.08866607196267905,
+            "p95": 0.2502660316376876
+          },
+          "runs_per_instance": 2.6,
+          "snapshot_interval": 0,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        },
+        {
+          "bytes": {
+            "compacted_canonical": 96783,
+            "compacted_gzip": 17549,
+            "compression_ratio": 1.8866226506721222,
+            "gzip_compression_ratio": 1.0115106273861758,
+            "original_canonical": 182593,
+            "original_gzip": 17751,
+            "space_saved_pct": 46.9952298280876
+          },
+          "center_error": {
+            "max": 2.7755575615628914e-17,
+            "mean": 3.8675271525975455e-19,
+            "median": 0.0,
+            "p95": 0.0,
+            "within_0_01": 1.0,
+            "within_0_05": 1.0,
+            "within_0_10": 1.0
+          },
+          "counts": {
+            "entries": 268,
+            "frames": 117,
+            "instances": 5,
+            "snapshots": 268,
+            "state_runs": 13
+          },
+          "latest_state": {
+            "exact_semantic_matches": 5,
+            "exact_semantic_rate": 1.0,
+            "instances": 5,
+            "mean_center_error": 0.0
+          },
+          "projection": {
+            "basis": "linear projection from 46.4 s observed duration",
+            "caution": "Projection, not a measured long-term session. Real state-change rates may differ.",
+            "compacted_bytes_24h": 180167866.64367288,
+            "compacted_bytes_8h": 60055955.54789096,
+            "compacted_bytes_per_hour": 7506994.44348637,
+            "original_bytes_24h": 339908778.1332276,
+            "original_bytes_8h": 113302926.04440919,
+            "original_bytes_per_hour": 14162865.755551148,
+            "state_runs_per_hour": 1008.3478272560554
+          },
+          "query_agreement": {
+            "agree": 5,
+            "agreement_rate": 1.0,
+            "queries": [
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Food Container #2",
+                  "relation": "inside",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Food Container #2",
+                  "relation": "inside",
+                  "room": "Room #1"
+                },
+                "query": "Where are my food container?",
+                "query_id": "auto_001",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "query": "Where are my garbage bag?",
+                "query_id": "auto_002",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Plastic Bottle #3",
+                  "relation": "on_surface",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Plastic Bottle #3",
+                  "relation": "on_surface",
+                  "room": "Room #1"
+                },
+                "query": "Where are my plastic bottle?",
+                "query_id": "auto_003",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "query": "Where are my rubbish?",
+                "query_id": "auto_004",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "before": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "query": "Where are my keys?",
+                "query_id": "auto_negative",
+                "same": true
+              }
+            ],
+            "source": "auto-generated label probes",
+            "total": 5
+          },
+          "relative_distance_error": {
+            "mean": 1.0356558065533176e-19,
+            "p95": 0.0
+          },
+          "runs_per_instance": 2.6,
+          "snapshot_interval": 1,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        },
+        {
+          "bytes": {
+            "compacted_canonical": 33536,
+            "compacted_gzip": 7081,
+            "compression_ratio": 5.444686307251908,
+            "gzip_compression_ratio": 2.506849315068493,
+            "original_canonical": 182593,
+            "original_gzip": 17751,
+            "space_saved_pct": 81.63346897197592
+          },
+          "center_error": {
+            "max": 0.43494565549155384,
+            "mean": 0.055456235257375475,
+            "median": 0.013567335067588449,
+            "p95": 0.2413529729903916,
+            "within_0_01": 0.48507462686567165,
+            "within_0_05": 0.667910447761194,
+            "within_0_10": 0.7873134328358209
+          },
+          "counts": {
+            "entries": 268,
+            "frames": 117,
+            "instances": 5,
+            "snapshots": 31,
+            "state_runs": 13
+          },
+          "latest_state": {
+            "exact_semantic_matches": 5,
+            "exact_semantic_rate": 1.0,
+            "instances": 5,
+            "mean_center_error": 0.0
+          },
+          "projection": {
+            "basis": "linear projection from 46.4 s observed duration",
+            "caution": "Projection, not a measured long-term session. Real state-change rates may differ.",
+            "compacted_bytes_24h": 62429451.202816755,
+            "compacted_bytes_8h": 20809817.067605585,
+            "compacted_bytes_per_hour": 2601227.133450698,
+            "original_bytes_24h": 339908778.1332276,
+            "original_bytes_8h": 113302926.04440919,
+            "original_bytes_per_hour": 14162865.755551148,
+            "state_runs_per_hour": 1008.3478272560554
+          },
+          "query_agreement": {
+            "agree": 5,
+            "agreement_rate": 1.0,
+            "queries": [
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Food Container #2",
+                  "relation": "inside",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Food Container #2",
+                  "relation": "inside",
+                  "room": "Room #1"
+                },
+                "query": "Where are my food container?",
+                "query_id": "auto_001",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "query": "Where are my garbage bag?",
+                "query_id": "auto_002",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Plastic Bottle #3",
+                  "relation": "on_surface",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Plastic Bottle #3",
+                  "relation": "on_surface",
+                  "room": "Room #1"
+                },
+                "query": "Where are my plastic bottle?",
+                "query_id": "auto_003",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "query": "Where are my rubbish?",
+                "query_id": "auto_004",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "before": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "query": "Where are my keys?",
+                "query_id": "auto_negative",
+                "same": true
+              }
+            ],
+            "source": "auto-generated label probes",
+            "total": 5
+          },
+          "relative_distance_error": {
+            "mean": 0.04312588066366251,
+            "p95": 0.23156030420531118
+          },
+          "runs_per_instance": 2.6,
+          "snapshot_interval": 10,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        },
+        {
+          "bytes": {
+            "compacted_canonical": 28572,
+            "compacted_gzip": 6135,
+            "compression_ratio": 6.390627187456251,
+            "gzip_compression_ratio": 2.893398533007335,
+            "original_canonical": 182593,
+            "original_gzip": 17751,
+            "space_saved_pct": 84.35208359575668
+          },
+          "center_error": {
+            "max": 0.5834638967256336,
+            "mean": 0.07916221059187464,
+            "median": 0.03227478025711091,
+            "p95": 0.245073404506973,
+            "within_0_01": 0.39552238805970147,
+            "within_0_05": 0.585820895522388,
+            "within_0_10": 0.6940298507462687
+          },
+          "counts": {
+            "entries": 268,
+            "frames": 117,
+            "instances": 5,
+            "snapshots": 12,
+            "state_runs": 13
+          },
+          "latest_state": {
+            "exact_semantic_matches": 5,
+            "exact_semantic_rate": 1.0,
+            "instances": 5,
+            "mean_center_error": 0.0
+          },
+          "projection": {
+            "basis": "linear projection from 46.4 s observed duration",
+            "caution": "Projection, not a measured long-term session. Real state-change rates may differ.",
+            "compacted_bytes_24h": 53188641.45297233,
+            "compacted_bytes_8h": 17729547.150990777,
+            "compacted_bytes_per_hour": 2216193.393873847,
+            "original_bytes_24h": 339908778.1332276,
+            "original_bytes_8h": 113302926.04440919,
+            "original_bytes_per_hour": 14162865.755551148,
+            "state_runs_per_hour": 1008.3478272560554
+          },
+          "query_agreement": {
+            "agree": 5,
+            "agreement_rate": 1.0,
+            "queries": [
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Food Container #2",
+                  "relation": "inside",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Food Container #2",
+                  "relation": "inside",
+                  "room": "Room #1"
+                },
+                "query": "Where are my food container?",
+                "query_id": "auto_001",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "query": "Where are my garbage bag?",
+                "query_id": "auto_002",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Plastic Bottle #3",
+                  "relation": "on_surface",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Plastic Bottle #3",
+                  "relation": "on_surface",
+                  "room": "Room #1"
+                },
+                "query": "Where are my plastic bottle?",
+                "query_id": "auto_003",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "before": {
+                  "anchor": "Storage Cabinet #1",
+                  "found": true,
+                  "instance_label": "Garbage Bag #1",
+                  "relation": "moving_towards",
+                  "room": "Room #1"
+                },
+                "query": "Where are my rubbish?",
+                "query_id": "auto_004",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "before": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "query": "Where are my keys?",
+                "query_id": "auto_negative",
+                "same": true
+              }
+            ],
+            "source": "auto-generated label probes",
+            "total": 5
+          },
+          "relative_distance_error": {
+            "mean": 0.05789827582656809,
+            "p95": 0.24310974319493742
+          },
+          "runs_per_instance": 2.6,
+          "snapshot_interval": 30,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        }
+      ],
+      "path": "outputs/demo04/objects/r4d_scene_graph.json"
+    },
+    {
+      "audit": {
+        "anchors": 2,
+        "bytes_per_frame": 5412.26,
+        "bytes_per_instance": 33826.625,
+        "canonical_json_bytes": 541226,
+        "dataset_id": null,
+        "duration_s": 99.032267,
+        "entries": 981,
+        "entries_per_frame": 9.81,
+        "entries_per_instance": 61.3125,
+        "entries_per_state_run": 16.913793103448278,
+        "events": 40,
+        "frames": 100,
+        "gzip_bytes": 40491,
+        "instances": 16,
+        "path": "outputs/demo03/objects/r4d_scene_graph.json",
+        "projection": {
+          "basis": "linear projection from 99.0 s observed duration",
+          "caution": "Projection assumes a constant activity/state-change rate; it is not a measured long-term run.",
+          "entries_per_hour": 35661.10427422609,
+          "original_bytes_24h": 472188790.75039244,
+          "original_bytes_8h": 157396263.58346415,
+          "original_bytes_per_hour": 19674532.94793302,
+          "state_runs_per_hour": 2108.4037185577104
+        },
+        "rooms": 0,
+        "source_file_bytes": 885736,
+        "state_runs": 58
+      },
+      "dataset_id": "demo03",
+      "evaluations": [
+        {
+          "bytes": {
+            "compacted_canonical": 94237,
+            "compacted_gzip": 21322,
+            "compression_ratio": 5.74324309984401,
+            "gzip_compression_ratio": 1.8990244817559327,
+            "original_canonical": 541226,
+            "original_gzip": 40491,
+            "space_saved_pct": 82.58823485937484
+          },
+          "center_error": {
+            "max": 0.29914350386018895,
+            "mean": 0.06227982961823371,
+            "median": 0.029606724914175066,
+            "p95": 0.21886062302029657,
+            "within_0_01": 0.3333333333333333,
+            "within_0_05": 0.5983690112130479,
+            "within_0_10": 0.745158002038736
+          },
+          "counts": {
+            "entries": 981,
+            "frames": 100,
+            "instances": 16,
+            "snapshots": 0,
+            "state_runs": 58
+          },
+          "latest_state": {
+            "exact_semantic_matches": 16,
+            "exact_semantic_rate": 1.0,
+            "instances": 16,
+            "mean_center_error": 0.0
+          },
+          "projection": {
+            "basis": "linear projection from 99.0 s observed duration",
+            "caution": "Projection, not a measured long-term session. Real state-change rates may differ.",
+            "compacted_bytes_24h": 82216403.26581639,
+            "compacted_bytes_8h": 27405467.755272128,
+            "compacted_bytes_per_hour": 3425683.469409016,
+            "original_bytes_24h": 472188790.75039244,
+            "original_bytes_8h": 157396263.58346415,
+            "original_bytes_per_hour": 19674532.94793302,
+            "state_runs_per_hour": 2108.4037185577104
+          },
+          "query_agreement": {
+            "agree": 3,
+            "agreement_rate": 1.0,
+            "queries": [
+              {
+                "after": {
+                  "anchor": "Sink #2",
+                  "found": true,
+                  "instance_label": "Bowl #10",
+                  "relation": "inside",
+                  "room": null
+                },
+                "before": {
+                  "anchor": "Sink #2",
+                  "found": true,
+                  "instance_label": "Bowl #10",
+                  "relation": "inside",
+                  "room": null
+                },
+                "query": "Where are my bowl?",
+                "query_id": "auto_001",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Refrigerator #1",
+                  "found": true,
+                  "instance_label": "Cooking Pot #16",
+                  "relation": "on_surface",
+                  "room": null
+                },
+                "before": {
+                  "anchor": "Refrigerator #1",
+                  "found": true,
+                  "instance_label": "Cooking Pot #16",
+                  "relation": "on_surface",
+                  "room": null
+                },
+                "query": "Where are my cooking pot?",
+                "query_id": "auto_002",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "before": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "query": "Where are my keys?",
+                "query_id": "auto_negative",
+                "same": true
+              }
+            ],
+            "source": "auto-generated label probes",
+            "total": 3
+          },
+          "relative_distance_error": {
+            "mean": 0.04037965254139911,
+            "p95": 0.16823455125485942
+          },
+          "runs_per_instance": 3.625,
+          "snapshot_interval": 0,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        },
+        {
+          "bytes": {
+            "compacted_canonical": 361885,
+            "compacted_gzip": 46154,
+            "compression_ratio": 1.4955745609793167,
+            "gzip_compression_ratio": 0.8773020756597478,
+            "original_canonical": 541226,
+            "original_gzip": 40491,
+            "space_saved_pct": 33.13606515577596
+          },
+          "center_error": {
+            "max": 5.551115123125783e-17,
+            "mean": 1.6799055068073055e-19,
+            "median": 0.0,
+            "p95": 0.0,
+            "within_0_01": 1.0,
+            "within_0_05": 1.0,
+            "within_0_10": 1.0
+          },
+          "counts": {
+            "entries": 981,
+            "frames": 100,
+            "instances": 16,
+            "snapshots": 981,
+            "state_runs": 58
+          },
+          "latest_state": {
+            "exact_semantic_matches": 16,
+            "exact_semantic_rate": 1.0,
+            "instances": 16,
+            "mean_center_error": 0.0
+          },
+          "projection": {
+            "basis": "linear projection from 99.0 s observed duration",
+            "caution": "Projection, not a measured long-term session. Real state-change rates may differ.",
+            "compacted_bytes_24h": 315724005.3890718,
+            "compacted_bytes_8h": 105241335.1296906,
+            "compacted_bytes_per_hour": 13155166.891211325,
+            "original_bytes_24h": 472188790.75039244,
+            "original_bytes_8h": 157396263.58346415,
+            "original_bytes_per_hour": 19674532.94793302,
+            "state_runs_per_hour": 2108.4037185577104
+          },
+          "query_agreement": {
+            "agree": 3,
+            "agreement_rate": 1.0,
+            "queries": [
+              {
+                "after": {
+                  "anchor": "Sink #2",
+                  "found": true,
+                  "instance_label": "Bowl #10",
+                  "relation": "inside",
+                  "room": null
+                },
+                "before": {
+                  "anchor": "Sink #2",
+                  "found": true,
+                  "instance_label": "Bowl #10",
+                  "relation": "inside",
+                  "room": null
+                },
+                "query": "Where are my bowl?",
+                "query_id": "auto_001",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Refrigerator #1",
+                  "found": true,
+                  "instance_label": "Cooking Pot #16",
+                  "relation": "on_surface",
+                  "room": null
+                },
+                "before": {
+                  "anchor": "Refrigerator #1",
+                  "found": true,
+                  "instance_label": "Cooking Pot #16",
+                  "relation": "on_surface",
+                  "room": null
+                },
+                "query": "Where are my cooking pot?",
+                "query_id": "auto_002",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "before": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "query": "Where are my keys?",
+                "query_id": "auto_negative",
+                "same": true
+              }
+            ],
+            "source": "auto-generated label probes",
+            "total": 3
+          },
+          "relative_distance_error": {
+            "mean": 0.0,
+            "p95": 0.0
+          },
+          "runs_per_instance": 3.625,
+          "snapshot_interval": 1,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        },
+        {
+          "bytes": {
+            "compacted_canonical": 123959,
+            "compacted_gzip": 27598,
+            "compression_ratio": 4.36616945925669,
+            "gzip_compression_ratio": 1.4671715341691427,
+            "original_canonical": 541226,
+            "original_gzip": 40491,
+            "space_saved_pct": 77.09662876506303
+          },
+          "center_error": {
+            "max": 0.4168925016546072,
+            "mean": 0.0184391731631927,
+            "median": 0.0,
+            "p95": 0.13674907686436968,
+            "within_0_01": 0.799184505606524,
+            "within_0_05": 0.8756371049949032,
+            "within_0_10": 0.9296636085626911
+          },
+          "counts": {
+            "entries": 981,
+            "frames": 100,
+            "instances": 16,
+            "snapshots": 109,
+            "state_runs": 58
+          },
+          "latest_state": {
+            "exact_semantic_matches": 16,
+            "exact_semantic_rate": 1.0,
+            "instances": 16,
+            "mean_center_error": 0.0
+          },
+          "projection": {
+            "basis": "linear projection from 99.0 s observed duration",
+            "caution": "Projection, not a measured long-term session. Real state-change rates may differ.",
+            "compacted_bytes_24h": 108147151.67532212,
+            "compacted_bytes_8h": 36049050.55844071,
+            "compacted_bytes_per_hour": 4506131.319805088,
+            "original_bytes_24h": 472188790.75039244,
+            "original_bytes_8h": 157396263.58346415,
+            "original_bytes_per_hour": 19674532.94793302,
+            "state_runs_per_hour": 2108.4037185577104
+          },
+          "query_agreement": {
+            "agree": 3,
+            "agreement_rate": 1.0,
+            "queries": [
+              {
+                "after": {
+                  "anchor": "Sink #2",
+                  "found": true,
+                  "instance_label": "Bowl #10",
+                  "relation": "inside",
+                  "room": null
+                },
+                "before": {
+                  "anchor": "Sink #2",
+                  "found": true,
+                  "instance_label": "Bowl #10",
+                  "relation": "inside",
+                  "room": null
+                },
+                "query": "Where are my bowl?",
+                "query_id": "auto_001",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Refrigerator #1",
+                  "found": true,
+                  "instance_label": "Cooking Pot #16",
+                  "relation": "on_surface",
+                  "room": null
+                },
+                "before": {
+                  "anchor": "Refrigerator #1",
+                  "found": true,
+                  "instance_label": "Cooking Pot #16",
+                  "relation": "on_surface",
+                  "room": null
+                },
+                "query": "Where are my cooking pot?",
+                "query_id": "auto_002",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "before": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "query": "Where are my keys?",
+                "query_id": "auto_negative",
+                "same": true
+              }
+            ],
+            "source": "auto-generated label probes",
+            "total": 3
+          },
+          "relative_distance_error": {
+            "mean": 0.012725186140229827,
+            "p95": 0.09066762968320352
+          },
+          "runs_per_instance": 3.625,
+          "snapshot_interval": 10,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        },
+        {
+          "bytes": {
+            "compacted_canonical": 108351,
+            "compacted_gzip": 25017,
+            "compression_ratio": 4.995117719264243,
+            "gzip_compression_ratio": 1.6185393932126155,
+            "original_canonical": 541226,
+            "original_gzip": 40491,
+            "space_saved_pct": 79.98045178908626
+          },
+          "center_error": {
+            "max": 0.43930347652671126,
+            "mean": 0.04140545741103723,
+            "median": 0.005509701969339953,
+            "p95": 0.17802382418484855,
+            "within_0_01": 0.5474006116207951,
+            "within_0_05": 0.7155963302752294,
+            "within_0_10": 0.8430173292558614
+          },
+          "counts": {
+            "entries": 981,
+            "frames": 100,
+            "instances": 16,
+            "snapshots": 52,
+            "state_runs": 58
+          },
+          "latest_state": {
+            "exact_semantic_matches": 16,
+            "exact_semantic_rate": 1.0,
+            "instances": 16,
+            "mean_center_error": 0.0
+          },
+          "projection": {
+            "basis": "linear projection from 99.0 s observed duration",
+            "caution": "Projection, not a measured long-term session. Real state-change rates may differ.",
+            "compacted_bytes_24h": 94530062.61080542,
+            "compacted_bytes_8h": 31510020.870268475,
+            "compacted_bytes_per_hour": 3938752.6087835594,
+            "original_bytes_24h": 472188790.75039244,
+            "original_bytes_8h": 157396263.58346415,
+            "original_bytes_per_hour": 19674532.94793302,
+            "state_runs_per_hour": 2108.4037185577104
+          },
+          "query_agreement": {
+            "agree": 3,
+            "agreement_rate": 1.0,
+            "queries": [
+              {
+                "after": {
+                  "anchor": "Sink #2",
+                  "found": true,
+                  "instance_label": "Bowl #10",
+                  "relation": "inside",
+                  "room": null
+                },
+                "before": {
+                  "anchor": "Sink #2",
+                  "found": true,
+                  "instance_label": "Bowl #10",
+                  "relation": "inside",
+                  "room": null
+                },
+                "query": "Where are my bowl?",
+                "query_id": "auto_001",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": "Refrigerator #1",
+                  "found": true,
+                  "instance_label": "Cooking Pot #16",
+                  "relation": "on_surface",
+                  "room": null
+                },
+                "before": {
+                  "anchor": "Refrigerator #1",
+                  "found": true,
+                  "instance_label": "Cooking Pot #16",
+                  "relation": "on_surface",
+                  "room": null
+                },
+                "query": "Where are my cooking pot?",
+                "query_id": "auto_002",
+                "same": true
+              },
+              {
+                "after": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "before": {
+                  "anchor": null,
+                  "found": false,
+                  "instance_label": null,
+                  "relation": null,
+                  "room": null
+                },
+                "query": "Where are my keys?",
+                "query_id": "auto_negative",
+                "same": true
+              }
+            ],
+            "source": "auto-generated label probes",
+            "total": 3
+          },
+          "relative_distance_error": {
+            "mean": 0.028876921916058933,
+            "p95": 0.14198194892625193
+          },
+          "runs_per_instance": 3.625,
+          "snapshot_interval": 30,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        }
+      ],
+      "path": "outputs/demo03/objects/r4d_scene_graph.json"
+    }
+  ],
+  "recommendation": {
+    "balanced": {
+      "center_error_p95": 0.245073404506973,
+      "compacted_bytes": 28572,
+      "compression_ratio": 6.390627187456251,
+      "dataset_id": "demo04",
+      "latest_exact_semantic_rate": 1.0,
+      "snapshot_interval": 30,
+      "space_saved_pct": 84.35208359575668,
+      "state_retention": {
+        "active_view": 1.0,
+        "full": 1.0,
+        "label": 1.0,
+        "last_seen": 1.0,
+        "semantic": 1.0
+      }
+    },
+    "center_error_p95": 0.245073404506973,
+    "compression_ratio": 6.390627187456251,
+    "dataset_id": "demo04",
+    "exact": {
+      "center_error_p95": 0.0,
+      "compacted_bytes": 96783,
+      "compression_ratio": 1.8866226506721222,
+      "dataset_id": "demo04",
+      "latest_exact_semantic_rate": 1.0,
+      "snapshot_interval": 1,
+      "space_saved_pct": 46.9952298280876,
+      "state_retention": {
+        "active_view": 1.0,
+        "full": 1.0,
+        "label": 1.0,
+        "last_seen": 1.0,
+        "semantic": 1.0
+      }
+    },
+    "latest_exact_semantic_rate": 1.0,
+    "per_dataset": {
+      "demo03": {
+        "balanced": {
+          "center_error_p95": 0.21886062302029657,
+          "compacted_bytes": 94237,
+          "compression_ratio": 5.74324309984401,
+          "dataset_id": "demo03",
+          "latest_exact_semantic_rate": 1.0,
+          "snapshot_interval": 0,
+          "space_saved_pct": 82.58823485937484,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        },
+        "exact": {
+          "center_error_p95": 0.0,
+          "compacted_bytes": 361885,
+          "compression_ratio": 1.4955745609793167,
+          "dataset_id": "demo03",
+          "latest_exact_semantic_rate": 1.0,
+          "snapshot_interval": 1,
+          "space_saved_pct": 33.13606515577596,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        }
+      },
+      "demo04": {
+        "balanced": {
+          "center_error_p95": 0.245073404506973,
+          "compacted_bytes": 28572,
+          "compression_ratio": 6.390627187456251,
+          "dataset_id": "demo04",
+          "latest_exact_semantic_rate": 1.0,
+          "snapshot_interval": 30,
+          "space_saved_pct": 84.35208359575668,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        },
+        "exact": {
+          "center_error_p95": 0.0,
+          "compacted_bytes": 96783,
+          "compression_ratio": 1.8866226506721222,
+          "dataset_id": "demo04",
+          "latest_exact_semantic_rate": 1.0,
+          "snapshot_interval": 1,
+          "space_saved_pct": 46.9952298280876,
+          "state_retention": {
+            "active_view": 1.0,
+            "full": 1.0,
+            "label": 1.0,
+            "last_seen": 1.0,
+            "semantic": 1.0
+          }
+        }
+      }
+    },
+    "reason": "At least one interval preserved full semantic state and the exact latest state at a centre p95 <= 0.05 scene units. A sparser interval can trade some geometric fidelity for more compression.",
+    "snapshot_interval": 30,
+    "space_saved_pct": 84.35208359575668,
+    "state_retention": {
+      "active_view": 1.0,
+      "full": 1.0,
+      "label": 1.0,
+      "last_seen": 1.0,
+      "semantic": 1.0
+    },
+    "status": "feasible"
+  },
+  "schema": "aegis.memory_control.v1",
+  "snapshot_intervals": [
+    0,
+    1,
+    10,
+    30
+  ]
+}

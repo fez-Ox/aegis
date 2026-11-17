@@ -1,0 +1,45 @@
+{
+  "_comment": "Ground-truth rooms for one held-out video. Footprints are polygons on the floor plane (x, z in pipeline world coordinates). A frame_rooms entry gives the true room at a keyframe. Room changes are scored with a tolerance from the config.",
+  "rooms": [
+    {
+      "room_id": 1,
+      "label": "Room #1",
+      "room_type": "Room",
+      "centroid": [0.0, 0.0, 0.0],
+      "footprint": [
+        [-0.6, 0.0, -0.5],
+        [0.9, 0.0, -0.5],
+        [0.9, 0.0, 1.4],
+        [-0.6, 0.0, 1.4]
+      ],
+      "evidence_labels": []
+    },
+    {
+      "room_id": 2,
+      "label": "Room #2",
+      "room_type": "Room",
+      "centroid": [2.0, 0.0, 1.0],
+      "footprint": [
+        [1.0, 0.0, 0.2],
+        [3.2, 0.0, 0.2],
+        [3.2, 0.0, 2.0],
+        [1.0, 0.0, 2.0]
+      ],
+      "evidence_labels": []
+    }
+  ],
+  "frame_rooms": [
+    {"frame_id": 0, "room_id": 1},
+    {"frame_id": 30, "room_id": 1},
+    {"frame_id": 60, "room_id": 2},
+    {"frame_id": 90, "room_id": 2}
+  ],
+  "room_changes": [
+    {
+      "event_id": "rc001",
+      "timestamp": 31.0,
+      "from_room_id": 1,
+      "to_room_id": 2
+    }
+  ]
+}

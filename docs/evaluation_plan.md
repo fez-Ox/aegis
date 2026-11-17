@@ -1,5 +1,16 @@
 # Aegis Pipeline Evaluation Plan
 
+> **Superseded design note.** The single source of truth for evaluation is now
+> [`docs/evaluation_suite.md`](evaluation_suite.md). It supersedes the protocol,
+> splits, metrics, and commands in Sections 1–7 below. In particular, the
+> held-out clip is now `demo05`, not `demo04`, and the runnable harness lives in
+> `src/aegis/evaluation/`.
+>
+> Section 7 is retained because it documents the object-persistence diagnosis
+> and the implemented re-identification fix. It is engineering history, not the
+> evaluation protocol. Section 8 indexes the measurement scripts (whose pure
+> scoring helpers now live in `aegis.evaluation.measurements`).
+
 This plan turns the FYP-1 rubric's **Testing & Early Validation** requirement into
 reproducible measurements. It is intentionally small: one annotated subset,
 one fixed baseline, one ablation, and one live API check.
@@ -274,7 +285,8 @@ a working tree with uncommitted changes is flagged as not valid evidence.
 | Mask comparison (M1) | `uv run modal run scripts/compare_masks.py --dataset-id <id>` |
 | Hand contact events (M6) | `scripts/evaluate_hand_contact.py --dataset-id <id> --ground-truth <json>` |
 
-Room metric definitions are implemented in `aegis.evaluation.room_metrics`
+Room metric definitions are implemented in `aegis.evaluation.measurements.room_metrics`
+(re-exported as `aegis.evaluation.room_metrics`)
 (half-open ground-truth intervals; predicted rooms mapped one-to-one to the
 ground-truth room they overlap most; `room_change` matched one-to-one within
 the tolerance).

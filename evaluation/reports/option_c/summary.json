@@ -1,0 +1,321 @@
+{
+  "adapter_contract": {
+    "aegis_outputs": {
+      "detections": "outputs/<clip_uid>/objects/detected_objects_3d.json",
+      "poses": "outputs/<clip_uid>/geometry/poses.json",
+      "scene_graph": "outputs/<clip_uid>/objects/r4d_scene_graph.json"
+    },
+    "clip_record": {
+      "notes": "Aegis processes the clip window; timestamps in queries are relative to the clip start unless the adapter records otherwise.",
+      "required": [
+        "clip_uid",
+        "video_uid",
+        "video_start_sec",
+        "video_end_sec"
+      ]
+    },
+    "inputs": {
+      "clips": "<ego4d_root>/annotations/nlq_train.json | nlq_val.json",
+      "official_splits": "official train/val/test split files; never re-split",
+      "video": "<ego4d_root>/videos/<video_uid>.mp4",
+      "vq2d": "<ego4d_root>/annotations/vq_train.json | vq_val.json"
+    },
+    "must_not_do": [
+      "Mix clips from one video across splits.",
+      "Tune prompts, classes, or thresholds on the benchmark test split.",
+      "Report Aegis-specific metrics as official Ego4D leaderboard numbers.",
+      "Treat Ego4D results as clinical or assistive-care validation."
+    ],
+    "purpose": "Convert official Ego4D clips and annotations into Aegis pipeline inputs and evaluation records without changing benchmark semantics.",
+    "query_record": {
+      "maps_to": "aegis.evaluation.schema.QuerySpec for NLQ-style checks",
+      "notes": "Keep the original query text. Do not paraphrase benchmark queries after the protocol is frozen.",
+      "required": [
+        "query_id",
+        "clip_uid",
+        "query",
+        "start_time",
+        "end_time"
+      ]
+    },
+    "scoring": {
+      "nlq": "score_nlq(...) with temporal IoU thresholds 0.3 and 0.5",
+      "official_parity_required": "Before publishing, re-score with the official Ego4D evaluation code on the official val/test splits.",
+      "vq2d": "score_vq2d(...) with timestamp tolerance and box IoU 0.5"
+    },
+    "version": 1,
+    "vq2d_record": {
+      "maps_to": "aegis.evaluation.option_c.BoxObservation (xyxy pixels)",
+      "required": [
+        "query_id",
+        "clip_uid",
+        "response_track"
+      ],
+      "response_track_item": [
+        "timestamp",
+        "x",
+        "y",
+        "w",
+        "h"
+      ]
+    }
+  },
+  "constraints": {
+    "adapter_effort_weeks": "\u22483\u20136 depending on task coverage",
+    "approval_lead_time": "\u224848 h after signing the agreement, but do not promise a date",
+    "benchmark_subset_size": "order of 1 TB",
+    "credential_lifetime_days": 14,
+    "domain": "general egocentric video, not assistive care",
+    "existing_aegis_data": "demo01\u2013demo05 are Hub egocentric iPhone clips, not Ego4D",
+    "license_portal": "Ego4D (Lab22) gated access"
+  },
+  "facts_path": "evaluation/configs/option_c_facts.yaml",
+  "notes": "These facts reflect the repository state at the time this file was written. Update them only with evidence (portal approval email, local dataset paths, a committed adapter, a validated score on an official sample).  A benchmark number may not be quoted until the decision is \"go\" and the official evaluation code has been run on the official split.\n",
+  "readiness": {
+    "blockers_missing": [
+      "license_approved",
+      "video_subset_downloaded",
+      "annotations_downloaded",
+      "adapter_implemented"
+    ],
+    "categories": {
+      "access": {
+        "earned": 0,
+        "items": 2,
+        "maximum": 25,
+        "satisfied": 0,
+        "score": 0.0
+      },
+      "data": {
+        "earned": 0,
+        "items": 2,
+        "maximum": 20,
+        "satisfied": 0,
+        "score": 0.0
+      },
+      "engineering": {
+        "earned": 0,
+        "items": 3,
+        "maximum": 30,
+        "satisfied": 0,
+        "score": 0.0
+      },
+      "governance": {
+        "earned": 0,
+        "items": 1,
+        "maximum": 5,
+        "satisfied": 0,
+        "score": 0.0
+      },
+      "science": {
+        "earned": 0,
+        "items": 3,
+        "maximum": 20,
+        "satisfied": 0,
+        "score": 0.0
+      }
+    },
+    "decision": "no_go",
+    "estimated_effort_weeks": 10.8,
+    "facts": [
+      {
+        "blocker": true,
+        "category": "access",
+        "earned": 0,
+        "key": "license_approved",
+        "label": "Ego4D license approved and credentials issued",
+        "satisfied": false,
+        "weight": 20
+      },
+      {
+        "blocker": false,
+        "category": "access",
+        "earned": 0,
+        "key": "credentials_valid",
+        "label": "Benchmark credentials valid for the evaluation window",
+        "satisfied": false,
+        "weight": 5
+      },
+      {
+        "blocker": true,
+        "category": "data",
+        "earned": 0,
+        "key": "video_subset_downloaded",
+        "label": "Held-out benchmark videos downloaded locally",
+        "satisfied": false,
+        "weight": 10
+      },
+      {
+        "blocker": true,
+        "category": "data",
+        "earned": 0,
+        "key": "annotations_downloaded",
+        "label": "Official annotations and splits downloaded",
+        "satisfied": false,
+        "weight": 10
+      },
+      {
+        "blocker": true,
+        "category": "engineering",
+        "earned": 0,
+        "key": "adapter_implemented",
+        "label": "Aegis -> Ego4D annotation adapter implemented",
+        "satisfied": false,
+        "weight": 15
+      },
+      {
+        "blocker": false,
+        "category": "engineering",
+        "earned": 0,
+        "key": "query_mapping_defined",
+        "label": "Aegis query and memory outputs mapped to benchmark answers",
+        "satisfied": false,
+        "weight": 5
+      },
+      {
+        "blocker": false,
+        "category": "science",
+        "earned": 0,
+        "key": "metric_scoring_validated",
+        "label": "Scoring validated against official task definitions",
+        "satisfied": false,
+        "weight": 10
+      },
+      {
+        "blocker": false,
+        "category": "engineering",
+        "earned": 0,
+        "key": "compute_budget_confirmed",
+        "label": "GPU and storage budget confirmed for the subset",
+        "satisfied": false,
+        "weight": 10
+      },
+      {
+        "blocker": false,
+        "category": "governance",
+        "earned": 0,
+        "key": "ethics_review_complete",
+        "label": "Ethics/privacy review covers benchmark and demo data",
+        "satisfied": false,
+        "weight": 5
+      },
+      {
+        "blocker": false,
+        "category": "science",
+        "earned": 0,
+        "key": "evaluation_protocol_frozen",
+        "label": "Benchmark protocol and success criteria frozen before scoring",
+        "satisfied": false,
+        "weight": 5
+      },
+      {
+        "blocker": false,
+        "category": "science",
+        "earned": 0,
+        "key": "domain_risk_mitigated",
+        "label": "Domain mismatch risk stated and bounded",
+        "satisfied": false,
+        "weight": 5
+      }
+    ],
+    "missing": [
+      {
+        "blocker": true,
+        "category": "access",
+        "effort_weeks": 0.3,
+        "hint": "Apply through the Ego4D portal (Lab22); approval is typically ~48 h after signing.",
+        "key": "license_approved",
+        "label": "Ego4D license approved and credentials issued"
+      },
+      {
+        "blocker": false,
+        "category": "access",
+        "effort_weeks": 0.2,
+        "hint": "Credentials last ~14 days; confirm the window covers download, annotation, and scoring.",
+        "key": "credentials_valid",
+        "label": "Benchmark credentials valid for the evaluation window"
+      },
+      {
+        "blocker": true,
+        "category": "data",
+        "effort_weeks": 1.5,
+        "hint": "Plan storage and transfer time; the benchmark subset is order ~1 TB.",
+        "key": "video_subset_downloaded",
+        "label": "Held-out benchmark videos downloaded locally"
+      },
+      {
+        "blocker": true,
+        "category": "data",
+        "effort_weeks": 0.3,
+        "hint": "Use official splits; do not re-split videos that share scenes.",
+        "key": "annotations_downloaded",
+        "label": "Official annotations and splits downloaded"
+      },
+      {
+        "blocker": true,
+        "category": "engineering",
+        "effort_weeks": 4.0,
+        "hint": "Map queries, temporal windows, tracks, and video/clip identifiers; budget 3\u20136 weeks.",
+        "key": "adapter_implemented",
+        "label": "Aegis -> Ego4D annotation adapter implemented"
+      },
+      {
+        "blocker": false,
+        "category": "engineering",
+        "effort_weeks": 1.0,
+        "hint": "Decide whether NLQ answers use anchors, rooms, or raw windows.",
+        "key": "query_mapping_defined",
+        "label": "Aegis query and memory outputs mapped to benchmark answers"
+      },
+      {
+        "blocker": false,
+        "category": "science",
+        "effort_weeks": 1.0,
+        "hint": "Compare on a small official sample before running the full subset.",
+        "key": "metric_scoring_validated",
+        "label": "Scoring validated against official task definitions"
+      },
+      {
+        "blocker": false,
+        "category": "engineering",
+        "effort_weeks": 0.5,
+        "hint": "Estimate Modal cost from measured per-video runtime, not optimism.",
+        "key": "compute_budget_confirmed",
+        "label": "GPU and storage budget confirmed for the subset"
+      },
+      {
+        "blocker": false,
+        "category": "governance",
+        "effort_weeks": 1.0,
+        "hint": "Keep the public benchmark and the care demo data separate.",
+        "key": "ethics_review_complete",
+        "label": "Ethics/privacy review covers benchmark and demo data"
+      },
+      {
+        "blocker": false,
+        "category": "science",
+        "effort_weeks": 0.5,
+        "hint": "Same freeze discipline as the held-out Aegis video.",
+        "key": "evaluation_protocol_frozen",
+        "label": "Benchmark protocol and success criteria frozen before scoring"
+      },
+      {
+        "blocker": false,
+        "category": "science",
+        "effort_weeks": 0.5,
+        "hint": "Ego4D is not an assistive-care dataset; do not over-claim transfer.",
+        "key": "domain_risk_mitigated",
+        "label": "Domain mismatch risk stated and bounded"
+      }
+    ],
+    "points_earned": 0,
+    "points_maximum": 100,
+    "rationale": "Too many prerequisites are missing to justify a benchmark claim. Report Option C as future work instead.",
+    "readiness_score": 0.0,
+    "thresholds": {
+      "conditional_go": 50.0,
+      "go": 80.0
+    }
+  },
+  "schema": "aegis.option_c.readiness.v1"
+}
