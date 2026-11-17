@@ -14,6 +14,28 @@ Entry points
 
 from __future__ import annotations
 
-__all__ = ["__version__"]
+# Pure scoring helpers used by scripts/ and tests/. They live in this package
+# (as of the evaluation-suite merge) so that ``aegis.evaluation`` has a single
+# import location; the old top-level ``aegis/evaluation.py`` was removed.
+from aegis.evaluation.measurements import (
+    keyframe_hits,
+    match_events,
+    ordered_matches,
+    placement_accuracy,
+    precision_recall,
+    room_metrics,
+    summarise_live_session,
+)
+
+__all__ = [
+    "__version__",
+    "keyframe_hits",
+    "match_events",
+    "ordered_matches",
+    "placement_accuracy",
+    "precision_recall",
+    "room_metrics",
+    "summarise_live_session",
+]
 
 __version__ = "0.1.0"

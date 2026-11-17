@@ -31,18 +31,15 @@ def answer_query(
     """
 
     from aegis.memory.reasoning import QueryReasoningEngine
-    from aegis.remote.api import _matches_query, find_latest_objects_state
+    from aegis.remote.api import _matching_states, find_latest_objects_state
 
     latest_states = find_latest_objects_state(graph)
     events = graph.get("events", [])
     canonical_item = QueryReasoningEngine.extract_target_item(query)
     room_filter = QueryReasoningEngine.extract_room_filter(query)
 
-    matches = [
-        state
-        for state in latest_states.values()
-        if _matches_query(state, canonical_item, query)
-    ]
+    # Reuse the gateway's vocabulary-based matcher (it replaced _matches_query).
+    _target, matches = _matching_states(latest_states, canonical_item)
     if not matches:
         available = sorted(
             {
@@ -680,14 +677,14 @@ def evaluate_ablations(
 
 
 def _synonym_groups() -> dict[str, set[str]]:
-    from aegis.memory.reasoning import QueryReasoningEngine
+    from aegis.core.vocabulary import default_vocabulary
 
+    # The synonym tables moved into config/vocabulary.yaml; build the same
+    # groups from that single ontology instead of QueryReasoningEngine.
     groups: dict[str, set[str]] = {}
-    for canonical, synonyms in QueryReasoningEngine.ITEM_SYNONYMS.items():
-        group = {normalise_label(canonical)} | {
-            normalise_label(synonym) for synonym in synonyms
-        }
-        groups[canonical] = group
+    for entry in default_vocabulary().entries():
+        words = {entry.id, *entry.prompts, *entry.synonyms}
+        groups[entry.id] = {normalise_label(word) for word in words}
     return groups
 
 

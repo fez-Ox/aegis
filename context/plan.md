@@ -2,7 +2,8 @@
 
 **Written:** 2026-11-14 against `develop` @ `8183015` (129 tests pass, Ruff clean).
 **Covers:** every open item in `context/todo.md` Milestone 1 (§1.4), Milestone 2 (§2.3–§2.8) and §6 (A1–A11, M1–M8, C1–C13).
-**Does not cover:** Milestone 3 and 4 features, except where a §6 item touches them (A9, C9, C13, FR1.3 control).
+**Does not cover (Part I):** Milestone 3 and 4 features, except where a §6 item touches them (A9, C9, C13, FR1.3 control).
+**Part II** (appended 2026-11-16, after Appendix B) is the implementation plan for Milestone 3, Milestone 4 and §5: work packages WP16–WP35.
 **Companion documents:** `context/todo.md` (what), `context/answer.md` (why), this file (how).
 
 This plan makes the design decisions. An implementing agent should not need to redesign anything. Where a number must be measured before it can be trusted, the plan says so and gives the default to ship with.
@@ -1946,3 +1947,2188 @@ State these in the report rather than hiding them.
 6. **Segments do not share geometry.** An object visible only across a segment boundary is matched symbolically. A relation that needs both segments' geometry cannot be computed.
 7. **Evidence crops may contain incidental background** inside the object's bounding box. Decision #9 must be confirmed with the supervisor before the report claims a privacy property for them.
 8. **Gravity needs visible floor.** Sessions that never see the floor fall back to the camera prior with confidence 0.2; in those sessions `under`, `above` and `on_floor` are reported as `near`.
+
+
+---
+---
+
+# Part II — Implementation Plan for Milestone 3 (Voice Agent) and Milestone 4 (Portal & Testing)
+
+**Written:** 2026-11-16 against `feat/memory-plan` @ `c69cc9c` (326 tests pass, Ruff clean, coverage 80%). Milestones 1 and 2 (WP01–WP15) are treated as done.
+**Covers:** every open item in `context/todo.md` §3.2–§3.7, §4.2–§4.6, §5.1 and §5.2, and decisions #1–#5, #8, #9, #11, #12.
+**Sources read:** the whole of `src/aegis`, `apps/mobile`, `tests`, `run_server.py`, `run_pipeline.py`, `context/specification.md` (restatement of `fyp_report/main.pdf`), `fyp_report/chapters/*`.
+
+Part II continues the WP numbering (WP16–WP35). §0.1 rules 3–10 of Part I still apply. Part II adds its own rules, facts and decisions below.
+
+---
+
+## II.0 How to use Part II
+
+### II.0.1 Additional rules
+
+1. Branch from the branch that contains WP01–WP15 (`feat/memory-plan` today, `develop` once it is merged). One branch per WP: `feat/wp<NN>-<slug>`. Commit after every feature or fix.
+2. Never add an AI or assistant attribution to a commit, PR or contributor list (`CLAUDE.md`). No `Co-Authored-By` trailer.
+3. Flutter is **not installed** on the development laptop. If `flutter` is on `PATH`, run `flutter analyze --no-fatal-infos && flutter test` in `apps/mobile`. If it is not, push the branch and read the `flutter-ci` job. Do not tick a Flutter todo item until that job is green.
+4. Every new wall-clock value goes through `aegis.core.timeutil` (`to_utc_iso`, `parse_iso`). Never call `datetime.now()` in query, auth or privacy code. Take `now` as a parameter; the API gets it from `remote/settings.py::current_time()` (WP16).
+5. Every answer sentence comes from a template in `memory/reasoning.py`. No f-string answer text in `api.py` or `answering.py`. This is what keeps the two-sentence rule testable.
+6. A non-abstaining answer without an evidence item is a bug. The answer engine downgrades it to an abstention (WP20) rather than send it.
+7. New runtime dependencies allowed by Part II, and only these: `sqlcipher3`, `cryptography` (WP27). Optional dependency group `speech`: `faster-whisper` (WP23). Optional group `llm`: `anthropic` (WP24). Flutter: `speech_to_text`, `shared_preferences`, `crypto`.
+8. Security code fails closed. An unreadable token, a missing grant, a store that cannot be opened or a scope that is not listed means "deny", never "allow".
+9. Do not weaken an existing test to make a security change pass. Tests that predate auth keep working because `tests/conftest.py` sets `AEGIS_AUTH_DISABLED=1` (WP26); new security tests remove that variable.
+
+### II.0.2 Facts about the system after Milestones 1–2 that Part II relies on
+
+| Fact | Where | Consequence |
+|---|---|---|
+| Two read paths exist. `home_id` reads the SQLite home store through `StoreRepository`; `dataset_id` reads one session's `r4d_scene_graph.json` through `JsonGraphRepository`. | `remote/api.py::resolve_repository` | Wall-clock history, summaries and evidence rows exist only in the home store. All temporal features are home-store features. |
+| `HomeStore.latest_states()` returns `last_seen_timestamp: None` and `is_active_view: False`. `query_memory` sorts matches by `last_seen_timestamp`. | `memory/store.py:468-500`, `api.py:590` | For a home store the "most recent" instance is arbitrary today. Fixed in WP16. Store answers are always worded "was last seen". |
+| `instance.last_confidence` is the run confidence: mean detector score of the run, already multiplied by 0.6 when the relation is uncertain. | `memory/runs.py:166-182` | Do not penalise an uncertain relation a second time. |
+| `anchor.match_quality` is one of `unique, aligned, resident, ordinal, new`. | `store.py:66` | `ordinal` is a guess (Appendix B.1) and lowers answer confidence. |
+| `event.evidence_id` is never written. Evidence rows hang off `state_run.evidence_id`. Carried runs have no crop. | `memory/ingest.py`, `memory/evidence.py:59` | Evidence for an event is the crop of the run that begins when the event ends. |
+| Summary periods are **local calendar dates** (`YYYY-MM-DD`, zone `memory.retention.timezone`). `HomeStore.summaries(start, end)` compares only the first ten characters of its arguments. | `store.py:436-466`, `compaction.py` | Pass local date strings, not UTC timestamps. `get_timeline` passes UTC today; fixed in WP29. |
+| Compaction never deletes `session`, `room`, `anchor`, `instance` rows or the run behind each last-known state. | `compaction.py` docstring | Recording coverage ("was the camera on?") can be answered for any past period from `session`. |
+| Object summary sidecar: `{instance_id, canonical, label, last:{relation, relation_certain, anchor_id, room_id, at}, rooms, anchors, event_types, moves, source_runs, source_events}`. `moves` is filled only for `importance: high` objects. Activity sidecar: `{room_id, start_at, end_at, event_types, instance_ids, anchor_ids}`; rolled-up activity sidecar: `{visits, seconds_by_room}`. | `memory/summaries.py` | Summarised answers have day granularity for normal objects and exact move times only for important ones. |
+| The API does not load a `RuntimeConfig`. It is configured only by environment variables. | `remote/api.py` | WP16 adds `remote/settings.py` so thresholds live in YAML. |
+| CORS is a wildcard with credentials. There is no auth. `GET /simulate/*` mutates memory. | `api.py:46-53, 1000-1037` | WP26. |
+| The store is plaintext SQLite; `open_store` is the single place a connection is made. | `store.py:570-585` | WP27 replaces the driver there. |
+| Raw imagery exists in four places: `captures/<session>/frame_*.jpg`; the promoted dataset directory (`PromotionResult.dataset_dir`) with `frames/`; `outputs/<dataset_id>/` (the `.rrd` contains video); the Modal volume `/data/<dataset_id>/`. | `ingestion/live_storage.py:144`, `live_handoff.py`, `run_pipeline.py:476-545` | The 24-hour purge (WP28) must cover all four. |
+| The Flutter client always sends `dataset_id`, never `home_id`. It branches on dataset names for its quick tiles and titles. The caregiver card states "All tracked items are safely stored…" and "Fall Hazard" without server evidence. "Tap to Ask by Voice" re-submits the text field. | `apps/mobile/lib/views/patient/patient_view.dart:29-103, 415-422`, `caregiver_view.dart:171-190` | WP30–WP32 remove all three. |
+| Theme colours used for text fail WCAG AA on the white card (measured 2026-11-16): `primaryTeal #D97706` 3.19, `tealAccent #EAB308` 1.92, `royalAmethyst #CA8A04` 2.94, `alertAmber #F59E0B` 2.15, `tertiaryLabel #A8A29E` 2.52, `#C084FC` 2.64, `systemGreen` 2.22, `systemRed` 3.55, `systemBlue` 4.02, white on `primaryTeal` 3.19. `textMuted #78716C` is 4.80 on white but 4.48 on the canvas `#FAF7F0`. | `apps/mobile/lib/theme/app_theme.dart` | WP30 replaces text colours; values are given there. |
+| `sqlcipher3` 0.6.5 installs as a self-contained wheel on Python 3.12 / Linux (SQLCipher 4.20.0). Verified: WAL mode, `sqlite.Row`, `PRAGMA user_version`, `BEGIN IMMEDIATE`, wrong key raises `DatabaseError: file is not a database`, a plaintext file opens without a key, and `ATTACH … KEY` + `sqlcipher_export` converts a plaintext database. | scratch test, 2026-11-16 | WP27 can depend on it. |
+
+### II.0.3 Decisions Part II makes
+
+| # (todo §7) | Decision | Status |
+|---|---|---|
+| 1 | Benchmark = the team's own scripted multi-room phone recordings, `Aegis-TestSet-v1` (WP33). An Ego4D subset stays a secondary, optional set. | Decided here; record in the report before any number is reported |
+| 2 | Speech: on-device platform recognition in the app (`speech_to_text`). A server endpoint (`faster-whisper`, CPU) exists for the reproducible AC-13 measurement and for clients without on-device recognition. | Decided here |
+| 3 | Rule-based parsing and retrieval stay primary. An LLM may only turn a sentence into a `ParsedQuery`; it never words an answer and never sees memory. Off by default (WP24). | Decided here; WP24 is optional |
+| 4 | Local accounts in the home store. Passwords: `hashlib.scrypt`. Sessions: opaque random tokens, SHA-256 stored, 60-minute lifetime. Grants are checked on **every** request, so a revocation takes effect on the next request. | Decided here |
+| 5 | Database: SQLCipher (AES-256). Evidence crops and `home_map.json`: AES-256-GCM. Key outside the store directory. Transport: TLS on the gateway with a self-signed certificate the app pins by fingerprint. | Decided here |
+| 8 | `query.abstain_below` ships at **0.25** and is replaced by the value read from the precision/abstention curve (`scripts/abstention_curve.py`, WP33). | Default decided; value must be measured |
+| 9 | Evidence crops are kept past 24 hours as derived evidence. | **Still needs supervisor confirmation.** `memory.evidence.enabled: false` reverses it; WP20's text fallback keeps answers grounded without images. |
+| 11 | Iteration 3 = WP16–WP24 and WP33. Iteration 4 = WP25–WP32, WP34, WP35. Owners in §II.0.4. Dates are the team's to set. | Scope decided; dates open |
+| 12 | Room calibration UI lives in the caregiver view behind the `rooms` scope. | Decided here |
+| — | One home per server. `AEGIS_HOME_ID` names it; a request for another home is refused when auth is on. | Decided here (constraint C5) |
+| — | Temporal questions are answered only from the home store. On a `dataset_id` they return `status: "unsupported"`. | Decided here |
+| — | The server clock is the reference for "now". `AEGIS_NOW` overrides it for tests and recorded demos; every answer carries `as_of`, and `/health` reports `clock_override`. | Decided here |
+
+### II.0.4 Work packages, order and todo coverage
+
+| WP | Title | Depends on | Owner | Todo items closed |
+|---|---|---|---|---|
+| 16 | Query foundations: settings, clock, store schema v2, repository reads | — | M-C | groundwork; fixes store ordering bug |
+| 17 | Time words: saying and parsing relative time | 16 | M-C | 3.3 (parser), 3.4 (real relative time) |
+| 18 | Query parser and intent routing | 17 | M-C | 3.3 (routing) |
+| 19 | Confidence, freshness and abstention | 16, 17 | M-C | 3.4, 3.5; AC-12, AC-28 |
+| 20 | Evidence references and real crops | 19 | M-C | 3.6; AC-11 |
+| 21 | Temporal answers over detailed and summarised tiers | 18, 20 | M-C | 3.3; AC-10, AC-23 at query level |
+| 22 | Clarification, query log, `/ask` endpoint | 21 | M-C | 3.7 (clarification, log) |
+| 23 | Speech input | 22 (server), 31 (app) | M-C | 3.2; AC-13 tooling |
+| 24 | Optional LLM query planner | 22 | M-C | 3.7 (optional agent); may be deferred with a reason |
+| 25 | Accounts, sessions, grants, consent, audit (store level) | 16 | M-D | 4.2 (mechanism, login, grants, consent) |
+| 26 | API enforcement, scopes, CORS, access endpoints | 22, 25 | M-D | 4.2 (all), 4.3 (scope, audit); AC-16, AC-17, AC-18, AC-26 |
+| 27 | Encryption at rest and TLS | 25 | M-D | 4.3 (TLS, AES-256); AC-20 |
+| 28 | Raw-frame purge, history deletion, privacy statement | 26, 27 | M-D | 4.3 (purge, deletion, statement); AC-30, AC-20 |
+| 29 | Portal API: object states, daily summary, sessions, timeline filters | 22, 26 | M-D | 4.4 (server side) |
+| 30 | App foundation: session, settings, text size, contrast, API client | 26, 29 | M-D | 4.4 (base), 4.5 (text sizes, contrast) |
+| 31 | App: patient view (ask, voice, evidence, clarification) | 30 | M-D | 3.2 (microphone), 4.4 (evidence display) |
+| 32 | App: caregiver portal and primary-user controls | 30 | M-D | 4.4 (all remaining) |
+| 33 | Benchmark `Aegis-TestSet-v1` and runner | 22 | Team | 5.1 (tooling), decision #8 curve |
+| 34 | Measurements and recorded evidence | all | Team | 3.x and 4.x measurements, 4.6, 5.1 (results) |
+| 35 | Report and documentation | all | Team | 5.2 |
+
+WP16–WP22 are strictly sequential. WP25–WP28 can run in parallel with WP17–WP22 after WP16. WP33 can start after WP22.
+
+### II.0.5 Target layout after Part II
+
+```
+src/aegis/core/config.py            WP16  + QueryConfig, AuthConfig, PrivacyConfig, SpeechConfig
+src/aegis/core/timewords.py         WP17  describe_when, parse_time_window
+src/aegis/core/keys.py              WP27  store key loading / generation
+src/aegis/core/crypto.py            WP27  AES-256-GCM file protection
+src/aegis/memory/store.py           WP16  schema v2, migration, new reads; WP27 SQLCipher
+src/aegis/memory/query_parser.py    WP18  ParsedQuery, parse_query
+src/aegis/memory/confidence.py      WP19
+src/aegis/memory/answering.py       WP19–WP22  the answer engine (no FastAPI imports)
+src/aegis/memory/reasoning.py       WP19–WP21  every answer template
+src/aegis/memory/auth.py            WP25
+src/aegis/memory/privacy.py         WP28  purge, deletion, verification
+src/aegis/memory/portal.py          WP29  object states, daily summary
+src/aegis/memory/cli.py             WP25, WP27, WP28  new sub-commands
+src/aegis/remote/settings.py        WP16
+src/aegis/remote/security.py        WP26
+src/aegis/remote/maintenance.py     WP28
+src/aegis/remote/api.py             all   routes only
+src/aegis/speech/transcriber.py     WP23
+src/aegis/llm/planner.py            WP24  (optional)
+src/aegis/evaluation.py             WP23, WP33  word_error_rate, benchmark scoring
+scripts/abstention_curve.py, run_benchmark.py, evaluate_speech.py,
+        measure_query_latency.py, verify_encryption.py, verify_purge.py     WP23, WP27, WP28, WP33, WP34
+benchmark/aegis_testset_v1/         WP33
+docs/privacy_limitations.md, docs/usability_protocol.md, docs/security.md   WP27, WP28, WP34
+apps/mobile/lib/...                 WP30–WP32 (file list in WP30)
+```
+
+### II.0.6 Environment variables (complete list after Part II)
+
+| Variable | Meaning | Set by |
+|---|---|---|
+| `AEGIS_HOME_ID` | The one home this server serves. Default `home01`. | `run_server.py --home-id` |
+| `AEGIS_STORE_ROOT` | Store root (exists today). | tests, operator |
+| `AEGIS_CONFIG` | YAML runtime config for the API. Unset = defaults. | `run_server.py --config` |
+| `AEGIS_NOW` | ISO-8601 time with zone that replaces the server clock. | tests, recorded demos |
+| `AEGIS_AUTH_DISABLED` | `1` turns auth off (developer mode). | `tests/conftest.py`, `run_server.py --no-auth` |
+| `AEGIS_CORS_ORIGINS` | Comma-separated exact origins. | operator |
+| `AEGIS_STORE_KEY` / `AEGIS_STORE_KEY_FILE` | 64 hex characters / path to a file holding them. | operator |
+| `AEGIS_REQUIRE_ENCRYPTION` | `1` = refuse to open a store without a key. | `run_server.py` (unless `--allow-plaintext`) |
+| `AEGIS_DISABLE_MAINTENANCE` | `1` = do not start the hourly maintenance thread. | `tests/conftest.py` |
+| `AEGIS_CAPTURE_DIR`, `AEGIS_CAPTURE_PAUSE_FILE`, `AEGIS_ENABLE_SIMULATOR`, `AEGIS_TEST_FIXTURE_ROOT`, `AEGIS_DATASET_ID`, `AEGIS_VOCABULARY_FILE` | Unchanged. | — |
+| `AEGIS_LLM_PLANNER` | `1` enables WP24. | operator |
+
+---
+
+## WP16 — Query foundations
+
+**Goal:** give the API a config and a clock, add every table Part II needs in one schema migration, add the store reads the answer engine needs, and fix the ordering bug.
+
+### Files
+- New: `src/aegis/remote/settings.py`, `tests/test_settings.py`, `tests/test_store_v2.py`.
+- Change: `src/aegis/core/config.py`, `src/aegis/memory/store.py`, `src/aegis/memory/repository.py`, `src/aegis/remote/api.py`, `config/demo.yaml`, `config/live.yaml`, `tests/conftest.py`.
+
+### Config (`core/config.py`)
+
+Add four flat frozen dataclasses (same style as `RetentionConfig`) and four fields on `RuntimeConfig` (`query`, `auth`, `privacy`, `speech`). Parse each with `_section(Cls, raw.get("<name>"), "<name>")` inside `RuntimeConfig.from_mapping`. If `from_mapping` checks top-level keys, add the four names.
+
+```python
+@dataclass(frozen=True, slots=True)
+class QueryConfig:
+    fresh_hours: float = 6.0             # NFR-R3
+    abstain_below: float = 0.25          # decision #8; replace after WP33
+    recency_half_life_hours: float = 72.0
+    min_recency_factor: float = 0.5
+    ordinal_anchor_factor: float = 0.7   # anchor.match_quality == "ordinal"
+    single_observation_factor: float = 0.8
+    max_options: int = 4                 # clarification list length
+    day_start_hour: int = 5
+    noon_hour: int = 12
+    evening_hour: int = 17
+    breakfast_hour: int = 8
+    lunch_hour: int = 13
+    dinner_hour: int = 20
+    log_queries: bool = True
+    log_retention_days: int = 30
+
+@dataclass(frozen=True, slots=True)
+class AuthConfig:
+    session_minutes: int = 60
+    max_failed_logins: int = 5
+    lockout_minutes: int = 15
+    invite_hours: int = 72
+    audit_retention_days: int = 30       # NFR-S3
+    min_password_length: int = 8
+
+@dataclass(frozen=True, slots=True)
+class PrivacyConfig:
+    raw_retention_hours: float = 24.0    # NFR-S4
+    purge_session_outputs: bool = True
+    exempt_datasets: str = ""            # comma-separated ids of consented test recordings
+
+@dataclass(frozen=True, slots=True)
+class SpeechConfig:
+    confirm_below: float = 0.80          # FR6.3
+    model: str = "base.en"
+    max_seconds: float = 15.0
+    max_bytes: int = 2_000_000
+```
+
+Validation in `__post_init__` (raise `ValueError` with the section name): `0 < abstain_below < 1`; `fresh_hours > 0`; `0 < min_recency_factor <= 1`; `0 <= day_start_hour < noon_hour < evening_hour <= 23`; meal hours in `0..23`; `session_minutes >= 5`; `max_failed_logins >= 1`; `min_password_length >= 8`; `raw_retention_hours > 0`; `0 < confirm_below <= 1`.
+
+Add the four sections with their defaults, commented, to `config/demo.yaml` and `config/live.yaml`.
+
+### `remote/settings.py`
+
+```python
+@lru_cache(maxsize=1)
+def get_settings() -> RuntimeConfig:
+    path = os.getenv("AEGIS_CONFIG")
+    return load_config(path) if path else RuntimeConfig.from_mapping({})
+
+def reset_settings() -> None: get_settings.cache_clear()
+
+def clock_overridden() -> bool: return bool(os.getenv("AEGIS_NOW"))
+
+def current_time() -> datetime:
+    """Server time (UTC). AEGIS_NOW replaces it for tests and recorded demos."""
+    override = os.getenv("AEGIS_NOW")
+    return parse_iso(override).astimezone(UTC) if override else utc_now()
+
+def local_zone() -> ZoneInfo: return ZoneInfo(get_settings().memory.retention.timezone)
+
+def server_home() -> str: return validate_dataset_id(os.getenv("AEGIS_HOME_ID") or "home01")
+```
+
+`current_time()` is read on every call (not cached), so `monkeypatch.setenv("AEGIS_NOW", ...)` works inside a test.
+
+### Store schema v2 (`memory/store.py`)
+
+Set `SCHEMA_VERSION = 2`. Keep `_SCHEMA` unchanged and add `_SCHEMA_V2`:
+
+```sql
+CREATE TABLE query_log (
+  query_id INTEGER PRIMARY KEY,
+  asked_at TEXT NOT NULL,
+  user_id INTEGER, username TEXT, role TEXT,
+  modality TEXT NOT NULL CHECK (modality IN ('text','speech')),
+  text TEXT NOT NULL,
+  intent TEXT NOT NULL,
+  status TEXT NOT NULL,
+  instance_id INTEGER,
+  evidence TEXT,               -- JSON list of observation ids
+  confidence REAL,
+  tier TEXT,
+  latency_ms INTEGER
+);
+CREATE INDEX query_log_asked ON query_log(asked_at);
+
+CREATE TABLE user (
+  user_id INTEGER PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  role TEXT NOT NULL CHECK (role IN ('primary','caregiver')),
+  display_name TEXT,
+  password_hash TEXT,          -- NULL until an invited caregiver accepts
+  invite_hash TEXT,
+  invite_expires_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active','invited','disabled')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE access_grant (
+  grant_id INTEGER PRIMARY KEY,
+  caregiver_id INTEGER NOT NULL REFERENCES user(user_id),
+  granted_by INTEGER NOT NULL REFERENCES user(user_id),
+  scopes TEXT NOT NULL,        -- JSON list
+  history_days INTEGER,        -- NULL = no limit
+  granted_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  expires_at TEXT,
+  revoked_at TEXT
+);
+CREATE INDEX access_grant_caregiver ON access_grant(caregiver_id);
+
+CREATE TABLE auth_session (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES user(user_id),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+
+CREATE TABLE consent (
+  consent_id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES user(user_id),
+  kind TEXT NOT NULL CHECK (kind IN ('capture','caregiver_access')),
+  subject_id INTEGER,          -- caregiver user_id for caregiver_access
+  statement_version TEXT NOT NULL,
+  given_at TEXT NOT NULL,
+  withdrawn_at TEXT
+);
+
+CREATE TABLE audit_log (
+  audit_id INTEGER PRIMARY KEY,
+  at TEXT NOT NULL,
+  username TEXT NOT NULL,      -- as typed; unknown names are logged too
+  user_id INTEGER,
+  role TEXT,
+  action TEXT NOT NULL,
+  result TEXT NOT NULL CHECK (result IN ('allowed','denied','error')),
+  reason TEXT,
+  detail TEXT,
+  remote_addr TEXT
+);
+CREATE INDEX audit_log_at ON audit_log(at);
+```
+
+Opening logic in `HomeStore.__init__`:
+
+- `user_version == 0`: run `_SCHEMA`, then `_SCHEMA_V2`, set `user_version = 2`, insert the `meta` rows as today.
+- `user_version == 1`: call `wal_checkpoint(TRUNCATE)`, copy the file to `memory.v1.bak.db` beside it (skip if that file already exists), then inside one `BEGIN IMMEDIATE … COMMIT` run `_SCHEMA_V2` statement by statement and set `user_version = 2`. `executescript` commits implicitly, so split `_SCHEMA_V2` on `;` and use `execute`.
+- `user_version > SCHEMA_VERSION`: unchanged (raise).
+
+Add the six table names to `TABLES`. Keep two tuples for later WPs: `HISTORY_TABLES = ("evidence", "event", "state_run", "activity", "room_visit", "summary", "compaction_log", "query_log", "instance", "anchor", "session", "room")` (this order is a safe delete order under the foreign keys) and `ACCOUNT_TABLES = ("auth_session", "consent", "access_grant", "audit_log", "user")`.
+
+### New store reads (all SQL stays in `store.py`)
+
+Every method returns plain `dict`s with names resolved, like `events()` does.
+
+| Method | SQL rule | Returns |
+|---|---|---|
+| `latest_states()` (extend) | add `LEFT JOIN state_run sr ON sr.run_id = i.last_run_id` and select `a.match_quality` | adds keys `run_id`, `run_start_at`, `observation_count` (of that run; `None` if no run), `anchor_match_quality`, `importance`, `session_id` |
+| `sessions_between(start, end)` | `ended_at >= start AND started_at <= end`, either bound optional | session rows |
+| `room_visits(start, end)` | `v.end_at >= start AND v.start_at <= end`, `LEFT JOIN room` | `{visit_id, room_id, room_label, start_at, end_at, session_id}` ordered by `start_at` |
+| `run_at(instance_id, at)` | `instance_id = ? AND start_at <= ? ORDER BY start_at DESC, run_id DESC LIMIT 1` with anchor and room labels | one run dict or `None` |
+| `runs_in_window(instance_id, start, end)` | `end_at >= start AND start_at <= end` | run dicts ordered by `start_at` |
+| `run_starting_at(instance_id, at)` | first run with `start_at >= shift_iso(at, -1.0)` ordered by `start_at` | run dict or `None` (the run an event led to) |
+| `events_for_instance(instance_id, start=None, end=None, types=None)` | call `events(start, end)`, filter in Python | event dicts |
+| `object_summaries(instance_id, start_date=None, end_date=None)` | call `summaries(start_date, end_date)`, keep `kind == "object"` and `subject_key == f"instance:{id}"` | newest last |
+| `evidence_row(evidence_id)` | by primary key | `{evidence_id, path, captured_at, instance_id, session_id, width, height, bytes}` or `None` |
+| `log_query(**values)` | `insert("query_log", values)` | id |
+
+All bounds are passed through `to_utc_iso` except the summary dates.
+
+### Repository changes (`memory/repository.py`)
+
+- Add to both repositories: `has_history: bool` (`StoreRepository`: `True`; `JsonGraphRepository`: `False`) and `home_id: str | None` (`StoreRepository`: `store.home_id`; JSON: `None`).
+- `JsonGraphRepository.latest_states()` stays as is. Add `JsonGraphRepository.evidence_path(instance_id) -> Path | None`: for a v2 graph, take the last entry of `data["state_runs"]` for that instance that has `evidence` with a `path`; return `self.path.parent / path` if that file exists, else `None`. For v1 graphs return `None`.
+
+### API changes in this WP
+
+- Replace the sort in `query_memory` with one helper used everywhere:
+
+```python
+def _recency_key(state: dict[str, Any]) -> tuple[str, float]:
+    return (str(state.get("last_seen_wallclock") or ""), float(state.get("last_seen_timestamp") or 0.0))
+```
+  `matches.sort(key=_recency_key, reverse=True)`. Fixed-format UTC text sorts chronologically.
+- `HealthResponse` gains `home_id: str | None`, `auth_required: bool = False` (filled in WP26), `clock_override: bool`, `as_of: str`.
+- `tests/conftest.py`: add `os.environ.setdefault("AEGIS_AUTH_DISABLED", "1")` and `os.environ.setdefault("AEGIS_DISABLE_MAINTENANCE", "1")` now, so later WPs do not break the suite midway.
+
+### Tests
+
+`tests/test_settings.py`
+- `test_defaults_without_config_file`, `test_config_file_is_loaded` (write a YAML with `query: {fresh_hours: 2}` to `tmp_path`, set `AEGIS_CONFIG`, call `reset_settings()`).
+- `test_unknown_query_setting_is_rejected`, `test_invalid_ranges_are_rejected` (parametrised over the validation rules).
+- `test_clock_override` (`AEGIS_NOW=2026-11-16T10:30:00+05:00` gives `05:30Z`).
+
+`tests/test_store_v2.py`
+- `test_new_store_has_v2_tables`.
+- `test_v1_store_is_migrated_and_backed_up`: build a v1 file by executing `_SCHEMA` and `PRAGMA user_version=1` with plain `sqlite3`, insert one room, open with `open_store`, assert the room survives, `user_version == 2`, the new tables exist and `memory.v1.bak.db` exists.
+- `test_latest_states_expose_run_and_anchor_quality`.
+- `test_run_at_and_runs_in_window`, `test_sessions_between`, `test_room_visits_between`.
+- `test_most_recent_instance_wins_in_home_query`: two `keys` instances with different anchors in two sessions; `/api/v1/query?item=keys&home_id=` must name the later one. This fails on today's code.
+
+### Done when
+All 326 existing tests pass, the new ones pass, and `uv run aegis-memory show --home-id <existing home>` still works on a store created before this WP.
+
+---
+
+## WP17 — Time words
+
+**Goal:** one module that says a past moment in plain words and reads a time expression out of a question (FR5.3, todo 3.3, 3.4).
+
+### Files
+- New: `src/aegis/core/timewords.py`, `tests/test_timewords.py`.
+
+### `describe_when(then, now, zone) -> str`
+
+`then` and `now` are aware datetimes; `delta = now - then`; dates are compared in `zone`. 24-hour clock, as the summaries already use.
+
+| Condition (first match) | Result |
+|---|---|
+| `delta < 90 s` (including negative) | `just now` |
+| `delta < 60 min` | `1 minute ago` / `N minutes ago` (`N = round(delta / 60 s)`) |
+| same local date | `today at HH:MM` |
+| local date is yesterday | `yesterday at HH:MM` |
+| fewer than 7 local days ago | `on Monday at HH:MM` (English weekday name from a fixed tuple, not `strftime`, so the locale cannot change it) |
+| same year | `on 12 Nov at HH:MM` |
+| otherwise | `on 12 Nov 2025 at HH:MM` |
+
+Also `describe_day(day: date, today: date) -> str`: `today`, `yesterday`, `on Monday` (within 7 days), `on 12 Nov`, `on 12 Nov 2025`. And `clock(value, zone) -> "HH:MM"`.
+
+### `parse_time_window(text, *, now, zone, config) -> tuple[TimeWindow | None, str]`
+
+```python
+@dataclass(frozen=True, slots=True)
+class TimeWindow:
+    start: datetime      # aware, UTC
+    end: datetime        # aware, UTC, never after `now`
+    label: str           # words to reuse in the answer: "this morning", "yesterday", "on 12 Nov"
+    future: bool = False # the expression lies entirely after `now`
+```
+
+The second return value is the lower-cased text with the matched expression removed and whitespace collapsed. The parser of WP18 looks for the object in that remainder, so "morning" or "lunch" never becomes an item.
+
+Algorithm:
+
+1. `clean = " ".join(text.lower().replace("?", " ").replace(",", " ").split())`.
+2. Find at most one **day/period expression** with the table below (try rows in order; first match wins).
+3. Find at most one **clock expression**: `\b(?:at|around|about)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|o'?clock)?\b`. Reject hours above 23 and minutes above 59 (treat as no match).
+4. Combine: clock only → the clock on a day chosen by the rule below; day/period only → that window; both → the clock on the first local date of the day window.
+5. Clamp: `end = min(end, now)`. If `start >= now` return the window with `future=True`, `start = end = now`.
+6. Convert to UTC.
+
+`D` = today's local date; `h(x)` = `D` at hour `x` local; hours come from `QueryConfig`.
+
+| # | Pattern (regex, `\b` on both sides) | Start | End | Label |
+|---|---|---|---|---|
+| 1 | `day before yesterday` | `D−2 00:00` | `D−1 00:00` | `the day before yesterday` |
+| 2 | `yesterday (morning\|afternoon\|evening\|night)` | period of `D−1` (row 6–8 hours) | | `yesterday <period>` |
+| 3 | `last night` | `D−1` at `evening_hour` | `D` at `day_start_hour` | `last night` |
+| 4 | `yesterday` | `D−1 00:00` | `D 00:00` | `yesterday` |
+| 5 | `(?:this\|in the)? ?morning` | `h(day_start_hour)` | `h(noon_hour)` | `this morning` |
+| 6 | `(?:this\|in the)? ?afternoon` | `h(noon_hour)` | `h(evening_hour)` | `this afternoon` |
+| 7 | `(?:this\|in the)? ?evening\|tonight` | `h(evening_hour)` | `D+1 00:00` | `this evening` |
+| 8 | `(before\|after) (breakfast\|lunch\|dinner)` | before: `h(day_start_hour)` → meal hour; after: meal hour → `D+1 00:00` | | `before lunch` |
+| 9 | `(?:at\|during\|over) (breakfast\|lunch\|dinner)(?: time)?` | meal hour − 1 h | meal hour + 1 h | `at lunch` |
+| 10 | `(?:in the )?(?:last\|past) (\w+ )?(minute\|hour\|day\|week)s?` | `now − N·unit` | `now` | `in the last N <unit>s` (N defaults to 1; accept digits and `a, an, one … twelve, couple`=2, `few`=3) |
+| 11 | `(\w+) (minute\|hour\|day\|week)s? ago` | minutes: `t−5 min`; hours: `t−30 min`; days: local day `D−N` 00:00; weeks: Monday of the week containing `D−7N` | minutes: `t+5 min`; hours: `t+30 min`; days: next midnight; weeks: + 7 days | `N <unit>s ago` (`t = now − N·unit`) |
+| 12 | `last week` | Monday of last week 00:00 | Monday of this week 00:00 | `last week` |
+| 13 | `this week` | Monday of this week 00:00 | `now` | `this week` |
+| 14 | `(?:on \|last \|this )?(monday\|…\|sunday)` | the most recent such local day that is not after `D`; with the prefix `last` and today being that weekday, use `D−7` | next midnight | `on Monday` |
+| 15 | `(?:on )?(\d{1,2})(?:st\|nd\|rd\|th)?(?: of)? (january\|…\|december\|jan\|…\|dec)` and the reversed order `(month) (\d{1,2})` | that date this year, or last year if it is after `D` | next midnight | `on 12 Nov` |
+| 16 | `(\d{4})-(\d{2})-(\d{2})` | that date | next midnight | `on 12 Nov` (add the year if not this year) |
+| 17 | `today\|earlier(?: today)?\|so far` | `D 00:00` | `now` | `today` |
+| 18 | `recently\|lately\|just now\|a moment ago` | `now − fresh_hours` | `now` | `recently` |
+
+Rows 5–7 when `now` is before the period's start: use `D−1` and the label `yesterday <period>`.
+
+Clock rule (step 4): with an explicit `am`/`pm`, the hour is fixed. Without one and `hour < 12`, there are two candidates, `hour` and `hour + 12`. With no day expression choose the latest candidate that is not after `now` today; if neither has happened yet today, use `hour + 12` yesterday. With a day expression choose `hour + 12` when `hour` is 1–6, else `hour`. The window is ±30 minutes; the label is `around HH:MM`, prefixed with the day label when there is one (`yesterday around 15:00`).
+
+Invalid dates (31 February) are treated as no match.
+
+### Tests (`tests/test_timewords.py`)
+
+Fix `NOW = 2026-11-16T10:30:00+05:00` (a Monday), zone `Asia/Karachi`, default `QueryConfig`. One parametrised test `test_windows` with these rows (local times):
+
+| Text | Start | End | Label / flag |
+|---|---|---|---|
+| `what did i do this morning` | Mon 05:00 | Mon 10:30 (clamped) | `this morning` |
+| `where were my keys yesterday` | Sun 00:00 | Mon 00:00 | `yesterday` |
+| `last night` | Sun 17:00 | Mon 05:00 | `last night` |
+| `yesterday evening` | Sun 17:00 | Mon 00:00 | `yesterday evening` |
+| `before lunch` | Mon 05:00 | Mon 10:30 | `before lunch` |
+| `after lunch` | — | — | `future is True` |
+| `in the last 2 hours` | Mon 08:30 | Mon 10:30 | `in the last 2 hours` |
+| `in the past hour` | Mon 09:30 | Mon 10:30 | `in the last 1 hour` |
+| `3 days ago` | Fri 13 00:00 | Sat 14 00:00 | `3 days ago` |
+| `on friday` | Fri 13 00:00 | Sat 14 00:00 | `on Friday` |
+| `on monday` | Mon 16 00:00 | Mon 10:30 | `on Monday` |
+| `last monday` | Mon 9 00:00 | Tue 10 00:00 | `on Monday` |
+| `on 12 november` | Thu 12 00:00 | Fri 13 00:00 | `on 12 Nov` |
+| `on 25 december` | 2025-12-25 00:00 | 2025-12-26 00:00 | `on 25 Dec 2025` |
+| `2026-11-10` | Tue 10 00:00 | Wed 11 00:00 | `on 10 Nov` |
+| `around 9` | Mon 08:30 | Mon 09:30 | `around 09:00` |
+| `at 3 pm` | Sun 14:30 | Sun 15:30 | `yesterday around 15:00` |
+| `yesterday at 3` | Sun 14:30 | Sun 15:30 | `yesterday around 15:00` |
+| `last week` | Mon 9 00:00 | Mon 16 00:00 | `last week` |
+| `the day before yesterday` | Sat 14 00:00 | Sun 15 00:00 | `the day before yesterday` |
+| `this evening` | — | — | `future is True` |
+| `where are my keys` | — | — | window is `None`, remainder equals the cleaned text |
+
+More tests:
+- `test_remainder_drops_the_time_words` (`"where were my keys yesterday morning"` → `"where were my keys"`).
+- `test_room_number_is_not_a_clock` (`"keys in room 2"` → `None`).
+- `test_describe_when` (parametrised over all seven rows of the table, including a negative delta and a different year).
+- `test_no_vocabulary_phrase_is_a_time_word`: no id, prompt or synonym in `default_vocabulary()` equals a weekday, month, `morning`, `afternoon`, `evening`, `night`, `today`, `yesterday`, `breakfast`, `lunch`, `dinner`. If this fails, the vocabulary entry must be renamed, not the parser.
+- `test_daylight_saving_zone` with `Europe/London` across 2026-10-25: `yesterday` is 25 hours long. This proves local midnights are built with `datetime.combine(day, time.min, tzinfo=zone)`, as `compaction._bounds` does.
+
+### Done when
+The table above passes exactly. No other module is changed in this WP.
+
+---
+
+## WP18 — Query parser and intent routing
+
+**Goal:** turn any typed or spoken sentence into a `ParsedQuery` (todo 3.3 intent routing). Pure functions, no store access.
+
+### Files
+- New: `src/aegis/memory/query_parser.py`, `tests/test_query_parser.py`.
+- Change: `src/aegis/memory/reasoning.py` (extend `STOP_WORDS` only).
+
+### Types
+
+```python
+@dataclass(frozen=True, slots=True)
+class ParsedQuery:
+    raw: str
+    intent: str                 # "where" | "when" | "what_happened" | "did_i"
+    subject: str                # "object" | "self"
+    item: VocabEntry | None     # vocabulary entry when the object is known
+    item_phrase: str            # words to say back when it is not ("umbrella")
+    room_filter: str | None     # QueryReasoningEngine.extract_room_filter result
+    window: TimeWindow | None
+    action: str | None          # "place" | "pickup" | "move" | "see" | "visit" | "unknown" | None
+    action_phrase: str | None   # the user's verb phrase, only for "unknown"
+```
+
+### `parse_query(text, *, now, zone, config, vocabulary=None) -> ParsedQuery`
+
+1. `window, rest = parse_time_window(text, now=now, zone=zone, config=config)`.
+2. `room_filter = QueryReasoningEngine.extract_room_filter(rest)`.
+3. `item = vocabulary.resolve_query(QueryReasoningEngine.strip_room_words(rest))`.
+4. Intent, first rule that matches `rest`:
+
+| # | Rule (regex on `rest`) | Intent | Subject |
+|---|---|---|---|
+| 1 | `^(when\|what time\|how long ago)\b` | `when` | `object` if `item` else `self` |
+| 2 | `^where (was\|were\|have) i\b` or `^what (did i do\|have i done\|was i doing\|happened)\b` with no `item` | `what_happened` | `self` |
+| 3 | `\bwhat happened (to\|with)\b` or `^what did i do with\b` or `^(show\|tell) me (what\|everything)\b` | `what_happened` | `object` if `item` else `self` |
+| 4 | `^(did\|have\|had\|was\|were\|has) (i\|we\|you)\b` or `^(did\|has\|have) (anyone\|someone\|somebody)\b` or `^(is\|are\|was\|were) (my\|the) .+ (in\|on\|inside\|under)\b` with a `room_filter` | `did_i` | `object` if `item` else `self` |
+| 5 | otherwise | `where` | `object` |
+
+5. Action (only for `when` and `did_i`; else `None`). Search `rest` for the first phrase of each list, longest phrase first across all lists:
+
+| Action | Phrases |
+|---|---|
+| `place` | put down, set down, put away, put, placed, place, left, leave, kept, keep, stored, store, dropped, drop, returned, return |
+| `pickup` | picked up, pick up, took out, take out, took, take, taken, grabbed, grab, removed, remove, carried, carry |
+| `move` | moved, move, shifted, shift, touched, touch, used, use, handled |
+| `see` | saw, see, seen, noticed, had, have |
+| `visit` | went to, go to, gone to, been in, been to, was in, were in, entered, visited, walked into |
+
+   Match on whole words. `have`/`had` count as `see` only when an `item` exists and no other action matched. If nothing matches: for `when` use `see`; for `did_i` with a `room_filter` and no `item` use `visit`; for `did_i` with an `item` and a `room_filter` use `place`; otherwise `unknown`, and `action_phrase` is `rest` with the leading auxiliary and pronoun removed (`"did i have breakfast"` → `"have breakfast"`).
+6. `item_phrase`: `item.id` when known, else `QueryReasoningEngine.item_phrase(rest)` after removing the matched action phrase. Extend `STOP_WORDS` in `reasoning.py` with: `when, did, do, does, done, was, were, have, has, had, been, last, time, it, them, you, we, with, at, around, about, ever, please, can, could, tell, show, anyone, someone, happened, happen, any, there, here, now, still, again, this, that`.
+7. A sentence that is only an object name (`"keys"`) gives `intent="where"`. An empty sentence raises `ValueError("empty query")`.
+
+### Tests (`tests/test_query_parser.py`)
+
+One parametrised test `test_routing` with at least these rows (`NOW` as in WP17):
+
+| Text | intent | subject | item | room | action | window label |
+|---|---|---|---|---|---|---|
+| `where are my keys` | where | object | keys | — | — | — |
+| `keys` | where | object | keys | — | — | — |
+| `keys in the kitchen` | where | object | keys | kitchen | — | — |
+| `where were my keys yesterday` | where | object | keys | — | — | yesterday |
+| `when did i last see my glasses` | when | object | glasses | — | see | — |
+| `when did i put my keys down` | when | object | keys | — | place | — |
+| `what time did i take my medicine` | when | object | medicine entry | — | pickup | — |
+| `what did i do this morning` | what_happened | self | — | — | — | this morning |
+| `where was i last night` | what_happened | self | — | — | — | last night |
+| `what happened to my phone yesterday` | what_happened | object | phone entry | — | — | yesterday |
+| `did i move my keys today` | did_i | object | keys | — | move | today |
+| `did i go to the kitchen this morning` | did_i | self | — | kitchen | visit | this morning |
+| `did i leave my keys in the kitchen` | did_i | object | keys | kitchen | place | — |
+| `did i have breakfast this morning` | did_i | self | — | — | unknown (`have breakfast`) | this morning |
+| `where is my umbrella` (not in vocabulary) | where | object | `None`, phrase `umbrella` | — | — | — |
+
+The vocabulary has `keys`, `glasses`, `medicine`, `wallet`, `mug` and `cell phone` (which is what "phone" should resolve to; if it does not, assert what `resolve_query` really returns and note it — do not add vocabulary entries in this WP). `umbrella` is not in the vocabulary.
+
+Also: `test_empty_query_raises`, `test_action_longest_phrase_wins` (`"picked up"` is `pickup`, not `place` via `put`), `test_parser_is_pure` (same input twice gives equal dataclasses).
+
+### Done when
+The routing table passes and `tests/test_reasoning.py` is unchanged and green.
+
+
+---
+
+## WP19 — Confidence, freshness and abstention
+
+**Goal:** replace the stored-score passthrough with a computed answer confidence, report freshness against the 6-hour window, and abstain explicitly (FR5.5, NFR-R3, SC6, AC-12, AC-28; todo 3.4, 3.5).
+
+### Files
+- New: `src/aegis/memory/confidence.py`, `src/aegis/memory/answering.py`, `tests/test_confidence.py`, `tests/test_answering_where.py`.
+- Change: `src/aegis/memory/reasoning.py`, `src/aegis/remote/api.py`, `tests/test_api.py`, `tests/test_reasoning.py`.
+
+### The answer contract (used by WP19–WP22 and by the app)
+
+`answering.py` defines the engine's result. It is a plain dataclass so it can be tested without FastAPI.
+
+```python
+ANSWERING = frozenset({"answered", "stale", "ambiguous", "not_seen_in_window"})
+
+@dataclass
+class Answer:
+    query: str
+    intent: str
+    status: str
+    text: str                              # at most two sentences
+    as_of: str                             # UTC ISO of "now" used
+    state: dict[str, Any] | None = None    # the primary memory state, if any
+    confidence: float | None = None
+    confidence_parts: dict[str, float] = field(default_factory=dict)
+    freshness: str = "unknown"             # "fresh" | "stale" | "unknown"
+    last_seen_at: str | None = None
+    last_seen_text: str | None = None      # describe_when(...)
+    tier: str = "detailed"                 # "detailed" | "summarised" | "mixed"
+    window_label: str | None = None
+    evidence: list[dict[str, Any]] = field(default_factory=list)   # WP20
+    options: list[dict[str, Any]] = field(default_factory=list)    # WP22
+    items: list[str] = field(default_factory=list)                 # extra lines for the UI
+    facts: dict[str, Any] = field(default_factory=dict)            # machine-checkable, WP21/WP33
+    known_items: list[str] = field(default_factory=list)
+
+    @property
+    def abstained(self) -> bool: return self.status not in ANSWERING
+```
+
+Status values (complete list; no other string may be used):
+
+| Status | Meaning | Abstains |
+|---|---|---|
+| `answered` | Grounded answer. | no |
+| `stale` | Grounded, but the last sighting is older than `fresh_hours`. | no |
+| `ambiguous` | Several instances in different places; options listed. | no |
+| `not_seen_in_window` | Not seen in the asked period; an older sighting is cited. | no |
+| `low_confidence` | Evidence exists but confidence is below the threshold. | yes |
+| `never_observed` | No memory of the object. | yes |
+| `no_match_in_room` | Seen, but not in the asked room. | yes |
+| `no_activity` | Nothing recorded or nothing changed in the asked period. | yes |
+| `unsupported_activity` | The activity cannot be recognised ("breakfast"). | yes |
+| `unsupported` | Temporal question on a `dataset_id`. | yes |
+| `future_time` | The asked period has not happened yet. | yes |
+| `not_ready` | The dataset has no scene graph. | yes |
+
+### `confidence.py`
+
+```python
+def answer_confidence(state, *, now, config) -> tuple[float | None, dict[str, float]]:
+```
+
+- `detection = state.get("confidence")`. If it is `None` return `(None, {})`; a missing score is never replaced by a default. This happens only for schema-v1 demo graphs (the tracked fixtures have no scores; `test_query_confidence_is_not_a_constant` asserts `None` for them). Home-store states always have a score (`state_run.confidence` is `NOT NULL`).
+- `identity = config.ordinal_anchor_factor if state.get("anchor_match_quality") == "ordinal" else 1.0`.
+- `support = config.single_observation_factor if state.get("observation_count") == 1 else 1.0` (missing count → `1.0`).
+- `age_hours`: from `state["last_seen_wallclock"]` and `now`; `None` when there is no wall-clock time.
+- `recency = 1.0` when `age_hours is None or age_hours <= fresh_hours`, else `max(min_recency_factor, 0.5 ** ((age_hours - fresh_hours) / recency_half_life_hours))`.
+- `value = round(clamp(detection, 0, 1) * identity * support * recency, 2)`.
+- Parts: `{"detection", "identity", "support", "recency"}`, each rounded to 2 decimals.
+
+`freshness(state, now, config) -> str`: `"unknown"` without wall-clock time, `"fresh"` when `age_hours <= fresh_hours`, else `"stale"`.
+
+The relation-certainty penalty is already inside `detection` (fact table). Do not add it again.
+
+### Templates (`reasoning.py`)
+
+Move `_place` out of `summaries.py` into `reasoning.py` as the public `place_phrase(relation, anchor, room) -> str` and import it back into `summaries.py`. Add these functions; each returns finished text.
+
+`name` below is `QueryReasoningEngine`'s item name (`entry.id`, e.g. `keys`); `is/are`, `was/were`, `it/they`, `it/them` follow `entry.plural`.
+
+| Function | Text |
+|---|---|
+| `where_answer(name, state, when, plural)` | The existing `_location_sentence(...)`. When `when` is given, insert `, {when}` before the final full stop: `Your keys were last seen on Desk #1 in the Kitchen, today at 14:05.` Then, if the relation is uncertain and not carried, append ` I'm not fully sure about the exact spot.` |
+| `stale_answer(name, state, when, plural)` | The same first sentence with `in_view=False`, then ` I have not seen {it/them} since, so {it/they} may have moved.` The uncertain sentence is not added (two-sentence limit). |
+| `low_confidence_answer(name, state, when, plural)` | `I'm not sure where your {name} {is/are}.` If the state has an anchor or a room: ` My last unclear sighting was {place_phrase}{, when}.` |
+| `never_observed_answer(phrase)` | `I haven't seen your {phrase}.` |
+| `not_ready_answer(dataset_id)` | `The scene graph for {dataset_id} has not been generated yet.` (existing wording) |
+| `no_match_in_room_answer(name, room, known_rooms)` | Existing wording from `query_memory`: `I couldn't find any '{name}' in the {Room}. It was last seen in {rooms}.` Move it here unchanged. |
+
+**Voice.** A caregiver must not be told "Your keys…" or "You were in the Kitchen". Add to `reasoning.py`:
+
+```python
+@dataclass(frozen=True, slots=True)
+class Voice:
+    owner: str      # "your" | "the"
+    you: str        # "You" | "The wearer"
+    you_were: str   # "You were" | "The wearer was"
+    you_are: str    # "You are" | "The wearer is"
+    you_obj: str    # "you" | "the wearer"
+
+PATIENT = Voice("your", "You", "You were", "You are", "you")
+CARER = Voice("the", "The wearer", "The wearer was", "The wearer is", "the wearer")
+```
+
+Every template function in this plan (WP19–WP22, WP29) and the existing `_location_sentence` take `voice: Voice = PATIENT` and build their words from it: `Your {name}` is `f"{voice.owner.capitalize()} {name}"`, `You put your {name}` is `f"{voice.you} put {voice.owner} {name}"`, `I did not see you` is `f"I did not see {voice.you_obj}"`. The templates in this plan are written in the patient voice for readability. The default keeps every existing test unchanged. The engine functions take `voice` and pass it down; the API chooses `CARER` when the caller's role is `caregiver` (WP26) and `PATIENT` otherwise.
+
+`sentence_count(text) -> int` (public, used by tests and by the engine's guard): count matches of `[.!?](?=\s|$)`.
+
+### Engine: `answer_where(parsed, repo, *, now, zone, settings, instance_id=None) -> Answer`
+
+This replaces the body of `query_memory`. Steps:
+
+1. `latest = repo.latest_states()`. Candidates: when `parsed.item` exists, states whose canonical equals `parsed.item.id` (use the existing `_state_canonical` logic, moved into `answering.py`); else states whose base label equals `parsed.item_phrase`.
+2. `instance_id` given: keep only that instance (unknown id → `never_observed`).
+3. No candidates: `not_ready` when `not repo.ready`, else `never_observed`. Fill `known_items` with the sorted distinct labels.
+4. Room filter (existing substring rule on `room_label`): none left → `no_match_in_room`.
+5. Sort with `_recency_key` descending. `primary = matches[0]`. Ambiguity handling is added in WP22; until then keep today's behaviour (`other_instances`).
+6. `confidence, parts = answer_confidence(primary, ...)`; `fresh = freshness(primary, ...)`; `when = describe_when(...)` when the state has wall-clock time, else `None`.
+7. Status: `low_confidence` when `confidence is not None and confidence < settings.query.abstain_below`; else `stale` when `fresh == "stale"`; else `answered`. A `None` confidence cannot be compared with a threshold: the answer is given with `confidence: null` (legacy v1 graphs only). The fixture-backed API tests rely on this.
+8. Text from the matching template. `last_seen_at`, `last_seen_text` filled.
+9. Guard: `assert sentence_count(text) <= 2` in tests; in production, if it is more than 2, keep the first two sentences and log an error.
+
+A JSON-graph state without wall-clock time: `freshness = "unknown"`, `recency = 1.0`, no time phrase. This keeps the demo datasets answerable without inventing a time.
+
+### API (`remote/api.py`)
+
+- `MemoryQueryResponse` gains, all optional with defaults: `status: str = "answered"`, `abstained: bool = False`, `intent: str = "where"`, `answer: str | None`, `as_of: str | None`, `freshness: str = "unknown"`, `confidence_parts: dict[str, float]`, `tier: str = "detailed"`, `window_label: str | None`, `evidence: list[EvidenceRef]` (model defined in WP20; an empty list for now), `options: list[dict]`, `items: list[str]`, `facts: dict`, `known_items: list[str]`.
+- `location_summary`, `explanation` and `answer` all carry `Answer.text`. `found = not answer.abstained`. `last_seen_time_ago = answer.last_seen_text`. `confidence = answer.confidence`. For an abstention set `anchor_id`, `anchor_label`, `relation`, `room_id`, `room_label`, `crop_url` to `None` **except** for `low_confidence`, where the candidate stays in the structured fields (UC-03 A2: "state uncertainty and show last evidence") and `found` is `False`.
+- One function `_to_response(answer: Answer, repo, key) -> MemoryQueryResponse` builds the model. `query_memory` becomes: parse (`parse_query`), call the engine, convert. In this WP only `intent == "where"` without a window is implemented; other intents return `status="unsupported"` with the text `I can't answer that kind of question yet.` until WP21 replaces it.
+
+### Tests
+
+`tests/test_confidence.py`
+- `test_missing_score_gives_none`.
+- `test_v1_graph_without_scores_is_answered_with_null_confidence` (fixture `demo01`, `shoes`: status `answered`, `confidence is None`).
+- `test_ordinal_anchor_lowers_confidence`, `test_single_observation_lowers_confidence`.
+- `test_recency_decay_and_floor` (age 6 h → 1.0; 78 h → 0.5; 1000 h → floor).
+- `test_confidence_varies_across_inputs` (replaces the idea of a constant; at least three distinct values).
+
+`tests/test_answering_where.py` (store built with `make_session_graph`, `now` passed explicitly)
+- `test_fresh_object_is_answered_with_time` — text contains `today at`.
+- `test_object_older_than_six_hours_is_stale` — status `stale`, text contains `may have moved`, does not contain ` is on ` / ` are on ` (AC-28: not presented as current).
+- `test_exactly_six_hours_is_still_fresh` (boundary).
+- `test_low_confidence_abstains` — run confidence 0.1 → status `low_confidence`, `abstained`, text starts `I'm not sure`.
+- `test_never_observed_abstains_without_location` — five different unseen objects (`wallet`, `passport`, `umbrella`, `charger`, `watch`; pick ones absent from the test store): all five abstain, none has an anchor or room in the response (AC-12).
+- `test_three_abstention_kinds_are_distinct` — never observed / stale / low confidence give three different statuses (todo 3.5).
+- `test_threshold_is_configurable` — same state answers with `abstain_below=0.05` and abstains with `0.95`.
+- `test_no_wallclock_gives_unknown_freshness` (JSON fixture `demo01`).
+- `test_every_template_is_at_most_two_sentences` — sweep relations × plural × certain × status.
+
+`tests/test_api.py`: no test asserts the old not-found sentence literally; `test_query_unfound_item` asserts that `wallet` is in the summary and `found` is `False`, which the new sentence keeps. Add an assertion that the available labels are in `known_items`. `test_query_confidence_is_not_a_constant` (confidence `None` on `demo01`) must keep passing unchanged.
+
+### Done when
+`grep -n "0.96" src apps/mobile/lib` finds nothing, the suite is green, and todo items 3.4 (all three) and 3.5 (first four) can be ticked with the test names above.
+
+---
+
+## WP20 — Evidence references and real crops
+
+**Goal:** every non-abstaining answer cites stored evidence, with an image when one exists and a text description when it does not (FR5.4, SC5, AC-11; todo 3.6).
+
+### Files
+- Change: `src/aegis/memory/answering.py`, `src/aegis/memory/reasoning.py`, `src/aegis/remote/api.py`, `tests/test_evidence.py`, `tests/test_api.py`.
+- New: `tests/test_evidence_refs.py`.
+
+### Evidence item
+
+```python
+class EvidenceRef(BaseModel):
+    kind: str                    # "crop" | "observation" | "event" | "summary" | "coverage"
+    observation_id: str          # "run:123" | "event:45" | "summary:7" | "session:<id>" | "graph:<dataset>:<instance>"
+    description: str             # always present, plain words
+    observed_at: str | None = None        # UTC ISO
+    observed_at_text: str | None = None   # describe_when
+    anchor_label: str | None = None
+    room_label: str | None = None
+    evidence_id: int | None = None        # row in `evidence`
+    crop_url: str | None = None
+    tier: str = "detailed"
+```
+
+Builders in `answering.py` (they return dicts with exactly these keys):
+
+- `evidence_for_state(repo, state, *, now, zone)`:
+  - Home store: `observation_id = f"run:{state['run_id']}"`. If `state["evidence_id"]` is set **and** the file `store.dir / row.path` exists: `kind="crop"`, `evidence_id`, `crop_url = f"/api/v1/evidence/{evidence_id}?home_id={home}"`. Otherwise `kind="observation"` and no URL.
+  - JSON graph: `observation_id = f"graph:{dataset}:{instance_id}"`; `kind="crop"` with `crop_url = f"/api/v1/crops/{instance_id}?dataset_id={dataset}"` when `repo.evidence_path(instance_id)` is not `None`, else `kind="observation"`.
+  - `description` from `reasoning.evidence_description(label, relation, anchor, room, when, has_image)`: `Mug #2 seen on Desk #1 in the Kitchen, today at 14:05.` and, when there is no image, ` (no image stored)` before the full stop.
+- `evidence_for_event(store, event, ...)` (used in WP21): `observation_id = f"event:{n}"`; the crop comes from `store.run_starting_at(instance_id, event["end_wallclock"])`; description is `event_summary(event)` plus the time.
+- `evidence_for_summary(row)`: `kind="summary"`, `observation_id = f"summary:{summary_id}"`, `description = row["text"]`, `tier="summarised"`, `observed_at_text = describe_day(period_start)`.
+- `evidence_for_coverage(sessions, label)`: `kind="coverage"`, `observation_id = f"session:{first_id}"`, description `Recording covered {HH:MM}–{HH:MM} {label} ({n} session(s)).`
+
+### Guard
+
+At the end of every engine entry point call `_finalise(answer)`:
+
+1. If `answer.status in ANSWERING` and `answer.evidence` is empty → set `status="low_confidence"`, replace the text with `low_confidence_answer(...)` (or `I'm not sure; I have no stored evidence for that.` when there is no state), log `logger.error("answer without evidence downgraded: %s", query)`.
+2. Every evidence item must have a non-empty `description` and `observation_id`; drop items that do not, then re-apply rule 1.
+3. `sentence_count(answer.text) <= 2`, as in WP19.
+
+### Endpoints
+
+- New `GET /api/v1/evidence/{evidence_id}?home_id=`: look the row up with `store.evidence_row`; 404 `no evidence image` when the row or the file is missing; else the JPEG bytes (`media_type="image/jpeg"`, header `Cache-Control: private, max-age=300`). Reading goes through one helper `_read_evidence_file(store, path) -> bytes` so WP27 can add decryption in one place.
+- `GET /api/v1/crops/{instance_id}`: with `home_id`, redirect logic stays as today but calls the same helper. With `dataset_id`, return the real JPEG from `repo.evidence_path(instance_id)` or **404**. Delete the SVG card and the `html` import. A placeholder image is not evidence.
+- `_crop_url` is deleted; `crop_url` on the response is the first evidence item's `crop_url`.
+
+### Tests
+
+`tests/test_evidence_refs.py`
+- `test_answer_with_crop_cites_it` — ingest with a crop (reuse `_graph_with_crop` from `tests/test_evidence.py`; move it to `tests/_graphs.py`), answer has one `crop` item whose URL returns 200 `image/jpeg`.
+- `test_purged_crop_falls_back_to_text` — delete the file from the store directory; the answer is still `answered`, the item is `kind="observation"`, `crop_url is None`, description contains `no image stored` (todo 3.6 fallback).
+- `test_carried_object_has_text_evidence`.
+- `test_evidence_coverage_is_total` — build a store with 12 objects across relations (`on_surface`, `inside`, `under`, `on_floor`, `in_room`, `carried_by_user`), with and without crops, fresh and stale; ask about each; every answer with `status in ANSWERING` has at least one evidence item with a description and an observation id (AC-11, 100%).
+- `test_answer_without_evidence_is_downgraded` — monkeypatch the builder to return `[]`; the status becomes `low_confidence`.
+- `test_dataset_crop_is_real_or_404` — a v2 graph in `tmp_path` with an evidence file returns the JPEG; fixture `demo01` (v1) returns 404 and `crop_url is None`.
+
+Rewrite `test_crops_endpoint` and the `crop_url is not None` line of `test_query_shoes_endpoint` in `tests/test_api.py`: the fixture is a v1 graph without crops, so the correct expectations are 404 and `None` (Part I rule 8).
+
+### Done when
+`grep -n "svg" src/aegis/remote/api.py` finds nothing; todo 3.6 items can be ticked.
+
+---
+
+## WP21 — Temporal answers over detailed and summarised tiers
+
+**Goal:** answer "when", "what happened" and "did I" questions, from detail rows when they exist and from summaries when they do not, and label summarised answers (FR5.2, FR5.3, FR4.3, UC-05, AC-10, AC-23).
+
+### Files
+- Change: `src/aegis/memory/answering.py`, `src/aegis/memory/reasoning.py`, `src/aegis/remote/api.py`.
+- New: `tests/test_answering_temporal.py`.
+
+### Entry point
+
+```python
+def answer(parsed, repo, *, now, zone, settings, instance_id=None, max_history_days=None) -> Answer:
+```
+
+Dispatch, in order:
+
+1. `parsed.window` with `future=True` → `future_time`, text `That time has not happened yet.`
+2. Temporal question (`intent != "where"` or `parsed.window is not None`) and `not repo.has_history` → `unsupported`, text `I can only answer that from the home memory, not from a single video.`
+3. `max_history_days` (caregiver limit, WP26): if the window starts before `now − max_history_days`, clamp `start`; if the whole window is before it, raise `PermissionError("outside granted history")`.
+4. `where` without window → `answer_where` (WP19). `where` with window → `answer_where_then`. `when` → `answer_when`. `what_happened` → `answer_what_happened`. `did_i` → `answer_did_i`.
+
+### Shared helpers
+
+- `_instances(parsed, repo, instance_id)` — the candidate list from WP19 steps 1–5, most recent first. Temporal answers use the first one and, when there are several, set `answer.options` (WP22 format) so the user can pick another.
+- `_local_dates(window, zone) -> (str, str)` — first and last local dates as `YYYY-MM-DD`, for `store.summaries`.
+- `_coverage(store, window)` — `sessions = store.sessions_between(start, end)`; returns `(sessions, recorded: bool)`.
+- `_default_window(now, zone, config)` — local today 00:00 → `now`, label `today`. Used when a question that needs a period has none.
+- Tier: `detailed` when only detail rows were used, `summarised` when only summary rows were used, `mixed` when both. A summarised or mixed answer **must** start with `From summarised history: ` (function `summarised_prefix(text)` lower-cases the first letter of `text` unless it starts with a label such as `Keys #1`) and carry `tier != "detailed"`.
+- Second-person event sentence, `reasoning.event_you_sentence(name, event, plural) -> str` (no trailing full stop, so a time can follow):
+
+| Event type | Text |
+|---|---|
+| `placement` | `You put your {name} {place_phrase(dst_relation, dst_anchor, dst_room)}` |
+| `pickup` | `You picked up your {name} from {src_anchor}` / `You picked up your {name}` |
+| `anchor_change` | `Your {name} moved from {src_anchor} to {dst_anchor}` |
+| `state_change` | `Your {name} changed place` |
+| `moved_while_unobserved` | `Your {name} {was/were} moved while I was not watching` |
+
+### `answer_where_then` — "where were my keys yesterday?"
+
+`W = parsed.window`. For the primary instance:
+
+1. `runs = store.runs_in_window(id, W.start, W.end)`. If any: take the last; status `answered`; text `{Label}, your {name} {was/were} {place}, last seen there at {HH:MM}.` where `{Label}` is the window label capitalised (`Yesterday`). Evidence: the run (`evidence_for_state` on a state dict built from the run). `facts = {"reference_time": run.end_at, "anchor_label", "room_label", "relation"}`.
+2. Else `rows = store.object_summaries(id, *_local_dates(W))`. If any: newest row; resolve `sidecar["last"]` ids to labels with `store.anchors()` / `store.rooms()`; status `answered`, tier `summarised`; text `From summarised history: {label} your {name} {was/were} last {place} at {HH:MM}.` Evidence: the summary.
+3. Else `run = store.run_at(id, W.start)` (older knowledge). If found: status `not_seen_in_window`; text `I did not see your {name} {label}. Before that, {it/they} {was/were} {place}, {describe_when(run.end_at)}.` Evidence: that run.
+4. Else `never_observed`.
+
+### `answer_when`
+
+- Action `see` (or none): for the primary instance, `status` and confidence as in `answer_where`; text `I last saw your {name} {when}, {place}.` (`when` from `describe_when`; if there is no wall-clock time: `unsupported`). Evidence: the state.
+- Action `place`, `pickup` or `move`. Event types: `place` → `{placement, anchor_change}`; `pickup` → `{pickup}`; `move` → `{pickup, placement, anchor_change, state_change, moved_while_unobserved}`.
+  1. `events = store.events_for_instance(id, W.start, W.end, types)` (no window → all time). If any: last event `e`; text `{event_you_sentence} {describe_when(e.end)}.` For `moved_while_unobserved`: `Your {name} {was/were} moved between {describe_when(e.start)} and {describe_when(e.end)}; I did not see it happen.` Status `answered`. Evidence: `evidence_for_event`. `facts = {"reference_time": e.end, "event_type": e.type}`.
+  2. Else summaries for the instance (window dates, or all): newest row whose `sidecar["event_types"]` has one of the types. If its `moves` list is non-empty: last matching move → `From summarised history: your {name} {was/were} last moved {describe_when(move.at)}.` Else: `From summarised history: your {name} {was/were} moved {n} time(s) {describe_day(period_start)}.` (for week or month rows: `in the week of 9 Nov` / `in Nov 2026`). Status `answered`, tier `summarised`, evidence: the summary, `facts = {"reference_date": period_start, "count": n}`.
+  3. Else `no_activity`: `I have not seen your {name} being moved{ label}.` If a window was given and `_coverage` says nothing was recorded, the text is `I have no record of {label}. The camera was not recording then.` and `facts["capture_gap"] = True` (UC-05 A1).
+
+### `answer_what_happened`
+
+`W = parsed.window or _default_window(...)`.
+
+Subject `object`:
+1. `events = store.events_for_instance(id, W.start, W.end, MOVE_TYPES)`. `n > 0`: text `Your {name} {was/were} moved {n} time(s) {label}. Most recently, {lower-first event_you_sentence} at {HH:MM}.`; `items` = one line per event (`{HH:MM} {event_summary}`); evidence: last event.
+2. Else summaries in the window dates: text = `From summarised history: ` + the newest row's `text` (it is already one or two sentences); `items` = the other rows' texts; evidence: the summary.
+3. Else, if the object is known: status `no_activity`, text `Nothing happened to your {name} {label}.` plus, when an older event exists, ` The last change I saw was {describe_when}.` If nothing was recorded in `W`, use the camera sentence instead of the second sentence.
+
+Subject `self`:
+1. `activities = store.activities(W.start, W.end)`. If any: `rooms` = distinct room labels in order (`None` → `an unnamed area`), at most three named, then `and N more`; `moved = sum(event_count)`. Sentence 1: `{Label} you were in {rooms}.` Sentence 2: `I did not see any objects move.` when `moved == 0`, else `I saw {moved} object change(s), most recently: {event_summary(last non-room event in W)}`. `items` = the activity summary lines. Evidence: the last event when there is one, else coverage. `facts = {"rooms": [...], "moved": moved}`.
+2. Else activity summaries in the window dates: text `From summarised history, {label}: {newest row text}`; `items` = all rows; evidence: summary; `facts["rooms"]` from the sidecars' `room_id` (or the keys of `seconds_by_room`).
+3. Else `no_activity`: nothing recorded → `I have no record of {label}. The camera was not recording then.` (`capture_gap = True`); recorded → `I was recording {label} but did not see anything change.`
+
+### `answer_did_i`
+
+`W = parsed.window or _default_window(...)`, except rule D3.
+
+- **D1, action `visit`** (needs `room_filter`; without one treat as `unknown`). `visits = [v for v in store.room_visits(W.start, W.end) if room_filter in (v.room_label or "").lower()]`.
+  - Found: `Yes. You were in the {Room} {label}, from {HH:MM} to {HH:MM}.` (first visit; when several: `…, {n} times, first at {HH:MM}.`). Status `answered`, `facts = {"polarity": "yes", "reference_time": first.start}`, evidence: coverage.
+  - Not found, recorded: `I did not see you in the {room} {label}.` Status `answered`, `polarity: "no"`, evidence: coverage.
+  - Not found, not recorded, summaries exist for the dates: use activity sidecars; `From summarised history: yes, you were in the {Room} {describe_day}.` or the "did not see" sentence with the prefix.
+  - Nothing recorded: `no_activity` with the camera sentence.
+- **D2, action `place`, `pickup`, `move` with an item and a window (or no room filter).** Events as in `answer_when`. Found: `Yes. {event_you_sentence} {describe_when}.` (`polarity: "yes"`). Not found and recorded: `I did not see you {put down|pick up|move} your {name} {label}.` (`polarity: "no"`, evidence: coverage). Not recorded: camera sentence, `no_activity`. Summarised: `From summarised history: yes, your {name} {was/were} moved {describe_day}.`
+- **D3, action `place` with an item, a room filter and no window** ("did I leave my keys in the kitchen?"). Take the `answer_where` result **without** the room filter. If it abstains, return it unchanged. Else compare the state's room with the filter: text `Yes. ` or `No. ` followed by the first sentence only of the where-answer (drop the second sentence to stay within two). `polarity` set accordingly. Evidence: the state.
+- **D4, action `see` with an item.** Runs in the window exist → `Yes. I saw your {name} {describe_when(last run end)}, {place}.`; else recorded → `I did not see your {name} {label}.` (`polarity: "no"`); else camera sentence.
+- **D5, action `unknown`.** Status `unsupported_activity`. Sentence 1: `I can't tell whether you did that.` Sentence 2: sentence 1 of the `self` branch of `answer_what_happened` for `W` if activities exist, otherwise the camera sentence or nothing. This is the honest answer to "Did I have breakfast?": the system recognises rooms and object changes, not meals.
+
+Confidence for temporal answers: event-based answers carry `event["confidence"]` when present, state-based ones the WP19 value, summarised ones `None`. An event confidence below `abstain_below` turns the answer into `low_confidence` with the text `I'm not sure. I may have seen your {name} being moved {describe_when}, but the sighting was unclear.`
+
+### API
+`query_memory` now passes every intent to `answer(...)`. `PermissionError` from step 3 becomes HTTP 403.
+
+### Tests (`tests/test_answering_temporal.py`)
+
+Build one store fixture `history_store` with a fixed timeline in `Asia/Karachi` (use `make_session_graph`, three rooms, anchors desk/drawer/refrigerator):
+
+| Local time | Session | Content |
+|---|---|---|
+| Fri 13 Nov 09:00 | `f1` | keys on desk (Kitchen); mug on desk |
+| Sat 14 Nov 10:00 | `s1` | keys carried, then placed inside drawer (Bedroom); wearer Kitchen → Bedroom |
+| Sun 15 Nov 20:00 | `u1` | glasses on nightstand/desk (Bedroom); wearer in Bedroom only |
+| Mon 16 Nov 08:10 | `m1` | wearer Kitchen 08:10–08:40, mug picked up and placed on the refrigerator anchor; keys still in drawer (seen) |
+
+`NOW = Mon 16 Nov 10:30`. Tests:
+
+- `test_when_did_i_put_keys` → text contains `on Saturday at 10:` and `Drawer`; `facts["event_type"] == "placement"`.
+- `test_when_did_i_last_see_glasses` → `yesterday at 20:`.
+- `test_where_were_keys_on_friday` → `Desk`, status `answered`, tier `detailed`.
+- `test_where_were_glasses_this_morning` → `not_seen_in_window`, cites yesterday.
+- `test_what_did_i_do_this_morning` → mentions `Kitchen`; `facts["moved"] >= 1`; `items` non-empty.
+- `test_what_happened_last_night_with_no_recording_gap` and `test_no_recording_says_camera_was_off` (ask about `the day before yesterday at 3 pm` → `capture_gap`).
+- `test_did_i_go_to_the_kitchen_this_morning` → `polarity == "yes"`; `…to the bedroom this morning` → `"no"` with coverage evidence.
+- `test_did_i_move_my_keys_today` → `"no"`; `…on saturday` → `"yes"`.
+- `test_did_i_leave_keys_in_kitchen` → starts `No.`; names the Bedroom drawer.
+- `test_unknown_activity_is_not_guessed` (`did i have breakfast this morning`) → `unsupported_activity`, text contains `can't tell`, no meal word asserted as fact.
+- `test_future_window` (`this evening`) → `future_time`.
+- `test_dataset_path_is_unsupported` (fixture `demo01`).
+- **Summarised tier:** run `compact(store, now=NOW + 5 days, config=RetentionConfig())`, set `now = NOW + 5 days`, then:
+  - `test_summarised_where_then` (`where were my keys on 13 november`) → tier `summarised`, text starts `From summarised history:`.
+  - `test_summarised_what_happened` and `test_summarised_did_i_visit`.
+  - `test_every_answer_from_compacted_history_is_labelled` — loop over 8 questions about the compacted days; for every answer whose evidence items are all `kind="summary"`, assert `tier == "summarised"` and the prefix (AC-23, 100%).
+- `test_temporal_set_of_ten` — ten questions with expected `status`, `polarity`, `event_type` and time tolerance; assert at least 6 correct (AC-10 at fixture level; the recorded benchmark run is WP34). Store the ten in a module-level list so WP33 can reuse them.
+- `test_all_temporal_texts_are_at_most_two_sentences` — run every question above and check `sentence_count`.
+- `test_history_limit_clamps_and_denies` — `max_history_days=1`: `yesterday` is clamped, `on friday` raises `PermissionError`.
+
+### Done when
+All of todo §3.3 can be ticked with the test names above (the ≥ 60% line is ticked only as `[~]` until the WP34 run).
+
+---
+
+## WP22 — Clarification, query log and the `/ask` endpoint
+
+**Goal:** handle several matching instances (UC-03 A3), log every home query with its evidence (UC-03 postcondition), and give clients one endpoint for whole questions (todo 3.7).
+
+### Files
+- Change: `src/aegis/memory/answering.py`, `src/aegis/memory/reasoning.py`, `src/aegis/remote/api.py`, `src/aegis/memory/store.py`.
+- New: `tests/test_clarification.py`, `tests/test_query_log.py`.
+
+### Clarification (in `answer_where`, replacing WP19 step 5's placeholder)
+
+After the room filter, with `matches` sorted most recent first and no `instance_id`:
+
+1. Group by place key `(relation, anchor_id, room_id)`. One group → not ambiguous; continue with `matches[0]`.
+2. Otherwise status `ambiguous`. `options = [option(m) for m in matches[:settings.query.max_options]]` with
+
+   `option = {"instance_id", "label", "place": place_phrase(...), "last_seen_at", "last_seen_text", "confidence", "crop_url"}`.
+3. Text (`reasoning.ambiguous_answer`):
+   - two instances: `I know of 2 {plural_name}. One was last seen {place₁}, and one {place₂}.`
+   - more: `I know of {n} {plural_name}. The one seen most recently was {place₁}; choose one below for the others.`
+   - `plural_name`: `entry.display.lower()` when `entry.plural`; otherwise add `s` (`es` after `s, x, ch, sh`; `y` after a consonant → `ies`).
+4. The structured fields (`instance_id`, `anchor_label`, …) describe `matches[0]`, as today. Evidence: one item per listed option. `other_instances` keeps its current content for old clients.
+5. Options with confidence below the threshold are listed last and their `place` is prefixed with `possibly `. If **all** are below it, the answer is `low_confidence` for `matches[0]` instead.
+
+A follow-up names the choice with `instance_id` (query parameter on `/query`, body field on `/ask`), which removes the ambiguity (WP19 step 2).
+
+### `/ask`
+
+```python
+class AskRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=300)
+    home_id: str | None = None
+    dataset_id: str | None = None
+    instance_id: int | None = None
+    modality: str = Field("text", pattern="^(text|speech)$")
+    transcript_confidence: float | None = None
+
+@app.post("/api/v1/ask", response_model=MemoryQueryResponse)
+```
+
+Both `/ask` and `GET /query?item=` call one function `_answer_request(text, dataset_id, home_id, instance_id, modality, principal)`:
+
+1. `start = time.perf_counter()`; `now = current_time()`; `settings = get_settings()`.
+2. `parsed = parse_query(text, now=now, zone=local_zone(), config=settings.query)`; `ValueError` → 422.
+3. `key, repo = resolve_repository(dataset_id, home_id)`.
+4. `answer = answering.answer(parsed, repo, now=now, zone=..., settings=settings, instance_id=instance_id, max_history_days=...)`.
+5. If `repo.has_history` and `settings.query.log_queries`: `store.log_query(asked_at=to_utc_iso(now), username=…, role=…, user_id=…, modality=modality, text=text[:300], intent=answer.intent, status=answer.status, instance_id=…, evidence=json.dumps([e["observation_id"] for e in answer.evidence]), confidence=answer.confidence, tier=answer.tier, latency_ms=round((perf_counter() - start) * 1000))`. Until WP26 the user fields are `None`/`"local"`/`"primary"`. A logging failure is caught and logged; it never fails the answer.
+6. Return `_to_response(...)`. Add `latency_ms` to the response model.
+
+`store.purge_query_log(before_iso) -> int` deletes rows older than `log_retention_days`; it is called by the maintenance job of WP28 and after compaction in `ingest_session` (next to `rollup`).
+
+### Tests
+
+`tests/test_clarification.py`
+- `test_two_instances_in_different_places_are_listed` — status `ambiguous`, both places in the text, two options, two evidence items, at most two sentences.
+- `test_three_instances_offer_a_choice` — text contains `choose one below`.
+- `test_same_place_is_not_ambiguous`.
+- `test_instance_id_selects_one`.
+- `test_room_filter_resolves_ambiguity` (`keys in the bedroom`).
+- `test_all_low_confidence_abstains`.
+
+`tests/test_query_log.py`
+- `test_home_query_is_logged_with_evidence` — one row; `evidence` JSON equals the answer's observation ids; `latency_ms >= 0`.
+- `test_abstention_is_logged` (status `never_observed`).
+- `test_dataset_query_is_not_logged`.
+- `test_old_rows_are_purged`.
+- `test_ask_and_query_agree` — `POST /ask {"text": "where are my keys"}` and `GET /query?item=where are my keys` return the same `status`, `instance_id` and `answer`.
+- `test_ask_rejects_empty_and_too_long_text` (422).
+
+### Done when
+Todo §3.7 "clarification" and "query log" can be ticked. `tests/test_api.py` multi-instance fixture tests (`test_query_shoes_endpoint` and the demo06 test) are updated only where the summary wording changed; their assertions on `instance_label`, `relation` and `anchor_label` must still hold unchanged.
+
+
+---
+
+## WP23 — Speech input
+
+**Goal:** spoken questions (FR6.1), a confirm-or-correct step when the transcript is uncertain (FR6.3), and a reproducible way to measure AC-13. Typed input stays fully supported (NFR-U4).
+
+Two parts. The server part is in this WP. The microphone in the app is specified here and built in WP31.
+
+### Files
+- New: `src/aegis/speech/__init__.py`, `src/aegis/speech/transcriber.py`, `scripts/evaluate_speech.py`, `tests/test_speech.py`.
+- Change: `pyproject.toml` (dependency group), `src/aegis/remote/api.py`, `src/aegis/evaluation.py`.
+
+### Server transcription
+
+`pyproject.toml`: add under `[dependency-groups]` `speech = ["faster-whisper>=1.0"]`. It is **not** a default dependency; install with `uv sync --dev --group speech`. CI does not install it.
+
+```python
+@dataclass(frozen=True, slots=True)
+class Transcript:
+    text: str
+    confidence: float | None    # 0..1, None when the engine gives none
+    duration_seconds: float
+
+class Transcriber(Protocol):
+    def transcribe(self, wav_bytes: bytes) -> Transcript: ...
+
+class FasterWhisperTranscriber:
+    def __init__(self, model: str = "base.en") -> None: ...   # lazy import; device="cpu", compute_type="int8"
+    def transcribe(self, wav_bytes: bytes) -> Transcript: ...
+
+class SpeechUnavailable(RuntimeError): ...
+
+def get_transcriber() -> Transcriber:   # FastAPI dependency; cached instance; raises SpeechUnavailable on ImportError
+```
+
+`FasterWhisperTranscriber.transcribe`: write nothing to disk; pass `io.BytesIO(wav_bytes)` to `model.transcribe(..., language="en", beam_size=1, vad_filter=True)`. Text = segments joined and stripped. Confidence = `exp(mean(segment.avg_logprob))` clipped to `[0, 1]`, `None` when there are no segments. Before using the library for the first time, read its README for the current `transcribe` signature; do not guess parameter names.
+
+Endpoint:
+
+```
+POST /api/v1/transcribe        Content-Type: audio/wav      body = the WAV bytes
+→ 200 {"text": str, "confidence": float | null, "needs_confirmation": bool, "duration_seconds": float}
+```
+
+- Read the body with `await request.body()` (no multipart dependency). Reject: wrong content type → 415; empty or larger than `speech.max_bytes` → 413; not a RIFF/WAVE header (`body[:4] == b"RIFF" and body[8:12] == b"WAVE"`) → 400; duration above `speech.max_seconds` (read with the standard `wave` module) → 413.
+- `needs_confirmation = confidence is None or confidence < speech.confirm_below or not text`.
+- `SpeechUnavailable` → 503 `speech transcription is not installed on this server`.
+- The endpoint only transcribes. The client then calls `/ask` with `modality="speech"` and `transcript_confidence`. Audio is never stored.
+
+### App behaviour (built in WP31)
+
+1. Tap the microphone. The app asks the platform recogniser (`speech_to_text`) to listen in `en_US`, at most 10 seconds, stopping after 2 seconds of silence.
+2. While listening, show the partial words and a Stop button.
+3. Final result with confidence ≥ 0.80: put the words in the text field and send them (`modality: "speech"`).
+4. Final result with confidence below 0.80, or with no confidence reported (the plugin reports 0 or −1 on some devices): show `I heard: "<words>"` with two buttons, **Ask** and **Edit**. Edit puts the words in the text field and focuses it.
+5. Recogniser unavailable, permission denied, or no words: show `Voice is not available. Please type your question.` and focus the text field (UC-02 A1).
+
+The app does not record audio for the server endpoint in this plan. Reason to state in the report: NFR-U4 makes speech best-effort, and on-device recognition avoids sending audio off the phone.
+
+### `scripts/evaluate_speech.py` (AC-13)
+
+Input: a directory with `queries.tsv` (columns `file`, `speaker`, `text`) and the WAV files (16 kHz mono; recorded from the test speakers reading the ten benchmark questions).
+
+For each row: transcribe with `FasterWhisperTranscriber`; compute word accuracy `1 − WER`; run `answering.answer` on the reference text and on the transcript against `--home-id`, with `--now`; the pair is *equivalent* when `status`, `intent`, primary `instance_id` and `facts.get("polarity")` are equal.
+
+`aegis.evaluation.word_error_rate(reference, hypothesis) -> float`: lower-case, strip punctuation, word-level Levenshtein distance divided by the reference length (0 words → 0.0 when both empty, else 1.0).
+
+Output through `scripts/_evidence.py` (`run_header`, `write_result`): per-row results, mean word accuracy, equivalent count, speakers. Targets: mean word accuracy ≥ 0.80, equivalent on 10 of 10 (report the real number).
+
+The on-device recogniser is measured by hand in WP34 (P13) because it cannot be scripted.
+
+### Tests (`tests/test_speech.py`)
+- `test_word_error_rate` (identical → 0; one substitution in four words → 0.25; empty cases).
+- `test_transcribe_endpoint_with_fake` — override `get_transcriber` through `app.dependency_overrides` with a fake returning `Transcript("where are my keys", 0.93, 1.2)`; build a valid WAV in memory with the `wave` module; assert 200 and `needs_confirmation is False`.
+- `test_low_confidence_needs_confirmation` (0.5 → `True`), `test_missing_confidence_needs_confirmation`.
+- `test_rejects_wrong_type_empty_oversize_and_non_wav` (415, 413, 413, 400).
+- `test_unavailable_engine_is_503`.
+- `test_speech_and_text_give_the_same_answer` — `/ask` with `modality="speech"` and the same text as a typed request returns the same `status` and `instance_id`; the `query_log` row has `modality = 'speech'`.
+
+### Done when
+Todo §3.2 item 1 (decision) and item 3 (transcript + confidence, server side) can be ticked. Items 2 and 4 are ticked in WP31 and WP34.
+
+---
+
+## WP24 — Optional LLM query planner
+
+**Status:** optional (report: "VLM/tool-calling agent … optional"). If the team skips it, record "deferred: rule-based parser meets AC-09/AC-10" in the Definition of Done and do not build it. Nothing else in Part II depends on it.
+
+**Design, if built.** The model is a *parser of last resort*. It receives only the user's sentence and returns a `ParsedQuery`-shaped JSON object. It never sees memory contents and never writes answer text, so it cannot invent a location (TC5).
+
+- Files: `src/aegis/llm/planner.py`, `tests/test_llm_planner.py`; dependency group `llm = ["anthropic"]`.
+- Trigger: `AEGIS_LLM_PLANNER=1` **and** the rule parser produced `intent == "where"` with `item is None`, or `action == "unknown"`. In every other case the rules win.
+- Call: one request with a 2-second timeout to `claude-haiku-5-5`, asking for a JSON object `{"intent", "subject", "item_text", "room_text", "time_text", "action"}` with the enumerations of WP18. Read the Anthropic SDK documentation for the exact request shape before writing the call.
+- Validation: `intent` and `action` must be in the WP18 enumerations; `item_text` is resolved with `vocabulary.resolve_query` (not trusted as an id); `time_text` goes through `parse_time_window`; `room_text` through `extract_room_filter`. Any error, timeout, invalid JSON or unknown value → keep the rule-based result.
+- Privacy: the sentence leaves the laptop. State this in `docs/privacy_limitations.md` and keep the feature off by default.
+- Tests use a fake client; no network.
+
+Event captions by a VLM (decision M8) remain out of scope for Part II: answers are grounded by crops and templates.
+
+---
+
+## WP25 — Accounts, sessions, grants, consent and audit (store level)
+
+**Goal:** the authentication and authorisation mechanism as pure store operations, testable without HTTP (FR8.1, FR8.4, FR8.5, NFR-S3, UC-07; todo 4.2).
+
+### Files
+- New: `src/aegis/memory/auth.py`, `tests/test_auth.py`.
+- Change: `src/aegis/memory/cli.py`.
+
+### Constants and types
+
+```python
+ROLE_PRIMARY, ROLE_CAREGIVER = "primary", "caregiver"
+SCOPE_OBJECT_STATE, SCOPE_HISTORY, SCOPE_SUMMARIES, SCOPE_ROOMS = "object_state", "history", "summaries", "rooms"
+ALL_SCOPES = frozenset({...})
+DEFAULT_CAREGIVER_SCOPES = (SCOPE_OBJECT_STATE, SCOPE_SUMMARIES)     # NFR-S2
+CONSENT_VERSION = "2026-11"
+
+@dataclass(frozen=True, slots=True)
+class Principal:
+    user_id: int | None
+    username: str
+    role: str
+    scopes: frozenset[str]          # primary: ALL_SCOPES
+    history_days: int | None        # caregiver limit; None = no limit
+    display_name: str | None = None
+
+class AuthError(Exception):
+    def __init__(self, reason: str) -> None: ...   # reason is one of the codes below
+```
+
+Reason codes: `invalid_credentials`, `account_locked`, `account_disabled`, `invite_pending`, `invite_invalid`, `no_active_grant`, `grant_revoked`, `grant_expired`, `weak_password`, `invalid_username`, `username_taken`, `session_expired`.
+
+### Functions (all take `store` first and `now: datetime` where time matters)
+
+| Function | Behaviour |
+|---|---|
+| `validate_username(name)` | 3–64 characters from `[A-Za-z0-9._@+-]`, else `AuthError("invalid_username")`. Email addresses fit (UC-07 "invites a caregiver by email address"). |
+| `hash_password(password, *, min_length)` | `AuthError("weak_password")` when shorter than `min_length` or longer than 128. `salt = secrets.token_bytes(16)`; `hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)`. Stored text: `scrypt$16384$8$1$<salt b64>$<hash b64>`. |
+| `verify_password(password, stored)` | Parse the stored text, recompute with the stored parameters, compare with `hmac.compare_digest`. A malformed or `None` value returns `False`. |
+| `create_user(store, username, role, *, password=None, display_name=None, now)` | Insert; `status="active"` with a password, `"invited"` without. Duplicate → `username_taken`. Returns `user_id`. |
+| `record_consent(store, user_id, kind, *, subject_id=None, now)` / `withdraw_consent(...)` | Insert a row / set `withdrawn_at` on the open row. |
+| `invite_caregiver(store, primary_id, username, *, scopes, history_days, expires_at, display_name, now, config)` | Validate scopes ⊆ `ALL_SCOPES` and non-empty. Create the caregiver as `invited`; `code = secrets.token_urlsafe(9)`; store `sha256(code)` and `invite_expires_at = now + invite_hours`. Insert the `access_grant`. Record `caregiver_access` consent for the primary user with `subject_id = caregiver_id`. Returns `(caregiver_id, grant_id, code)`. The code is shown once and never stored in clear. |
+| `accept_invite(store, username, code, password, *, now, config)` | User must be `invited`, the code must match by `compare_digest`, not expired; set the password, `status="active"`, clear the invite fields. Else `invite_invalid`. |
+| `active_grant(store, caregiver_id, now)` | Newest grant with `revoked_at IS NULL` and (`expires_at IS NULL` or `expires_at > now`). Returns a dict or `None`. |
+| `update_grant(store, grant_id, *, scopes=None, history_days=..., expires_at=..., now)` | "Restrict": change fields, set `updated_at`. Unknown id → `KeyError`. |
+| `revoke_grant(store, grant_id, now)` | Set `revoked_at`; withdraw the matching consent. Sessions are **not** deleted: the next request is refused by the grant check and that refusal is logged with the caregiver's name. |
+| `login(store, username, password, *, now, config, remote_addr=None)` | Steps below. Returns `(token, Principal, expires_at)`. |
+| `resolve_token(store, token, now)` | `sha256(token)` lookup; `None` when missing, revoked or expired. Then load the user (`disabled` → `None`) and build the `Principal`; for a caregiver use `active_grant`; no active grant → raise `AuthError("grant_revoked")` or `("grant_expired")` so the caller can log the precise reason. |
+| `logout(store, token, now)` | Set `revoked_at`. |
+| `change_password(store, user_id, old, new, *, now, config)` | Verify the old one, store the new hash, revoke the user's other sessions. |
+| `record_audit(store, *, at, username, action, result, user_id=None, role=None, reason=None, detail=None, remote_addr=None)` | Insert. `detail` is cut to 200 characters. |
+| `list_audit(store, *, since=None, limit=200, role=None)` | Newest first. |
+| `purge_audit(store, before_iso)` | Delete older rows; returns the count. |
+| `purge_sessions(store, now)` | Delete `auth_session` rows expired more than a day ago. |
+
+`login` steps:
+
+1. Count `audit_log` rows with this username (case-insensitive), `action = 'auth.login'`, `result = 'denied'`, `at >= now − lockout_minutes`. If the count is `>= max_failed_logins`: audit `denied / account_locked`, raise.
+2. Load the user. If there is none, run `verify_password(password, DUMMY_HASH)` anyway (a module-level hash computed at import) so timing does not reveal which names exist; audit `denied / invalid_credentials`; raise `invalid_credentials`.
+3. `status == "invited"` → `invite_pending`; `"disabled"` → `account_disabled`. Both audited as denied.
+4. Wrong password → audit denied, raise `invalid_credentials`.
+5. Caregiver without an active grant → audit denied with `no_active_grant`, raise.
+6. `token = secrets.token_urlsafe(32)`; insert `auth_session` with `sha256(token)` and `expires_at = now + session_minutes`; audit `allowed`.
+
+Every denial writes exactly one audit row with the username **as typed** (AC-16). Passwords and tokens are never written to the log, the audit table or an exception message.
+
+### CLI (`aegis-memory`)
+
+Restructure `main` so each sub-command adds its own arguments (the current loop over four names does not scale). New sub-commands; all accept `--home-id`, `--store-root`, `--config-path`:
+
+```
+aegis-memory user add --username NAME --role primary|caregiver [--display-name TEXT] [--password-stdin] --consent
+aegis-memory user list
+aegis-memory user disable --username NAME
+aegis-memory user passwd --username NAME [--password-stdin]
+aegis-memory audit list [--limit N]
+```
+
+- Without `--password-stdin` the password is read twice with `getpass.getpass`.
+- `user add --role primary` requires `--consent` and records a `capture` consent row. Without the flag print: `The primary user (or their authorised representative) must consent to capture. Re-run with --consent once consent has been given.` and exit 2.
+- Only one active primary user may exist; a second is refused (single home, single patient).
+- `user add --role caregiver` is for tests and recovery; the normal path is the invite (WP26).
+
+### Tests (`tests/test_auth.py`)
+- `test_hash_roundtrip_and_format`, `test_weak_password_rejected`, `test_malformed_hash_is_false`.
+- `test_login_success_returns_token_and_principal`.
+- `test_five_invalid_credentials_are_denied_and_logged` — wrong password, unknown user, empty password, invited-but-not-accepted user, disabled user: five `AuthError`s, five `audit_log` rows with `result='denied'`, each with the typed username, a timestamp and a reason (AC-16).
+- `test_lockout_after_repeated_failures_and_expiry` (sixth attempt with the right password is `account_locked`; after `lockout_minutes` it works).
+- `test_unknown_user_takes_the_dummy_path` (monkeypatch `verify_password` to count calls).
+- `test_invite_accept_flow`, `test_invite_code_is_single_use_and_expires`.
+- `test_revoked_grant_blocks_existing_token` — `resolve_token` raises `grant_revoked` for a token issued before the revocation (AC-17 at store level).
+- `test_expired_grant_and_expired_session`.
+- `test_restrict_changes_scopes_on_next_resolve`.
+- `test_token_is_not_stored_in_clear` — the raw token does not appear in any column of `auth_session`.
+- `test_audit_purge_keeps_thirty_days`.
+- `test_cli_user_add_requires_consent` and `test_cli_second_primary_is_refused`.
+
+### Done when
+The tests pass and no HTTP code was touched.
+
+---
+
+## WP26 — API enforcement, scopes, CORS and access endpoints
+
+**Goal:** every request is authenticated and authorised; caregivers act only inside their grant; every caregiver access is logged and visible to the primary user (FR8.1–FR8.6, NFR-S2, NFR-S3; AC-16, AC-17, AC-18, AC-26; todo 4.2 all, §6 C8).
+
+### Files
+- New: `src/aegis/remote/security.py`, `tests/test_security_api.py`, `tests/_secure.py` (fixtures).
+- Change: `src/aegis/remote/api.py`, `run_server.py`, `tests/conftest.py`, `docs/running_aegis.md`.
+
+### `remote/security.py`
+
+```python
+def auth_disabled() -> bool: return os.getenv("AEGIS_AUTH_DISABLED") == "1"
+
+LOCAL = Principal(None, "local", ROLE_PRIMARY, ALL_SCOPES, None)
+
+def auth_store() -> HomeStore: return get_store(server_home())
+
+def current_principal(request: Request) -> Principal: ...
+def optional_principal(request: Request) -> Principal | None: ...
+def guard(action: str, *, scope: str | None = None, primary_only: bool = False): ...   # returns a dependency
+def authorise(request, principal, *, action, scope=None, primary_only=False, detail=None) -> None: ...
+```
+
+`current_principal`:
+1. `auth_disabled()` → `LOCAL`.
+2. Header `Authorization: Bearer <token>`; missing or malformed → 401 `authentication_required` with `WWW-Authenticate: Bearer`.
+3. `resolve_token(auth_store(), token, current_time())`. `None` → audit (`username="unknown"`, `action="auth.token"`, `denied`, `session_expired`) and 401. `AuthError` → audit with the caregiver's username and the reason, 403 with that reason as `detail`.
+
+`authorise` (called by `guard`, and directly by `/ask` and `/query` because their scope depends on the parsed intent):
+1. **Home check.** If the request has a `home_id` query parameter (or body field, passed in by the caller) and it differs from `server_home()` → 403 `wrong_home`.
+2. `primary_only` and role is not primary → denied `not_permitted`.
+3. `scope` given, role is caregiver, `scope not in principal.scopes` → denied `out_of_scope`.
+4. Audit: write a row when the role is caregiver (allowed or denied), and for any denial. A primary user's allowed read is not audited (their questions are in `query_log`); their access-management and deletion actions are (the endpoints do it).
+5. Denied → `HTTPException(403, detail=<reason>)`.
+
+`resolve_repository` change: when auth is on and the caller gave no `dataset_id`, always use `server_home()`. A `dataset_id` request with auth on requires `primary_only` (the demo datasets are a developer feature).
+
+### Route policy (complete; anything not listed is `primary_only`)
+
+| Route | Requirement | Audit action |
+|---|---|---|
+| `GET /health` | public. Without a valid token it returns only `status`, `version`, `auth_required`, `home_id`, `clock_override`, `as_of`; counts are filled only for an authenticated caller. | — |
+| `POST /auth/login`, `POST /auth/accept` | public | `auth.login`, `auth.accept` |
+| `POST /auth/logout`, `GET /auth/me`, `POST /auth/password` | any authenticated user | `auth.logout`, —, `auth.password` |
+| `GET /query`, `POST /ask` — intent `where` without a window | scope `object_state` | `query.where` (detail: the question) |
+| `GET /query`, `POST /ask` — any other intent or a window | scope `history`; `max_history_days = principal.history_days` | `query.history` |
+| `GET /objects` (WP29) | scope `object_state` | `objects.list` |
+| `GET /evidence/{id}`, `GET /crops/{id}?home_id=` | scope `object_state` | `evidence.view` |
+| `GET /timeline`, `GET /sessions` (WP29) | scope `history` | `timeline.view` |
+| `GET /activities`, `GET /summary/daily` (WP29) | scope `summaries` | `summary.view` |
+| `GET /rooms` | scope `rooms` | `rooms.list` |
+| `POST /rooms/rename` | scope `rooms` | `rooms.rename` (detail: id and new label) |
+| `GET /capture/status` | any authenticated user | — |
+| `POST /transcribe` | any authenticated user | — |
+| `POST /capture/pause`, `POST /capture/resume` | primary | `capture.pause`, `capture.resume` |
+| `GET/POST/PATCH/DELETE /access/grants…`, `GET /access/log` | primary | `access.grant`, `access.update`, `access.revoke`, `access.log.view` |
+| `POST /history/delete` (WP28) | primary + password | `history.delete` |
+| `GET /video/{dataset_id}`, `GET /scene_graph`, `GET /anchors`, `GET /datasets`, `POST /dataset/select`, `GET /crops/{id}?dataset_id=`, all `/simulate*`, `POST /reset` | primary; simulator routes also need `AEGIS_ENABLE_SIMULATOR=1` as today | `video.view` etc. |
+
+Raw video is therefore never reachable with a caregiver token (NFR-S2). For history routes with a caregiver `history_days` limit: `/timeline`, `/activities`, `/sessions` clamp `start` to `now − history_days`; `/summary/daily` for an older date → 403 `outside_history`.
+
+The simulator presets move from `GET` to `POST` (`/simulate/floor` etc.); update `ApiService.simulatePreset`, `run_server.py`'s printed hints and `tests/test_mid1_prototype.py` / `tests/test_api.py` accordingly. A `GET` must not change memory.
+
+### Auth and access endpoints
+
+```
+POST /api/v1/auth/login     {username, password}
+  → 200 {token, token_type: "bearer", expires_at, user: {username, role, display_name, scopes, history_days, home_id}}
+  → 401 {"detail": "invalid_credentials"} | 403 {"detail": "no_active_grant" | "invite_pending" | "account_disabled"} | 429 {"detail": "account_locked"}
+POST /api/v1/auth/accept    {username, invite_code, password}   → 200 {"status": "ok"} | 400 {"detail": "invite_invalid" | "weak_password"}
+POST /api/v1/auth/logout    → 200
+GET  /api/v1/auth/me        → the `user` object
+POST /api/v1/auth/password  {old_password, new_password}
+
+GET    /api/v1/access/grants                 → [{grant_id, username, display_name, status, scopes, history_days, granted_at, expires_at, revoked_at, consent_given_at}]
+POST   /api/v1/access/grants                 {username, display_name?, scopes?, history_days?, expires_at?}
+                                              → 201 {grant_id, username, invite_code, invite_expires_at}
+PATCH  /api/v1/access/grants/{grant_id}      {scopes?, history_days?, expires_at?}
+DELETE /api/v1/access/grants/{grant_id}      → 200 {"status": "revoked"}
+GET    /api/v1/access/log?since=&limit=      → [{at, username, role, action, result, reason, detail}]
+```
+
+Login must never reveal whether a username exists: unknown user and wrong password both return 401 `invalid_credentials`. With auth disabled, `/auth/login` returns 409 `auth_disabled` and `/auth/me` returns the `LOCAL` user. Request bodies are pydantic models with length limits (username ≤ 64, password ≤ 128, display name ≤ 60).
+
+### CORS
+
+Replace the wildcard:
+
+```python
+origins = [o.strip() for o in os.getenv("AEGIS_CORS_ORIGINS", "").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_origin_regex=None if origins else r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=False,                       # bearer header, no cookies
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+```
+
+The Android app is not a browser and is not affected. The Flutter web build is served from `localhost` in development; for another origin the operator sets `AEGIS_CORS_ORIGINS`.
+
+### Input validation sweep (§6 C8)
+
+Every route parameter named `dataset_id` or `home_id` must pass through `_validated`. Check each route in `api.py`; `simulate_transition` takes `dataset_id` in the body and `get_active_dataset` validates it — confirm with a test. `room_id`, `instance_id`, `evidence_id`, `grant_id` are typed `int` in the signatures.
+
+### `run_server.py`
+
+New flags: `--home-id` (sets `AEGIS_HOME_ID`), `--config` (`AEGIS_CONFIG`), `--no-auth` (sets `AEGIS_AUTH_DISABLED=1`, prints a three-line warning, binds `127.0.0.1` only). Default is auth on. With auth on and no active primary user in the home store: print
+
+```
+No primary user exists for home '<id>'. Create one first:
+  uv run aegis-memory user add --home-id <id> --username <name> --role primary --consent
+```
+
+and exit with status 2. The banner prints `Auth: required` or `Auth: DISABLED (developer mode)`. Simulator hints are printed only with `--enable-simulator`.
+
+### Test fixtures (`tests/_secure.py`)
+
+```python
+@pytest.fixture
+def secure(tmp_path, monkeypatch):
+    """Auth on, home 'homeS' with a primary user, one caregiver and a small memory."""
+```
+It: removes `AEGIS_AUTH_DISABLED`; sets `AEGIS_STORE_ROOT`, `AEGIS_HOME_ID=homeS`, `AEGIS_NOW`; opens the store, ingests two sessions (keys, mug, two rooms, one crop), creates `patient` (primary, with consent), invites `carer@example.com` with the default scopes and accepts the invite; yields an object with `client`, `login(username, password) -> headers`, `primary` and `carer` header dicts and `store`; calls `close_stores()` and `reset_settings()` on teardown.
+
+### Tests (`tests/test_security_api.py`)
+
+- `test_every_route_needs_a_token` — iterate `app.routes`; for every path under `/api/v1/` except `/health`, `/auth/login`, `/auth/accept`, send the route's method without a token and assert 401. This test fails automatically when someone adds an unprotected route.
+- `test_five_invalid_credentials_are_denied_and_logged` — HTTP version of the WP25 test, plus a request with a made-up token; all denied; `GET /access/log` as the primary user shows the rows with username, time and result (AC-16).
+- `test_login_does_not_reveal_usernames` (same status and body for unknown user and wrong password).
+- `test_revocation_blocks_the_next_request` — caregiver token works; primary `DELETE`s the grant; the same token gets 403 `grant_revoked`; a new login gets 403 `no_active_grant`; both are in the log (AC-17).
+- `test_restricting_scopes_applies_immediately` (`PATCH` removes `summaries`; `/summary/daily` → 403).
+- `test_five_caregiver_actions_appear_in_the_log` — query, objects list, evidence image, daily summary, one denied timeline request: five rows, in order, with action names (AC-18).
+- `test_caregiver_scope_matrix` — default grant: three in-scope requests succeed (`/ask` where, `/objects`, `/summary/daily`); two out-of-scope are refused with 403: `GET /video/<session>` and `POST /ask {"text": "what did she do last week"}` (AC-26). Also `/scene_graph`, `/access/grants`, `/history/delete` → 403.
+- `test_history_days_limit` (grant with `history`, `history_days=1`).
+- `test_caregiver_answers_use_the_carer_voice` — the answer text does not contain `Your ` or `You `.
+- `test_rooms_rename_needs_the_rooms_scope` (403 without, 200 with; AC-31 behaviour unchanged).
+- `test_other_home_is_refused` (`home_id=other` → 403 `wrong_home`).
+- `test_mutating_routes_are_primary_only` — rename without scope, `dataset/select`, `reset`, `simulate_transition`, `capture/pause`.
+- `test_simulator_presets_are_post`.
+- `test_cors_has_no_wildcard` — a preflight from `https://evil.example` gets no `access-control-allow-origin`; one from `http://localhost:5000` does.
+- `test_public_health_hides_counts`.
+- `test_passwords_and_tokens_never_reach_logs` — `caplog` at DEBUG during login and a failed login; neither secret appears.
+- `test_auth_disabled_keeps_old_behaviour` (one legacy request without a token under `AEGIS_AUTH_DISABLED=1`).
+
+### Done when
+All of todo §4.2 can be ticked; `grep -n 'allow_origins=\["\*"\]' src` finds nothing; the 326 pre-existing tests still pass untouched except the simulator `GET`→`POST` change.
+
+---
+
+## WP27 — Encryption at rest and TLS
+
+**Goal:** AES-256 for the memory store, evidence crops and `home_map.json`; TLS between the app and the gateway (NFR-S1, AC-20, decision #5; todo 4.3 item 1).
+
+### Files
+- New: `src/aegis/core/keys.py`, `src/aegis/core/crypto.py`, `scripts/verify_encryption.py`, `tests/test_encryption.py`, `tests/test_tls_cert.py`, `docs/security.md`.
+- Change: `pyproject.toml` (`uv add sqlcipher3 cryptography`), `src/aegis/memory/store.py`, `src/aegis/memory/evidence.py`, `src/aegis/memory/home_registry.py`, `src/aegis/memory/cli.py`, `src/aegis/remote/api.py`, `run_server.py`.
+
+### Keys (`core/keys.py`)
+
+- The master key is 32 random bytes written as 64 hex characters.
+- `load_store_key(home_id) -> bytes | None`, first hit wins: `AEGIS_STORE_KEY` (hex) → file named by `AEGIS_STORE_KEY_FILE` → `~/.config/aegis/keys/<home_id>.key` if it exists → `None`. A value that is not exactly 64 hex characters raises `ValueError` (never fall back to plaintext on a malformed key).
+- `generate_store_key(home_id, path=None) -> Path`: create the directory with mode `0700`, write the file with `os.open(..., O_WRONLY | O_CREAT | O_EXCL, 0o600)`; refuse to overwrite.
+- `derive(master, purpose: bytes) -> bytes`: HKDF-SHA256, 32 bytes, `info=purpose`. `db_key = derive(master, b"aegis/db/v1")`, `file_key = derive(master, b"aegis/files/v1")`.
+- The key file must **not** live under the store root. `docs/security.md` says so and tells the operator to back the key up separately; losing it loses the memory.
+
+### Files (`core/crypto.py`)
+
+Format: 4 bytes magic `AEG1`, 12 bytes random nonce, then AES-256-GCM ciphertext with tag; associated data `b"aegis-file-v1"`.
+
+```python
+def encrypt_bytes(key: bytes, data: bytes) -> bytes
+def decrypt_bytes(key: bytes, blob: bytes) -> bytes         # InvalidTag → CryptoError
+def is_encrypted(blob: bytes) -> bool                        # blob[:4] == b"AEG1"
+def write_protected(path: Path, data: bytes, key: bytes | None) -> None   # atomic: temp file + replace; plaintext when key is None
+def read_protected(path: Path, key: bytes | None) -> bytes   # plaintext passthrough when the file is not encrypted; CryptoError when it is encrypted and key is None
+```
+
+### Store (`memory/store.py`)
+
+- `HomeStore.__init__(self, home_id, path, key: bytes | None = None)`. `self.file_key = derive(key, b"aegis/files/v1") if key else None`.
+- With a key: `from sqlcipher3 import dbapi2 as driver` (import inside the branch so machines without the wheel still run unencrypted stores and tests); connect; **first statement** `PRAGMA key = "x'<db_key hex>'"`; then `SELECT count(*) FROM sqlite_master`. A `DatabaseError` here → close and raise `StoreKeyError("wrong key, or the store is not encrypted; run 'aegis-memory encrypt'")`.
+- Without a key: standard `sqlite3`. If the file exists and its first 16 bytes are not `b"SQLite format 3\x00"` → `StoreKeyError("this store is encrypted; set AEGIS_STORE_KEY or AEGIS_STORE_KEY_FILE")`.
+- `row_factory = driver.Row`. The rest of the class is unchanged; `sqlite3.Row` in type hints may stay.
+- `open_store(home_id, store_root=None, *, key=_UNSET)`: when `key` is not passed, `key = load_store_key(home_id)`. If `AEGIS_REQUIRE_ENCRYPTION=1` and the key is `None` → `StoreKeyError`.
+- The v1→v2 backup copy made in WP16 is plaintext only when the store is plaintext; for an encrypted store it is a copy of the encrypted file. Keep that behaviour.
+
+### Evidence and registry
+
+- `evidence.copy_into_store`: replace `shutil.copyfile` with `write_protected(target, source.read_bytes(), store.file_key)`. The `bytes` column stores the **plaintext** length (`_attach_evidence` compares it with the new crop's file size).
+- `api._read_evidence_file` (WP20): `read_protected(path, store.file_key)`.
+- `home_registry.save_registry(registry, base_dir, key=None)` writes through `write_protected`; `load_registry(home_id, base_dir, key=None)` reads through `read_protected` and treats `CryptoError` like a corrupt file (empty registry). `export_registry(store)` and the seeding call in `open_store` pass `store.file_key`.
+
+### `aegis-memory encrypt --home-id ID`
+
+1. Refuse when the store is already encrypted.
+2. Key: use `load_store_key`; when there is none, `generate_store_key` and print its path.
+3. Open the plaintext file with the `sqlcipher3` driver and no key; `PRAGMA wal_checkpoint(TRUNCATE)`; read `PRAGMA user_version`.
+4. `ATTACH DATABASE '<dir>/memory.enc.db' AS enc KEY "x'<db_key hex>'"`; `SELECT sqlcipher_export('enc')`; `PRAGMA enc.user_version = <n>` (the export does not carry it over); `DETACH DATABASE enc`.
+5. Verify: open `memory.enc.db` with the key; every table's row count equals the plaintext count; `user_version` equal.
+6. Replace: delete `memory.db-wal`, `memory.db-shm`, any `memory.v*.bak.db`; `os.replace("memory.enc.db", "memory.db")`.
+7. Encrypt in place every file under `<home>/evidence/` that is not already encrypted, and `home_map.json`.
+8. Print a report: tables, rows, files encrypted, key path. Any failure before step 6 leaves the original untouched and exits 1.
+
+`aegis-memory rekey` is out of scope; say so in `docs/security.md`.
+
+### TLS
+
+- `aegis-memory tls-cert --host <LAN IP> [--host …] [--out ~/.config/aegis/tls]`: with `cryptography`, generate an EC P-256 key and a self-signed certificate (CN `aegis`, SAN: `localhost`, `127.0.0.1`, `10.0.2.2` and every `--host`; validity 825 days). Write `aegis.key` (mode `0600`) and `aegis.crt`; print the SHA-256 fingerprint of the DER certificate as 64 lower-case hex characters. Refuse to overwrite without `--force`.
+- `run_server.py --tls-cert PATH --tls-key PATH`: pass `ssl_certfile` / `ssl_keyfile` to `uvicorn.run`; print the URL with `https://` and the fingerprint. Binding rule: with TLS → `0.0.0.0`; without TLS → `127.0.0.1` only, unless `--insecure-http` is given (prints `WARNING: serving memory over plain HTTP on the network`). `adb reverse` keeps working over loopback, so USB development needs no certificate.
+- `run_server.py` sets `AEGIS_REQUIRE_ENCRYPTION=1` unless `--allow-plaintext`.
+- `/health` gains `tls: bool` (`request.url.scheme == "https"`) and `encrypted_at_rest: bool` (only for an authenticated caller).
+- The app pins the fingerprint (WP30).
+
+### `scripts/verify_encryption.py` (AC-20 inspection)
+
+`--home-id`, `--store-root`, `--probe TEXT` (a room or object label known to be in the store; repeatable). Checks, each printed PASS/FAIL, exit 1 on any FAIL:
+1. `memory.db` does not start with `SQLite format 3`.
+2. No probe string occurs in the raw bytes of `memory.db`, `memory.db-wal` or `home_map.json`.
+3. No file under `evidence/` starts with the JPEG magic `FF D8`; every one starts with `AEG1`.
+4. `home_map.json` is not parseable as JSON.
+5. Opening with the configured key works and `counts()` is non-empty.
+6. Optional `--url https://…`: a TLS handshake succeeds and the certificate fingerprint equals `--fingerprint`; the same host on `http://` is refused or not listening.
+Writes a result file through `scripts/_evidence.py`.
+
+### Tests
+
+`tests/test_encryption.py` (skip the module with `pytest.importorskip("sqlcipher3")`; CI installs it because it is a normal dependency)
+- `test_encrypted_store_roundtrip` (ingest, close, reopen with the key, same `latest_states`).
+- `test_database_file_has_no_plaintext` (header and a known label are absent from the raw bytes, including the WAL before checkpoint).
+- `test_wrong_key_is_refused`, `test_missing_key_on_encrypted_store_is_refused`, `test_key_on_plaintext_store_is_refused`.
+- `test_malformed_key_raises_not_plaintext_fallback`.
+- `test_require_encryption_flag`.
+- `test_evidence_and_home_map_are_encrypted_and_served` (file starts with `AEG1`; `/api/v1/evidence/{id}` returns a JPEG beginning `FF D8`).
+- `test_crypto_roundtrip_and_tamper_detection` (flip one byte → `CryptoError`).
+- `test_encrypt_command_migrates_a_plaintext_home` (row counts equal, `user_version` kept, old files gone, crops encrypted, restart-equivalence of `latest_states`).
+- `test_compaction_and_rename_work_on_an_encrypted_store` (one call each; guards against driver differences).
+- `test_key_file_permissions_and_no_overwrite`.
+
+`tests/test_tls_cert.py`
+- `test_certificate_has_expected_sans_and_fingerprint` (parse with `cryptography.x509`).
+- `test_refuses_to_overwrite`.
+
+### Done when
+`uv run python scripts/verify_encryption.py --home-id <id> --probe Kitchen` passes on a real home, and todo 4.3 item 1 can be ticked with that result file.
+
+---
+
+## WP28 — Raw-frame purge, history deletion and the privacy statement
+
+**Goal:** raw frames are gone after 24 hours with a check that proves it (NFR-S4, AC-30); the primary user can delete all history, verifiably (NFR-S5, UC-11, AC-20); the limits are written down (todo 4.3 items 4–6).
+
+### Files
+- New: `src/aegis/memory/privacy.py`, `src/aegis/remote/maintenance.py`, `scripts/verify_purge.py`, `docs/privacy_limitations.md`, `tests/test_privacy.py`.
+- Change: `src/aegis/memory/cli.py`, `src/aegis/remote/api.py`, `run_pipeline.py`, `docs/live_capture.md`.
+
+### What counts as raw material
+
+A dataset id is **patient material** when the home store has a `session` row with that id, or its dataset directory contains `live_session.json`, and it is not listed in `privacy.exempt_datasets` (consented scripted test recordings and the public demo clips).
+
+```python
+@dataclass(frozen=True, slots=True)
+class RawRoots:
+    captures: Path = Path("captures")
+    data: Path = Path("data")
+    outputs: Path = Path("outputs")
+    volume: str | None = None        # Modal data volume name; None = do not touch the volume
+
+@dataclass(frozen=True, slots=True)
+class RawItem:
+    location: str    # "capture" | "data" | "outputs" | "volume"
+    path: str
+    captured_at: datetime
+    bytes: int
+```
+
+`find_raw_material(roots, store, *, cutoff, exempt) -> list[RawItem]` lists everything captured before `cutoff`:
+
+| Location | What | Age taken from |
+|---|---|---|
+| capture | `frame_*.jpg` in every directory under `roots.captures` that has `session.json` or `session_state.json` | the file's mtime |
+| data | for patient datasets under `roots.data/<id>/`: the `frames/` tree, `video.mp4`, `<id>.mp4` | the store session's `ended_at`, else the directory mtime |
+| outputs | for patient datasets under `roots.outputs/<id>/`: `viewer/`, `geometry/`, `objects/evidence/`, `objects/*.json` (everything except `benchmark_stats.json`), only when `privacy.purge_session_outputs` | same |
+| volume | `<id>/` on the Modal volume for patient datasets | the store session's `ended_at` |
+
+`live_handoff.promote_live_session` writes to `data/<dataset_id>` (`data_root` defaults to `Path("data")`), so `roots.data` covers promoted live sessions and segments.
+
+`index.jsonl`, `session.json` and `session_state.json` are kept: they hold timestamps and gap records (needed for AC-25), not images. `outputs/_homes` is never touched by the purge.
+
+`purge_raw(roots, store, *, now, retention_hours, exempt, dry_run=False, run=subprocess.run) -> PurgeReport`:
+1. `cutoff = now − retention_hours`. `items = find_raw_material(...)`.
+2. Delete local files and trees (`unlink`, `shutil.rmtree`). For the volume: `run(["modal", "volume", "rm", "-r", volume, f"{id}"], check=False)`; a non-zero exit is recorded in `errors`.
+3. `remaining = find_raw_material(...)` again (for the volume: `modal volume ls <volume> <id>` must fail or be empty).
+4. Return `PurgeReport(deleted, bytes_freed, remaining, errors, cutoff)`. `verified = not remaining and not errors`.
+
+If frames of a live capture are purged before they were processed, log a warning with the count; the 24-hour rule wins.
+
+### Where the purge runs
+
+- `aegis-memory purge-frames [--older-than-hours 24] [--captures DIR] [--data-root DIR] [--outputs-root DIR] [--remote] [--dry-run]`: prints the report as JSON; exit 1 when not verified. `--remote` adds the Modal volume named in the config.
+- `run_pipeline._ingest_into_home`: after a successful ingest, call `purge_raw` with `--remote` semantics for sessions older than the cutoff (not the one just ingested, unless it is already old).
+- `remote/maintenance.py::run_maintenance(now)`: local purge (no volume), `purge_query_log`, `purge_audit`, `purge_sessions`. A daemon thread started in the FastAPI `lifespan` runs it at start-up and then hourly; it is not started when `AEGIS_DISABLE_MAINTENANCE=1`. Exceptions are logged, never raised. `/health` (authenticated) reports `last_maintenance_at` and `raw_frames_overdue` (the length of the last `remaining` list).
+- `docs/live_capture.md`: a cron line for laptops that do not keep the server running: `0 * * * * cd <repo> && uv run aegis-memory purge-frames --remote`.
+
+`scripts/verify_purge.py` (AC-30): runs `find_raw_material` with the 24-hour cutoff and writes a result file listing every remaining path; PASS means none.
+
+### History deletion
+
+`delete_history(store, *, roots, now, exempt) -> DeletionReport`:
+
+1. Collect the session ids from `session`.
+2. `PRAGMA secure_delete = ON`.
+3. One transaction: `DELETE FROM <table>` for each table in `HISTORY_TABLES`, in that order.
+4. `PRAGMA wal_checkpoint(TRUNCATE)`; `VACUUM`.
+5. Remove `<home>/evidence/` and `<home>/home_map.json`.
+6. `purge_raw` for those session ids with `retention_hours = 0` (everything, including the volume when configured).
+7. Verify: every table in `HISTORY_TABLES` has 0 rows; the evidence directory and `home_map.json` do not exist; `find_raw_material` with `cutoff = now` returns nothing for those ids. Any failure goes into `report.failures`; `report.verified = not failures`.
+8. Accounts, grants, consent and the audit log are kept. The caller writes the audit row.
+
+Endpoint:
+
+```
+POST /api/v1/history/delete   {password, confirm}     primary only
+```
+`confirm` must equal `"DELETE"` (else 400). The password is re-checked with `verify_password` (wrong → 403, audited). On success: 200 with the report and an audit row `history.delete / allowed`. When `verified` is false: **500** with the report and an audit row `history.delete / error` — the system reports the failure instead of claiming success (UC-11 A2). The deletion is immediate and has no undo; there is no soft-delete.
+
+CLI: `aegis-memory delete-history --home-id ID --yes` (same function; refuses without `--yes`).
+
+### `docs/privacy_limitations.md`
+
+Write these sections, in plain statements, each tied to what the code does:
+
+1. **What is stored.** Structured memory (rooms, furniture, objects, state runs, events, summaries), object-only evidence crops, query log, account and audit data. No audio. No full frames after 24 hours.
+2. **Evidence crops.** Cut to the object's box plus 15% padding; they can contain background, including parts of a bystander. Kept until the run they belong to is compacted, and the last-known crop is kept longer (`keep_last_evidence`). Decision #9 and its status (confirmed by the supervisor on <date>, or pending). How to turn crops off.
+3. **Bystanders.** Recording happens only with the primary user's consent; other household members should be told; test recordings include only consenting participants. The system does not detect or blur faces.
+4. **Raw frames.** Where they exist (four places), the 24-hour rule, how it is verified, and that the Modal volume is a cloud service.
+5. **Encryption.** What is encrypted (database, crops, room map), with which algorithm, and what is not (data in memory while the server runs; raw frames during their 24 hours; per-session working files until purged). The key is on the same laptop: this protects a copied or stolen store directory, not a compromised running machine.
+6. **Access.** One primary user, invited caregivers, scopes, the audit log and its 30-day retention; the lockout can be used to block a caregiver temporarily by guessing wrong passwords.
+7. **Deletion.** What "delete history" removes and keeps; backups made outside Aegis are not covered.
+8. **Speech and optional language model.** On-device recognition; the optional server transcription; WP24 sends the question text to a cloud model when enabled.
+9. **Not a medical device; no clinical claim.**
+
+### Tests (`tests/test_privacy.py`)
+
+All paths under `tmp_path`; file ages set with `os.utime`.
+- `test_old_capture_frames_are_removed_and_metadata_kept`.
+- `test_frames_younger_than_24h_stay`.
+- `test_dataset_frames_video_and_outputs_are_removed_for_home_sessions`.
+- `test_exempt_and_non_home_datasets_are_untouched` (a demo dataset directory with frames survives).
+- `test_volume_purge_calls_modal_and_reports_failure` (fake `run`).
+- `test_verification_lists_what_remains` (make one file undeletable by monkeypatching `Path.unlink` to raise; `verified is False`, the path is in `remaining`).
+- `test_dry_run_deletes_nothing`.
+- `test_home_store_is_never_purged`.
+- `test_delete_history_empties_everything_and_verifies` — after it: all history tables 0 rows, no evidence files, no `home_map.json`, raw frames gone, the user and audit rows still present; a query answers `never_observed`; `open_store` after restart does not resurrect rooms.
+- `test_delete_history_api_requires_password_and_confirm` (400, 403, then 200).
+- `test_failed_deletion_reports_failure_not_success` (500 and `verified: false`).
+- `test_deleted_text_is_not_in_the_database_file` (plaintext store: a unique room label is absent from the raw file after `VACUUM`).
+- `test_maintenance_purges_logs_and_frames`.
+
+### Done when
+`scripts/verify_purge.py` passes on the development laptop after a real live session older than 24 hours (recorded in WP34), and todo 4.3 items 4–6 can be ticked.
+
+---
+
+## WP29 — Portal API: object states, daily summary, sessions, timeline filters
+
+**Goal:** the server side of the caregiver portal (FR8.2, FR8.3, FR7.4; UC-09, UC-10; AC-25).
+
+### Files
+- New: `src/aegis/memory/portal.py`, `tests/test_portal_api.py`.
+- Change: `src/aegis/remote/api.py`, `src/aegis/memory/store.py`.
+
+### `GET /api/v1/objects?home_id=` (scope `object_state`)
+
+`portal.object_states(repo, *, now, zone, settings, voice) -> list[dict]`, one entry per instance in `latest_states()`:
+
+```
+{instance_id, label, canonical, importance,
+ status,            # "answered" | "stale" | "low_confidence"  (WP19 rule)
+ freshness,         # "fresh" | "stale" | "unknown"
+ place,             # place_phrase(...)  e.g. "on Desk #1 in the Kitchen"; "being carried" for carried
+ anchor_label, room_label,
+ last_seen_at, last_seen_text,
+ confidence,
+ evidence}          # one EvidenceRef (WP20)
+```
+Order: `importance == "high"` first, then most recently seen. For `low_confidence`, `place` is prefixed with `possibly `. This is UC-09: the caregiver sees the state, when it was observed, whether it is stale, and the evidence.
+
+### `GET /api/v1/summary/daily?date=YYYY-MM-DD&home_id=` (scope `summaries`)
+
+`portal.daily_summary(store, day, *, now, zone, settings, voice) -> dict`:
+
+```
+{date, tier, text,                       # text: at most two sentences
+ recorded_minutes, sessions,             # from session rows overlapping the local day
+ rooms: [{room_label, minutes}],         # from room_visit (detailed) or activity sidecars (summarised)
+ activities: [ActivityModel],            # detailed tier only
+ lines: [str],                           # activity lines (detailed) or summary texts (summarised)
+ object_lines: [{label, text}],          # objects that changed that day
+ evidence: [EvidenceRef]}
+```
+
+- Window = the local day (`compaction._bounds`); a future date → 422.
+- Detailed (activity rows exist): `text` = the two sentences of the `self` branch of `answer_what_happened` with the label `describe_day(day)`; `object_lines` = for each instance with events that day, `{label, text: "<n> change(s); last: <event_summary>"}`.
+- Summarised (no activity rows, summary rows cover the date at day, week or month level): `tier="summarised"`; `text = "From summarised history, {label}: {n} room visit(s) recorded."`; `lines` = the summary texts; `object_lines` from the object summaries (`text` = the summary text after the label).
+- Neither: `tier="detailed"`, `text` = `No activity was recorded {label}.` when no session overlaps the day, else `Recording ran {label} but nothing changed.` (UC-10 A1).
+
+### `GET /api/v1/sessions?home_id=&date=` (scope `history`)
+
+`[{session_id, started_at, ended_at, keyframe_count, time_source, event_count}]`, newest first; `date` filters to sessions overlapping that local day. This feeds the timeline filter.
+
+### `GET /api/v1/timeline` additions
+
+- New query parameters `date` (local day; exclusive with `start`/`end` → 422 when combined) and `session_id`.
+- For a home store: convert `start`/`end` to local dates before calling `store.summaries` (fixes the UTC-slice bug in the fact table).
+- `StoreRepository.events_between(start, end, session_id=None)` filters on the `session_id` already present in each event.
+- Each item keeps `tier`. Items are ordered by time: summaries by `period_start`, then events by `end_wallclock`.
+- The response model gains `session_id: str | None`.
+
+### Tests (`tests/test_portal_api.py`) — reuse the `history_store` fixture of WP21 (move it to `tests/_graphs.py`)
+- `test_objects_lists_state_time_freshness_and_evidence` (keys stale, mug fresh).
+- `test_objects_order_puts_important_first`.
+- `test_daily_summary_detailed`, `test_daily_summary_no_recording`, `test_daily_summary_after_compaction_is_labelled_summarised` (UC-10 A2).
+- `test_daily_summary_text_is_at_most_two_sentences`.
+- `test_sessions_filter_by_local_date` (a session at 23:30 UTC belongs to the next local day in `Asia/Karachi`).
+- `test_timeline_filters_by_date_and_session`.
+- `test_timeline_matches_the_session_log` — every event row of the store for one session appears once, in chronological order, with matching type and time (AC-25 at fixture level).
+- `test_timeline_summary_dates_are_local` (the regression for the UTC-slice bug).
+
+### Done when
+The endpoints exist behind the WP26 policy table and the tests pass.
+
+
+---
+
+## WP30 — App foundation: session, settings, text size, contrast, API client
+
+**Goal:** the app logs in, talks to the home memory, remembers its settings, offers three text sizes and meets WCAG AA text contrast (FR7.3, NFR-U3, AC-24; todo 4.4 base, 4.5 items 1–2).
+
+All paths are under `apps/mobile/`. Flutter rule II.0.1-3 applies to WP30–WP32.
+
+### Files
+
+```
+pubspec.yaml                                   + shared_preferences, crypto, speech_to_text (WP31)
+lib/main.dart                                  AppScope, text scaler, start-up routing
+lib/state/app_state.dart                       NEW  ChangeNotifier: session, text size, mode
+lib/services/settings_store.dart               NEW  shared_preferences wrapper
+lib/services/http_client_factory.dart          NEW  conditional import
+lib/services/http_client_io.dart               NEW  fingerprint pinning
+lib/services/http_client_web.dart              NEW
+lib/services/api_service.dart                  REWRITE
+lib/models/query_result.dart                   extend (Answer fields)
+lib/models/evidence_ref.dart, object_state.dart, daily_summary.dart,
+           access_models.dart, room_info.dart, session_info.dart, user_session.dart   NEW
+lib/models/timeline_event.dart                 extend (tier, wall-clock, session)
+lib/theme/app_theme.dart                       text-safe colours, textPairs
+lib/views/login_screen.dart                    NEW
+lib/views/home_screen.dart                     REWRITE: role-based shell
+lib/views/settings/settings_screen.dart        NEW
+test/contrast_test.dart, test/api_service_test.dart, test/login_test.dart, test/text_size_test.dart   NEW
+test/widget_test.dart                          REWRITE
+test/support/fake_server.dart                  NEW  shared MockClient
+android/app/src/main/AndroidManifest.xml, res/xml/network_security_config.xml
+```
+
+Add packages with `flutter pub add shared_preferences crypto` (and `speech_to_text` in WP31) so the resolver picks versions that match the SDK; commit `pubspec.lock`. Do not add a state-management package.
+
+### Server change needed first
+`HealthResponse` gains `home_ready: bool` (the home store has at least one session). Public.
+
+### `AppState` (`lib/state/app_state.dart`)
+
+```dart
+enum TextSize { small, medium, large }          // scale 0.9, 1.0, 1.3
+enum AppMode { home, dataset }
+
+class AppState extends ChangeNotifier {
+  UserSession? session;          // null = not logged in (token kept in memory only)
+  bool authRequired = true;      // from /health
+  AppMode mode = AppMode.home;
+  String? homeId;                // from /health or the login response
+  TextSize textSize = TextSize.medium;
+  bool caregiverPreview = false; // developer mode only
+  double get textScale;
+  bool get isCaregiver;          // session?.role == 'caregiver' || caregiverPreview
+  bool hasScope(String scope);   // primary / developer mode: always true
+}
+class AppScope extends InheritedNotifier<AppState> { static AppState of(BuildContext c); }
+```
+
+`MaterialApp.builder` wraps the child in `MediaQuery(data: mq.copyWith(textScaler: TextScaler.linear(state.textScale)), child: child)`. Every screen must stay usable at 1.3: replace fixed `childAspectRatio` grids with `mainAxisExtent: 112 * scale`, wrap rows of badges in `Wrap`, and never put scaled text in a fixed-height box.
+
+The token is **not** written to disk. Closing the app means logging in again; sessions last 60 minutes anyway.
+
+### Settings store
+Keys: `base_url`, `text_size`, `pinned_fingerprint`, `last_username`. `SettingsStore.load()` at start-up; tests call `SharedPreferences.setMockInitialValues({})`.
+
+### HTTP client and certificate pinning
+
+`http_client_factory.dart`: `export 'http_client_web.dart' if (dart.library.io) 'http_client_io.dart';` Both files define `http.Client createHttpClient({String? pinnedSha256, void Function(String fingerprint)? onUnknownCertificate})`.
+
+- IO (`http_client_io.dart`): `HttpClient()..badCertificateCallback = (cert, host, port) { final fp = sha256.convert(cert.der).toString(); if (pinnedSha256 != null && fp == pinnedSha256) return true; onUnknownCertificate?.call(fp); return false; }` wrapped in `IOClient`. A certificate signed by a public authority never reaches the callback and is accepted normally.
+- Web: `http.Client()`; the browser decides. Say in Settings that on the web the certificate must be accepted in the browser.
+
+Trust on first use: when a request fails with a handshake error and `onUnknownCertificate` delivered a fingerprint, show a dialog: `This server's certificate is not known. Fingerprint: <8 groups of 8 hex>. Compare it with the one printed by run_server.py.` Buttons **Trust** (save the pin, rebuild the client, retry) and **Cancel**. A changed fingerprint for an already pinned server shows `The server's certificate has changed.` and offers only Cancel and **Forget and re-check**.
+
+Android manifest: remove `android:usesCleartextTraffic="true"` from `src/main/AndroidManifest.xml` and set `cleartextTrafficPermitted="false"` on the `base-config` of `network_security_config.xml`; keep the `domain-config` that allows cleartext for `localhost`, `127.0.0.1` and `10.0.2.2` (USB `adb reverse` and the emulator). LAN connections must use `https://`. `updateBaseUrl` keeps a typed scheme; for a bare host it now defaults to `https://<host>:8000`, except loopback hosts, which default to `http://`.
+
+### `ApiService` rewrite
+
+- Constructor: `ApiService({String baseUrl, http.Client? client, AppState? state})`. Tests inject a `MockClient`.
+- One private `_send(method, path, {query, body})` that: adds `Authorization: Bearer <token>` when logged in; adds the scope parameter (`home_id=<id>` in home mode, `dataset_id=<id>` in dataset mode) for memory routes; applies the 5-second timeout; maps results to
+
+```dart
+class ApiResult<T> { final T? data; final ApiError? error; bool get ok; }
+enum ApiErrorKind { unreachable, unauthorised, forbidden, notFound, invalid, server }
+class ApiError { final ApiErrorKind kind; final String message; final String? reason; }
+```
+- A 401 on any route clears `state.session` and notifies; the shell then shows the login screen with `Your session has ended. Please sign in again.`
+- No method returns invented data. `unreachable` carries the existing message `Can't reach Aegis memory. Check the connection and try again.`
+- Methods (each maps to one endpoint): `health()`, `login`, `acceptInvite`, `logout`, `ask(text, {instanceId, modality, transcriptConfidence})`, `objects()`, `timeline({date, sessionId})`, `sessions({date})`, `dailySummary(date)`, `rooms()`, `renameRoom(id, label)`, `grants()`, `createGrant(...)`, `updateGrant(...)`, `revokeGrant(id)`, `accessLog()`, `captureStatus()`, `setCapturePaused(bool)`, `deleteHistory(password)`, `changePassword`, and the developer ones `datasets()`, `selectDataset`, `simulatePreset` (now `POST`), `resetMemory`.
+- `evidenceUrl(String path)` returns the absolute URL; `authHeaders` is public so `Image.network(url, headers: api.authHeaders)` can fetch crops.
+- The in-memory search history stays, keyed by home or dataset, for the patient's "recent questions".
+
+`QueryResult` gains: `status`, `abstained`, `intent`, `answer`, `tier`, `freshness`, `windowLabel`, `evidence` (`List<EvidenceRef>`), `options`, `items`, `knownItems`, `asOf`, `latencyMs`. Unknown or missing fields parse to safe defaults (`status` defaults to `found ? 'answered' : 'never_observed'`) so the app still works against an older server.
+
+### Start-up flow (`main.dart`)
+
+1. Load settings. Call `health()`.
+2. Unreachable → a full-screen `Can't reach Aegis memory` with **Retry** and **Server settings**. No other content.
+3. `auth_required == true` and no session → `LoginScreen`.
+4. `auth_required == false` (developer mode) → the shell as a primary user, with a thin `Developer mode — sign-in is off` banner. Mode is `home` when `home_ready`, else `dataset`.
+5. A health response without the new fields (old server, or the 404 that the old widget tests returned) is treated as developer mode + dataset mode.
+
+### Login screen
+Fields: username, password (obscured, with a show/hide toggle), **Sign in**; a link **I have an invite code** that opens three fields (username, code, new password) and calls `acceptInvite`, then signs in. Errors are shown in words: `invalid_credentials` → `That username or password is not right.`; `account_locked` → `Too many attempts. Try again in 15 minutes.`; `no_active_grant` → `Your access has ended. Ask the person you care for to grant it again.`; `invite_pending` → `Use your invite code first.`; unreachable → the standard message. The server address is editable from a gear icon.
+
+### Shell (`home_screen.dart`)
+Bottom navigation chosen by role and scopes:
+
+| Role | Tabs |
+|---|---|
+| Primary (and developer mode) | **Ask** (WP31) · **Timeline** (WP32 timeline tab) · **Settings** |
+| Caregiver | **Objects** (`object_state`) · **Summary** (`summaries`) · **Timeline** (`history`) · **Rooms** (`rooms`) · **Account** — a tab is shown only when its scope is granted |
+
+The old "Patient Recall / Caregiver Audit" segmented control is removed: who you are is decided by signing in, not by a switch. In developer mode Settings has **Preview caregiver view**, which shows the caregiver tabs with every scope.
+
+### Settings screen
+Sections: **Text size** (three large buttons `A` small, `A` medium, `A` large; the change applies immediately and is saved); **Account** (name, role, sign out, change password); **Server** (address, connection state, certificate fingerprint, forget pin); for the primary user **Sharing** and **Privacy** (WP32); **Developer** (only in developer mode or for the primary user: dataset switcher, simulator when the server enables it, last answer latency, caregiver preview).
+
+### Theme: text colours that meet AA
+
+Measured contrast (white card / `#FAF7F0` canvas). Add these constants and use them for **every text and every icon that carries meaning**; the existing bright colours remain only for fills, borders and decorative icon backgrounds.
+
+| New constant | Value | White | Canvas | Replaces as text colour |
+|---|---|---|---|---|
+| `textHighContrast` (unchanged) | `#1C1917` | 17.49 | 16.35 | — |
+| `textMuted` (change value) | `#57534E` | 7.63 | 7.13 | `#78716C` |
+| `textHint` | `#6B655F` | 5.75 | 5.37 | `tertiaryLabel` |
+| `brandText` | `#B45309` | 5.02 | 4.69 | `primaryTeal` as text |
+| `accentText` | `#92400E` | 7.09 | 6.63 | `tealAccent`, `royalAmethyst`, `#C084FC` as text |
+| `warningText` | `#9A3412` | 7.31 | 6.83 | `alertAmber` as text |
+| `successText` | `#15803D` | 5.02 | 4.69 | `systemGreen` as text |
+| `dangerText` | `#B91C1C` | 6.47 | 6.05 | `systemRed` as text |
+| `infoText` | `#4338CA` | 7.90 | 7.39 | `systemIndigo`, `systemBlue` as text |
+| `buttonFill` | `#B45309` | white text on it: 5.02 | | the `primaryTeal` gradient behind white text |
+
+On the segmented track `#ECE7DE` only `textHighContrast` and `textMuted` pass; do not put `brandText` there. Snack bars keep `#065F46`, `#0F766E`, `#991B1B` with white text (7.68, 5.47, 8.31).
+
+Expose the pairs the app uses as `static const List<(String name, Color fg, Color bg)> textPairs` in `AppTheme`. After the change, `grep -n "tealAccent\|alertAmber\|tertiaryLabel\|royalAmethyst\|C084FC\|systemGreen\|systemRed\|systemBlue" lib/` must show these colours only in non-text positions (`color:` of a `BoxDecoration`, a border, `withOpacity` fills).
+
+`web/index.html`: change the body background from `#0F172A` to `#FAF7F0` (it flashes dark before the light app loads).
+
+### Tests
+
+- `test/contrast_test.dart`: implement the WCAG relative-luminance formula in the test; every entry of `AppTheme.textPairs` must be ≥ 4.5. Print a table (name, ratio); this printed table is the AC-24 contrast record.
+- `test/text_size_test.dart`: pump the app at each of the three sizes on a 360×640 surface; `tester.takeException()` is null (no overflow); the text scaler equals 0.9 / 1.0 / 1.3; changing the size in Settings updates the scaler and is saved.
+- `test/api_service_test.dart`: bearer header is sent after login; `home_id` is added in home mode and `dataset_id` in dataset mode; 401 clears the session; unreachable gives `ApiErrorKind.unreachable` and no data; an old-server `QueryResult` JSON parses; bare LAN host becomes `https://…:8000`, loopback stays `http://`.
+- `test/login_test.dart`: wrong password shows the message and stays on the login screen; success shows the role's tabs; a caregiver without the `history` scope has no Timeline tab; the invite flow calls `/auth/accept` then `/auth/login`.
+- `test/support/fake_server.dart`: one configurable `MockClient` (`FakeServer`) with health, login, ask, objects, timeline, sessions, summary, rooms, grants, access log; it records requests so tests can assert headers and bodies.
+- Rewrite `test/widget_test.dart` on top of `FakeServer`. Keep the meaning of the existing cases (answer shown from the server, unreachable shows the message and never a location, the recent-question history, LAN host normalisation, null confidence parsing); drop assertions on dataset-specific tiles and titles, which are being removed.
+
+### Done when
+`flutter analyze --no-fatal-infos` and `flutter test` pass in CI; todo 4.5 items 1 and 2 can be ticked with `test/text_size_test.dart` and the printed contrast table.
+
+---
+
+## WP31 — App: patient view
+
+**Goal:** ask by typing or by voice, see a short answer with its evidence, time and place, and choose between several matches (FR6.1, FR6.3, FR7.1, FR7.2, NFR-U2; AC-14; todo 3.2 microphone, 4.4 evidence display).
+
+### Files
+```
+lib/views/patient/patient_view.dart          REWRITE
+lib/views/patient/answer_card.dart           NEW
+lib/widgets/evidence_image.dart              NEW
+lib/services/speech_input.dart               NEW
+android/app/src/main/AndroidManifest.xml     RECORD_AUDIO + recogniser query
+test/patient_view_test.dart, test/answer_card_test.dart, test/voice_test.dart   NEW
+```
+
+### Remove
+`_getDatasetHumanTitle`, `_configureQuickItems` and every branch on a dataset name; the "ACTIVE VIDEO SCENE" card (it moves to Settings › Developer); the `✦ PERSISTENT MEMORY` badge; the `(~0.1m)` distance text; the `"Room Anchor"` placeholder.
+
+### Layout (top to bottom)
+1. Prompt line: `Ask where something is, or what you did.`
+2. Ask field (`Key('ask-field')`, hint `Type your question`) with a send button (`Key('ask-send')`).
+3. Microphone button (`Key('mic-button')`), full width, label `Ask by voice`; while listening the label is `Listening… tap to stop` and partial words show under it.
+4. Quick tiles: up to four objects from `GET /objects` (label without the `#n` suffix; high-importance first). Tapping sends `Where is my <label>?`. Icon from a small `canonical → IconData` map (`keys`, `glasses`, `phone`/`cell phone`, `wallet`, `medicine`, `bottle`, `mug`/`cup`, `remote`, `bag`), default `Icons.category_rounded`. No tiles when the list is empty or the server is unreachable.
+5. Three suggestion chips, fixed text: `What did I do this morning?`, `Where were my keys yesterday?`, `Did I go to the kitchen today?` Shown only in home mode.
+6. The answer card.
+7. Recent questions (last three), tap to ask again.
+
+### `AnswerCard`
+
+| Part | Rule |
+|---|---|
+| Status chip | `answered`, `not_seen_in_window` → `ANSWER`; `stale` → `SEEN EARLIER`; `ambiguous` → `MORE THAN ONE`; `low_confidence` → `NOT SURE`; `never_observed` → `NOT SEEN`; `no_match_in_room` → `NOT IN THAT ROOM`; `no_activity` → `NOTHING RECORDED`; `unsupported_activity`, `unsupported` → `CAN'T TELL`; `future_time` → `NOT YET`; unreachable → `NO CONNECTION`. Colours: `successText` for `ANSWER`, `warningText` for the middle group, `textMuted` otherwise. |
+| Answer text | `result.answer`, 20 pt bold, `textHighContrast`. Never truncated. |
+| Badge | `From summarised history` when `tier != 'detailed'`. |
+| Evidence | The first evidence item. With `cropUrl`: `EvidenceImage` (rounded, max height 220, `semanticLabel: description`). Without, or when the image fails to load: the `description` text in a bordered box with an image-off icon. An abstention without evidence shows `No stored evidence.` |
+| Time row | clock icon + `lastSeenText` (or the evidence's `observedAtText`). Hidden when both are null. |
+| Place row | pin icon + anchor label and room label joined by `, `. Hidden when both are null. |
+| Options | For `ambiguous`: one tappable row per option (`label — place — lastSeenText`); tapping re-asks with `instanceId`. |
+| Details | When `items` is non-empty: a `Show details` expander listing them. |
+
+No confidence number is shown to the primary user (low load, TC6); the caregiver views show it as a percentage.
+
+`EvidenceImage` uses `Image.network(api.evidenceUrl(path), headers: api.authHeaders, errorBuilder: …, loadingBuilder: …)`.
+
+### Voice (`speech_input.dart`)
+
+```dart
+class SpeechResult { final String words; final double? confidence; final bool isFinal; }
+abstract class SpeechInput {
+  Future<bool> initialize();                 // false = not available or permission denied
+  Future<void> listen(void Function(SpeechResult) onResult, {Duration max, Duration pause});
+  Future<void> stop();
+}
+class PlatformSpeechInput implements SpeechInput { /* speech_to_text */ }
+class FakeSpeechInput implements SpeechInput { /* test double: scripted results */ }
+```
+
+`PatientView` takes an optional `SpeechInput` (default `PlatformSpeechInput`). `PlatformSpeechInput` maps the plugin's confidence to `null` when it is `<= 0` (some devices report 0 or −1 for "unknown"). Locale `en_US`, `max` 10 s, `pause` 2 s. Read the `speech_to_text` README for the current API and the platform setup before coding; the Android manifest needs `<uses-permission android:name="android.permission.RECORD_AUDIO"/>` and, inside `<queries>`, `<intent><action android:name="android.speech.RecognitionService"/></intent>`.
+
+Behaviour is the five steps of WP23 "App behaviour". The confirm bar has `Key('heard-text')`, `Key('heard-ask')`, `Key('heard-edit')`. Requests made from voice send `modality: "speech"` and the confidence.
+
+### Latency probe (for AC-19)
+`PatientView` starts a `Stopwatch` when a question is submitted (for voice: when the final words arrive) and stops it in a post-frame callback after the answer card is built. The last 20 values are kept in `AppState.latencies` and listed in Settings › Developer with their median and maximum. This is the "query received → answer displayed" time.
+
+### Tests
+`test/answer_card_test.dart` — one test per status: chip text, answer text, evidence image present when a URL is given, description shown when it is not, `From summarised history` badge, options rendered and tappable, details expander; a test that no card contains a `%` sign in the patient view.
+`test/patient_view_test.dart` — typing and sending shows the server's answer; quick tiles come from `/objects`; an unreachable server shows `NO CONNECTION` and no place text; tapping an option re-asks with `instance_id`; five different answers each show answer text, a time and an evidence element (AC-14 at widget level).
+`test/voice_test.dart` — high-confidence result is sent at once with `modality: speech`; low-confidence result shows the confirm bar, **Ask** sends it, **Edit** fills the field; missing confidence asks for confirmation; unavailable recogniser shows `Voice is not available. Please type your question.` and focuses the field; typed-only and voice-only flows both complete (AC-24 flows).
+
+### Done when
+CI is green; todo §3.2 item 2 and §4.4 item 1 (patient side) can be ticked.
+
+---
+
+## WP32 — App: caregiver portal and primary-user controls
+
+**Goal:** the caregiver can verify object states, read a daily summary, browse the timeline and name rooms; the primary user can share and stop sharing, read the access log, pause capture and delete history (FR7.4, FR8.2–FR8.6; UC-07, UC-09, UC-10, UC-11, UC-13; todo 4.4 all remaining).
+
+### Files
+```
+lib/views/caregiver/objects_tab.dart        NEW   UC-09
+lib/views/caregiver/summary_tab.dart        NEW   UC-10
+lib/views/caregiver/timeline_tab.dart       NEW   FR7.4, AC-25
+lib/views/caregiver/rooms_tab.dart          NEW   UC-13
+lib/views/caregiver/caregiver_view.dart     DELETE (replaced by the tabs)
+lib/views/settings/sharing_screen.dart      NEW   UC-07, FR8.5
+lib/views/settings/privacy_screen.dart      NEW   UC-11
+lib/views/capture_control.dart              move into privacy_screen; keep the widget
+test/objects_tab_test.dart, summary_tab_test.dart, timeline_tab_test.dart,
+     rooms_tab_test.dart, sharing_test.dart, privacy_test.dart      NEW
+```
+
+### Remove
+The status card that says `All tracked items are safely stored…`, `Displaced Item Alert … (Fall Hazard)` and `In-Transit Activity`. The server never said these; alerts and hazard detection are out of scope (report §4.2). Also remove the "Active Anchors / Instances" metric tiles computed from the event list, and the `Window: 3.0s - 5.0s` line.
+
+### Objects tab (scope `object_state`)
+- A search field at the top (`Check an object…`) that calls `ask` and shows an `AnswerCard` with the confidence percentage visible.
+- Below it the list from `GET /objects`: label; place; `Seen <lastSeenText>`; a badge `STALE` (`warningText`) when `freshness == 'stale'`, `NOT SURE` when `status == 'low_confidence'`; the confidence as a percentage; a thumbnail when the evidence has an image. Tapping a row opens a sheet with the full evidence image, description, time, room and anchor.
+- A stale row's subtitle reads `Not seen for more than 6 hours` (UC-09 A1).
+- Pull to refresh. Empty list: `Nothing has been observed yet.`
+
+### Summary tab (scope `summaries`)
+- A date row: previous day, the date (`Mon 16 Nov`), next day (disabled for today), and a calendar button (`showDatePicker`, last date = today, first date = today − 365 days or the grant's `history_days`).
+- Content from `GET /summary/daily`: the `text`; a `From summarised history` badge when `tier == 'summarised'`; `Recorded for <n> min in <k> session(s)`; time per room; the activity lines; the object lines.
+- No activity: the server's sentence, nothing else.
+- 403 `outside_history`: `That day is outside the access you were given.`
+
+### Timeline tab (scope `history`; also the primary user's Timeline)
+- Filters: the same date row; a session drop-down filled from `GET /sessions?date=` with `All sessions` first.
+- Items in time order. Detailed events: `HH:MM`, the server's `summary`, the room. Summarised items: the period (`12 Nov` or `9–15 Nov`), the text, a `Summarised` badge.
+- `TimelineEvent` gains `tier`, `startWallclock`, `endWallclock`, `periodStart`, `periodEnd`, `sessionId`. Dataset mode (no wall-clock) shows `+12.4 s` from `endTime` instead of a clock time.
+- Empty: `No events recorded on this day.`
+
+### Rooms tab (scope `rooms`)
+- List from `GET /rooms`: label, type, the furniture in it, a pencil button.
+- Rename dialog: one field (1–40 characters, trimmed), **Save**. 409 → `Another room already has that name.`; 404 → refresh the list; success → snack bar `Room renamed.` and refresh.
+- Rooms named by a caregiver show a small `named` tag (`label_source`; add the field to `RoomModel` on the server and to the model).
+
+### Sharing screen (primary user)
+- **People with access**: one card per grant — name, username, status (`Invited`, `Active`, `Ended`), scopes in words (`Check where things are`, `Daily summaries`, `Past events`, `Name rooms`), limit (`Last 7 days` / `No limit`), end date.
+- **Invite someone**: username (email), display name, four scope switches (the first two on by default), optional history limit (None, 1, 7, 30 days), optional end date. On success show the invite code once, large, with `Share this code with <name>. It works once and expires in 72 hours.` and a copy button.
+- Per grant: **Change** (same form, `PATCH`) and **Stop sharing** (confirm dialog: `Stop sharing with <name>? They will lose access immediately.` → `DELETE`).
+- **Access log**: newest first — time, who, what in words (map action codes: `query.where` → `Asked where something is`, `objects.list` → `Viewed object list`, `evidence.view` → `Viewed a picture`, `summary.view` → `Viewed a daily summary`, `timeline.view` → `Viewed the timeline`, `rooms.rename` → `Renamed a room`, `auth.login` → `Signed in`, …; unknown codes are shown as they are), and `Allowed` / `Refused` with the reason. A filter chip `Refused only`.
+
+### Privacy screen (primary user)
+- **Recording**: the existing `CaptureControl` switch. Hidden text when capture is not configured: `Recording is not set up on this server.`
+- **Delete all history**: a red-outlined button. Step 1 dialog explains: `This removes everything Aegis remembers: objects, places, events, summaries and pictures. It cannot be undone. People you share with keep their accounts but will see nothing.` Step 2: type the password and the word `DELETE`. On 200: `History deleted.` and the app returns to an empty Ask tab. On 500: `Deletion could not be confirmed. Nothing is reported as deleted. Details: …` with the `failures` list (UC-11 A2). On 403: `That password is not right.`
+- A link **What Aegis stores** showing the text of `docs/privacy_limitations.md` §1–§3 (copy the text into a Dart constant; keep it in sync).
+
+### Tests
+- `objects_tab_test`: stale badge and subtitle; low-confidence badge; evidence sheet; refresh; empty state; confidence shown as a percentage.
+- `summary_tab_test`: detailed day; summarised badge; no-activity sentence; date navigation calls the API with the new date; `outside_history` message.
+- `timeline_tab_test`: order by time; summarised badge; session filter sends `session_id`; dataset mode shows relative seconds; the items equal the fake server's log in order (AC-25 at widget level).
+- `rooms_tab_test`: rename success, 409 message, validation of empty and 41-character names.
+- `sharing_test`: invite shows the code once; stop sharing calls `DELETE` after confirmation; the log lists five actions with allowed/refused; `Refused only` filter.
+- `privacy_test`: the delete flow needs both the password and `DELETE`; a 500 shows the failure text and never `History deleted.`; the capture switch calls pause/resume.
+- A caregiver session never renders the Sharing or Privacy screens (the Settings sections are absent).
+
+### Done when
+CI is green and every line of todo §4.4 can be ticked with a widget test name.
+
+---
+
+## WP33 — Benchmark `Aegis-TestSet-v1` and its runner
+
+**Goal:** a documented, repeatable test set and a scorer for SC1–SC3, SC5, SC6, AC-08–AC-12 (todo §5.1; decisions #1, #8). The recordings themselves are made by the team in WP34; this WP builds the format, the tools and their tests.
+
+### Files
+- New: `benchmark/aegis_testset_v1/README.md`, `manifest.yaml`, `queries.yaml`, `ground_truth/placements.yaml`, `ground_truth/events.yaml` (templates with one worked example each), `scripts/run_benchmark.py`, `scripts/abstention_curve.py`, `tests/test_benchmark.py`.
+- Change: `src/aegis/evaluation.py`.
+
+### Recording protocol (`README.md`)
+
+State, in this order: purpose; owner (assign one team member by name); participants (team members, consenting, no bystanders; a signed consent note per participant kept outside the repository); the home (rooms and anchors with the names used in ground truth); device and capture settings; the scripts below; the limitations (one home, healthy volunteers, scripted actions, single camera wearer, daytime lighting, a small number of objects; results do not generalise to people with dementia).
+
+Scripts to record (each a separate live or batch session, with `--recorded-at`):
+
+| Id | Content | Feeds |
+|---|---|---|
+| `S1` placements | 10 objects placed one after another at 10 known anchors across at least 2 rooms; each object held to the camera first | AC-04, AC-09, Iteration 1 exit |
+| `S2` activity | a scripted sequence across 3 rooms with 8 pick-ups/placements at announced times (clap or spoken marker for the annotator) | AC-05, AC-10 |
+| `S3` next day | a second session a day later: 3 objects moved, 7 untouched, one object carried out of view | AC-10, moved-while-unobserved |
+| `S4` rooms | a walk through every room with revisits | AC-22 |
+| `S5` distractors | a session with objects that are **not** queried later, plus the 5 "never observed" objects kept out of the house | AC-12 |
+
+To exercise compaction without waiting days, the sessions are ingested with `--recorded-at` values spread over five calendar days (documented in `manifest.yaml`). Say so in the report: the recordings are real, the dates assigned to them are the experiment's design.
+
+### Formats
+
+`manifest.yaml`
+```yaml
+testset: aegis_testset_v1
+home_id: bench01
+timezone: Asia/Karachi
+now: "2026-11-20T10:30:00+05:00"      # the clock used for every query unless a query overrides it
+sessions:
+  - {id: s1_placements, source: captures/…, recorded_at: "2026-11-16T09:00:00+05:00", config: config/live.yaml}
+exempt_from_purge: true               # also list these ids in privacy.exempt_datasets
+```
+
+`queries.yaml` — a list; `kind` is `spatial`, `temporal`, `unanswerable` or `room`:
+```yaml
+- id: q01
+  kind: spatial
+  text: "where are my keys"
+  expect: {canonical: keys, anchor_any_of: ["Desk #1"], relation_any_of: [on_surface], room: Kitchen}
+- id: q11
+  kind: temporal
+  text: "when did i put my keys down"
+  expect: {status_any_of: [answered], event_type: placement, time: "2026-11-16T09:04:10+05:00", tolerance_minutes: 10}
+- id: q14
+  kind: temporal
+  text: "did i go to the kitchen this morning"
+  now: "2026-11-16T12:00:00+05:00"
+  expect: {polarity: "yes"}
+- id: q21
+  kind: unanswerable
+  text: "where is my passport"
+  expect: {abstain: true}
+```
+The set holds at least 10 spatial, 10 temporal (at least 4 with relative time words, at least 2 answered from summaries after compaction), 5 unanswerable and 5 room-constrained queries.
+
+### Scoring (`aegis.evaluation.score_answer(answer: dict, expect: dict) -> dict`)
+
+Returns `{"correct": bool, "reasons": [str]}`. An expectation key that is absent is not checked.
+
+| Key | Rule |
+|---|---|
+| `abstain: true` | `answer["abstained"]` and `anchor_label is None` and `room_label is None` (for `low_confidence` the candidate fields count as a fabricated location → incorrect for an unanswerable query) |
+| `status_any_of` | `answer["status"]` in the list |
+| `canonical` | the primary state's canonical equals it |
+| `anchor_any_of` | `anchor_label` equals one, case-insensitive |
+| `relation_any_of` | `relation` in the list |
+| `room` | `room_label` equals it, case-insensitive |
+| `polarity` | `facts["polarity"]` equals it |
+| `event_type` | `facts["event_type"]` equals it |
+| `time` + `tolerance_minutes` (default 10) | `abs(facts["reference_time"] − time) <= tolerance` |
+| `rooms_include` | every listed room is in `facts["rooms"]` |
+| `tier` | `answer["tier"]` equals it |
+
+A spatial or temporal query is correct only when the answer is not an abstention **and** every checked key passes. Aggregates (`aegis.evaluation.summarise_benchmark`): accuracy per kind; evidence coverage = share of non-abstaining answers with at least one evidence item whose `description` is non-empty (and whose crop file exists when `crop_url` is set); abstention correctness = share of unanswerable queries that abstain; fabricated locations = count of unanswerable queries with any location field set; summarised-label rate = share of answers whose evidence is all `summary` that have `tier == "summarised"`.
+
+### `scripts/run_benchmark.py`
+
+```
+uv run python scripts/run_benchmark.py --testset benchmark/aegis_testset_v1 \
+    --store-root outputs/_bench --laptop "…" --phone "…" [--compare-compaction] [--out …]
+```
+- Loads the manifest and queries; opens the home store (the sessions must already be ingested; print the exact `run_pipeline.py` commands when a session is missing).
+- Calls `answering.answer` directly (no HTTP) with each query's `now`, `PATIENT` voice and the settings from `--config-path`.
+- Writes per-query rows (`id, kind, text, status, answer, correct, reasons, confidence, tier, evidence ids, latency_ms`) and the aggregates through `scripts/_evidence.py`.
+- `--compare-compaction` (AC-08, SC3): copy the store directory; run all queries with `now = manifest.now + (hot_days + 1) days` on the copy **before** compaction; run `compact` + `rollup` on the copy at that time; run the queries again; report both accuracies per kind and the drop in percentage points, plus room-label survival (every room id named in a pre-compaction answer still resolves to the same label). Both runs use the same `now`, so freshness does not differ between them.
+- Exit code 0 always (it measures; it does not gate). Targets are printed beside the results as "proposed target", never as pass/fail of the system.
+
+### `scripts/abstention_curve.py` (decision #8)
+
+Runs the spatial and unanswerable queries with `abstain_below` from 0.05 to 0.95 in steps of 0.05 and writes, per threshold: answered count, correct among answered (precision), abstained count, wrongly abstained (a correct answer suppressed), fabricated locations. Recommendation printed: the lowest threshold with zero fabricated locations and precision ≥ 0.80; if none exists, the threshold with the highest precision. The team then sets `query.abstain_below` in the config and records the choice and the curve file in the report.
+
+### Tests (`tests/test_benchmark.py`)
+- `test_score_spatial_correct_and_wrong_anchor`, `test_score_temporal_time_tolerance`, `test_score_polarity`, `test_unanswerable_needs_no_location`.
+- `test_aggregates` on a hand-made list.
+- `test_runner_on_synthetic_testset` — build a tiny test set in `tmp_path` from the WP21 `history_store` timeline and its ten temporal questions; run `run_benchmark.main([...])`; the output file has a header, per-query rows and aggregates.
+- `test_compare_compaction_reports_a_drop_and_leaves_the_original_store_untouched`.
+- `test_abstention_curve_is_monotone` (answered count never increases with the threshold).
+- `test_template_files_parse` (the YAML templates load and every query passes a schema check).
+
+### Done when
+The tools run on the synthetic set. Todo §5.1 items 1–2 are ticked when the README names the owner and the first recordings exist; the result items stay open until WP34.
+
+---
+
+## WP34 — Measurements and recorded evidence
+
+**Goal:** run every Milestone 3 and 4 acceptance check on real hardware and record the results. Nothing here is ticked from a unit test.
+
+Rules: every run writes a file under `outputs/evaluation/` through `scripts/_evidence.py` (commit, config hash, model ids, hardware, operator); the working tree must be clean; a missed target is reported as missed.
+
+| # | Check | Procedure | Record | Proposed target |
+|---|---|---|---|---|
+| P9 | AC-09, SC1 spatial accuracy | Ingest `S1`, `S3`; `run_benchmark.py` | `benchmark_<ts>.json` → spatial accuracy | ≥ 70% |
+| P10 | AC-10, SC2 temporal accuracy | Ingest `S2`, `S3`; same run | temporal accuracy | ≥ 60% |
+| P11 | AC-11, SC5 evidence coverage | same run | evidence coverage | 100% |
+| P12 | AC-12, SC6 abstention | same run, unanswerable queries; then `abstention_curve.py`, choose the threshold, re-run | abstention correctness, fabricated count, curve file, chosen threshold | ≥ 4 of 5 abstain; 0 fabricated |
+| P13 | AC-13 speech | (a) `evaluate_speech.py` on recordings of the ten questions by at least 3 speakers; (b) on the phone, speak the same ten questions, note the words the app shows and whether the answer matches the typed answer | word accuracy per speaker; equivalent answers out of 10; phone model, Android version | ≥ 80%; equivalent |
+| P14 | AC-14 answer screens | Five different questions on the phone; screenshot each | five screenshots; checklist: answer ≤ 2 sentences, time shown, evidence shown | 5 of 5 |
+| P15 | AC-15, SC8, NFR-U1 usability | Follow `docs/usability_protocol.md` | per-participant sheet | 5 of 5 within 60 s, unassisted |
+| P16 | AC-16 | Five invalid sign-ins against the running TLS server (wrong password, unknown user, empty password, expired invite, made-up token); then read the access log as the primary user | request/response transcript + log screenshot | 5 denied, 5 logged |
+| P17 | AC-17 | Caregiver signed in on one phone; primary stops sharing on another; caregiver pulls to refresh | times of revoke and of the refused request | refused on the next request |
+| P18 | AC-18 | Five caregiver actions; primary opens the access log | screenshot | 5 of 5 listed |
+| P19 | AC-19, SC4, NFR-P1 latency | (a) `scripts/measure_query_latency.py --n 100 --warmup 10` against the running server on the T480 with a real home store; (b) on the phone, 20 questions (10 typed, 10 spoken), read the values from Settings › Developer | p50, p95, max for (a) and (b); store size; hardware | p95 ≤ 5 s |
+| P20 | AC-20 | `scripts/verify_encryption.py --probe <room label> --url https://… --fingerprint …`; then delete history in the app; then `aegis-memory size` and `sqlcipher` inspection of the tables | result file; post-delete row counts | all PASS; all history tables 0 |
+| P21 | AC-24 | Typed-only query; voice-only query; change text size through all three; `flutter test test/contrast_test.dart` output | screenshots at 3 sizes; contrast table | both flows; 3 sizes; all pairs ≥ 4.5 |
+| P22 | AC-25 | After a 10-minute live session (the P4 run of Part I), open the timeline filtered to that session; export `GET /timeline?session_id=` and compare with the store's event rows and with the annotator's log | diff (should be empty); screenshot | chronological and matching |
+| P23 | AC-26 | Caregiver with the default grant: three in-scope requests, then `GET /video/<session>` and a history question | transcript with status codes | 3 succeed, 2 refused |
+| P24 | AC-28 | Ask about an object last seen more than 6 hours ago (use the real clock, not `AEGIS_NOW`) | screenshot + response JSON | states when last seen; `status: stale` |
+| P25 | AC-30 | 25 hours after a live session, run `scripts/verify_purge.py --remote` | result file listing remaining paths | none remain |
+| P26 | AC-08, SC3 | `run_benchmark.py --compare-compaction` | accuracy before/after, drop, room-label survival | drop ≤ 15 points |
+| P27 | AC-23 | In the P26 output, every answer built only from summaries | summarised-label rate | 100% |
+| P28 | NFR-P3 with real recordings | `aegis-memory size` after each ingested benchmark day and after compaction | table of bytes and rows per day | growth recorded |
+| P29 | AC-31 with auth | Rename a room as a caregiver with the `rooms` scope, restart the server, ingest another session | transcript | label survives; refused without the scope |
+
+### `scripts/measure_query_latency.py`
+Arguments: `--url`, `--username`/`--password-stdin` (or `--no-auth`), `--home-id`, `--queries` (a text file, one question per line; default: the benchmark's spatial and temporal texts), `--n 100`, `--warmup 10`, plus the common evidence arguments. It signs in once, sends `POST /ask` sequentially with `httpx`, measures wall time per request with `time.perf_counter`, and records p50, p95, max, the server-reported `latency_ms` percentiles, the count of non-200 responses, the number of instances and runs in the store. It refuses to report when fewer than 100 timed requests succeeded.
+
+### `docs/usability_protocol.md` (AC-15, SC8)
+Write the protocol before any session: purpose and the statement that this is not a clinical study; participants (5 adults, healthy volunteers, not team members, mixed ages and, where possible, both genders; consent wording); setting (phone model, text size medium, a home store prepared from the benchmark recordings, real clock); the task, read once and not explained further (`Use this app to find out where the keys are.`); what the facilitator may say (nothing until 60 s have passed); measures (time from the app's first screen to the participant reading the answer aloud; modality chosen; errors; whether help was needed; one free comment); the record sheet (participant code, age band, gender, smartphone use, time in seconds, assisted yes/no, notes); how results are reported (count within 60 s unassisted, median time, limitations).
+
+### After the runs
+For each row above, tick the matching todo item (or mark it `[~]` with the reason) and cite the result file. Update `context/implementation_log.md`.
+
+---
+
+## WP35 — Report and documentation
+
+**Goal:** close todo §5.2 so that the report matches the system.
+
+1. `docs/running_aegis.md`: sign-in set-up (`aegis-memory user add`, key generation, `aegis-memory encrypt`, `aegis-memory tls-cert`, the new `run_server.py` flags), the app's first-run steps (server address, trust the certificate, sign in), the developer mode, the purge cron line. Extend the confirmation checklist with one line per P-row of WP34.
+2. `docs/artifact_contracts.md`: store schema v2 (the six tables), the encrypted file format (`AEG1`), the `query_log` and `audit_log` retention, the answer contract (statuses, evidence item, `facts`).
+3. `docs/security.md` (started in WP27): key handling, backup, TLS and pinning, roles and scopes table, lockout, what is logged, known gaps.
+4. `docs/evaluation_plan.md`: add the benchmark section (WP33), the abstention curve, the speech and usability protocols; keep every target labelled "proposed".
+5. `docs/fyp1_mid_defense_dossier.md`: rewrite the stale claims (55 tests, `S = 5.0×`, Z-up frame) or mark the file as historical at the top and link to the current documents.
+6. Report (`fyp_report/chapters`): update the test count and the test-suite tables from `uv run pytest --collect-only -q`; M1 status (live path connected); Chapter 4 status columns for FR4–FR8 and NFR-S; the use-case diagram (add UC-13), component diagram (answer engine, auth, home store, speech), class diagram (store tables), data-flow diagram (purge, compaction, encryption boundary), sequence diagrams (ask a question; caregiver sign-in and scoped query; revoke). Record decisions #1–#5, #8, #9, #11, #12 with their status from §II.0.3. Fill Iteration 3 and 4 scope from §II.0.4.
+7. `README.md` and `AGENTS.md`: module list and commands.
+8. Consolidated compute/storage/device account (panel item 3) from `benchmark_stats.json` and the P19/P28 files.
+9. `context/todo.md`: update §0 status snapshot for FR5–FR8 and NFR-R/P/S/U; tick only with evidence.
+
+No measured number is written into the report before its P-row result file exists.
+
+---
+
+## Appendix C — Traceability: every Milestone 3, 4 and §5 todo item to its plan
+
+### Milestone 3
+
+| Todo item | WP | Closing evidence |
+|---|---|---|
+| 3.2 ASR provider and placement (decision #2) | 23 | §II.0.3; `tests/test_speech.py` |
+| 3.2 Microphone capture in the patient view | 31 | `test/voice_test.dart` |
+| 3.2 Transcript + confidence, confirm/correct | 23, 31 | `test_low_confidence_needs_confirmation`, `voice_test` |
+| 3.2 Speech/text equivalence, accuracy ≥ 80% | 23, 34 (P13) | `evaluate_speech` result file |
+| 3.3 Intent routing | 18 | `test_routing` |
+| 3.3 Relative-time parser | 17 | `test_windows` |
+| 3.3 Hot and summarised tiers, labelled | 21 | `test_every_answer_from_compacted_history_is_labelled` |
+| 3.3 "Capture may have been off" | 21 | `test_no_recording_says_camera_was_off` |
+| 3.3 Ten temporal queries ≥ 60% | 21, 34 (P10) | `test_temporal_set_of_ten`; benchmark file |
+| 3.4 Real relative time | 17, 19 | `test_describe_when`, `test_fresh_object_is_answered_with_time` |
+| 3.4 Six-hour window; stale wording | 19 | `test_object_older_than_six_hours_is_stale` |
+| 3.4 Stale-object test | 19, 34 (P24) | same; screenshot |
+| 3.5 Computed confidence | 19 | `tests/test_confidence.py` |
+| 3.5 Configurable threshold (decision #8) | 19, 33 | `test_threshold_is_configurable`; curve file |
+| 3.5 Three abstention kinds | 19 | `test_three_abstention_kinds_are_distinct` |
+| 3.5 Five unanswerable, ≥ 4 abstain | 19, 34 (P12) | `test_never_observed_abstains_without_location`; benchmark file |
+| 3.6 Evidence reference on every answer | 20 | `test_evidence_coverage_is_total` |
+| 3.6 Real crop on the per-dataset path; decision #9 | 20 | `test_dataset_crop_is_real_or_404`; supervisor confirmation still needed |
+| 3.6 Text fallback when purged | 20 | `test_purged_crop_falls_back_to_text` |
+| 3.6 Evidence-coverage test | 20, 34 (P11) | same; benchmark file |
+| 3.7 Clarification flow | 22, 31 | `tests/test_clarification.py`, `answer_card_test` |
+| 3.7 Query log with evidence | 22 | `test_home_query_is_logged_with_evidence` |
+| 3.7 Optional tool-calling agent / VLM | 24 | built, or deferred with the stated reason |
+
+### Milestone 4
+
+| Todo item | WP | Closing evidence |
+|---|---|---|
+| 4.2 Mechanism and credential storage (decision #4) | 25 | `tests/test_auth.py` |
+| 4.2 Caregiver login | 25, 26, 30 | `test_login_success…`, `login_test` |
+| 4.2 Grant / restrict / revoke, enforced per request | 25, 26, 32 | `test_revocation_blocks_the_next_request`; P17 |
+| 4.2 Patient identity boundary and consent record | 25, 26 | `test_cli_user_add_requires_consent`, `test_other_home_is_refused` |
+| 4.2 Protect mutating endpoints; validate ids | 26 | `test_mutating_routes_are_primary_only`, `test_every_route_needs_a_token` |
+| 4.2 Explicit CORS | 26 | `test_cors_has_no_wildcard` |
+| 4.2 AC-16 and AC-17 tests | 25, 26 | named tests; P16, P17 |
+| 4.3 TLS; AES-256 at rest | 27 | `tests/test_encryption.py`; P20 |
+| 4.3 Caregiver scope excludes raw video and out-of-scope history | 26 | `test_caregiver_scope_matrix`; P23 |
+| 4.3 Access audit log, 30 days, visible to the primary user | 25, 26, 32 | `test_five_caregiver_actions_appear_in_the_log`, `test_audit_purge_keeps_thirty_days`; P18 |
+| 4.3 Raw-frame purge with verification | 28 | `tests/test_privacy.py`; P25 |
+| 4.3 Full, immediate, irreversible deletion | 28, 32 | `test_delete_history_empties_everything_and_verifies`; P20 |
+| 4.3 Privacy-limitation statement | 28 | `docs/privacy_limitations.md` |
+| 4.4 Evidence display in both views | 31, 32 | `answer_card_test`, `objects_tab_test`; P14 |
+| 4.4 Object-state verification with stale indicator | 29, 32 | `test_objects_lists_state_time_freshness_and_evidence`, `objects_tab_test` |
+| 4.4 Daily activity summary view | 29, 32 | `test_daily_summary_*`, `summary_tab_test` |
+| 4.4 Access-log view | 26, 32 | `sharing_test` |
+| 4.4 Room list / rename screen (decision #12) | 32 | `rooms_tab_test`; P29 |
+| 4.4 Timeline with session/date filter | 29, 32 | `test_timeline_filters_by_date_and_session`, `timeline_tab_test`; P22 |
+| 4.4 Capture pause and delete-history controls | 28, 32 | `privacy_test` |
+| 4.5 Three text sizes | 30 | `text_size_test`; P21 |
+| 4.5 Measured contrast ≥ 4.5:1 | 30 | `contrast_test` table; P21 |
+| 4.5 First-time-user task | 34 (P15) | usability sheets |
+| 4.6 Latency p50/p95/max over ≥ 100 requests | 34 (P19) | latency file |
+| 4.6 Ingestion backlog | Part I P4 | — |
+| 4.6 Storage growth after retention | 34 (P28) | size table |
+| 4.6 Hardware, config, versions with every measurement | 34 | `scripts/_evidence.py` header |
+
+### §5
+
+| Todo item | WP |
+|---|---|
+| 5.1 Dataset and annotation strategy (decision #1) | 33 |
+| 5.1 Build `Aegis-TestSet-v1`, assign an owner | 33, 34 |
+| 5.1 Spatial and temporal accuracy | 34 (P9, P10) |
+| 5.1 Accuracy drop after compaction | 33, 34 (P26) |
+| 5.1 Evidence coverage and abstention correctness | 34 (P11, P12) |
+| 5.1 Iteration 1 exit criterion | 34 (P9 on `S1`) and Part I P6 |
+| 5.1 Document dataset limitations | 33 (`README.md`) |
+| 5.2 all items | 35 |
+
+---
+
+## Appendix D — Limitations Part II accepts
+
+State these in the report.
+
+1. **Activities are room stays and object changes, not recognised actions.** "Did I have breakfast?" is answered with "I can't tell" plus what was observed. A meal, a medication intake or a conversation is not detected.
+2. **Temporal answers from summaries are coarse.** For objects of normal importance, compacted history keeps the last place and a move count per day, not move times. Only `importance: high` objects keep their move times.
+3. **"Now" is the laptop's clock.** A wrong system clock makes freshness and relative time wrong. Sessions without capture time (`time_source: ingest`) are placed at ingest time and say so in the store.
+4. **Confidence is a product of heuristics**, not a calibrated probability. The threshold is chosen from a small benchmark of one home.
+5. **The parser is English and rule-based.** Unusual phrasings fall back to a "where" question or to "I can't tell". Urdu is not supported.
+6. **Speech depends on the phone's recogniser.** Its accuracy is measured on a few speakers; accented or impaired speech may do worse, and typed input is the guaranteed path.
+7. **One home, one primary user.** Accounts live in that home's store. There is no password reset by email; the operator resets a password with the CLI.
+8. **The lockout can be abused** to keep a caregiver out for 15 minutes by guessing wrong passwords for their username.
+9. **The encryption key is on the same laptop.** It protects a copied store, not a compromised running system. Raw frames are plaintext during their 24 hours.
+10. **The certificate is self-signed.** Safety depends on the user comparing the fingerprint once. On the web build the browser's warning must be accepted by hand.
+11. **Session tokens live for 60 minutes and are kept in memory.** Closing the app signs the user out.
+12. **The 24-hour purge needs the laptop to be on** (server maintenance thread or cron). The Modal volume is purged only by the CLI or the pipeline, not by the server.
+13. **Deletion covers Aegis's own storage.** Copies made by the operating system, cloud provider snapshots or manual backups are outside it.
+14. **Evidence crops can contain background**, including parts of other people (Appendix B.7). Decision #9 needs the supervisor's confirmation.
+15. **The Modal ASGI wrapper (`fastapi_gateway`) is not a deployment target for home data.** The home store and its key are on the laptop; the wrapper has no users and refuses every memory request once auth is on.
+16. **Usability evidence is five healthy volunteers.** It supports no claim about people with cognitive impairment.
