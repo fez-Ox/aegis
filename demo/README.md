@@ -17,28 +17,28 @@ app. The authoritative setup and verification procedures are in
 ## Before the show (once)
 
 1. `docs/running_aegis.md` Part A §§1–3: code, `uv sync --dev --group viewer`, Modal profile, `aegis-secrets`, `.env` with `HF_TOKEN`.
-2. **Part B2 — first real Modal run.** The GPU paths changed after the last real run. Do the preset run in §4 and tick every B2 box.
-3. **Part B7 — measure the window.** Save the JSON so preflight can check it:
+2. **Calibrate — one command replaces three manual scripts:**
 
    ```bash
-   uv run modal run scripts/measure_vggt_window.py --dataset-id <a long dataset> \
-     --sizes 32,64,96,120,160 > outputs/evaluation/vggt_window.json
+   uv run python -m demo.calibrate --capture captures/<short-walk>
    ```
 
-4. **Measure the accepted keyframe rate** from a short 2-minute capture:
+   It reads the stage timings already in `outputs/*/benchmark_stats.json`
+   (your real runs already prove 100–117 keyframes at ~67% of L4 VRAM), reads
+   the kept-frame rate from the short capture, prints **"USE --segment-frames
+   N"** in plain language, and writes `outputs/evaluation/vggt_window.json`
+   plus `demo/demo.conf`. `run_demo.sh` and `preflight.py` pick both up
+   automatically — you do not pass the number around yourself.
 
-   ```bash
-   uv run python scripts/summarise_live_session.py captures/<short-session> \
-     --laptop "<laptop>" --phone "<phone>"
-   ```
+   Without a capture it still works, but labels the frame rate as an
+   assumption. Add `--measure` only if you want a fresh GPU sweep; it streams
+   progress instead of going silent for eight minutes (the raw
+   `measure_vggt_window.py` prints only at the very end, after image build and
+   model load).
 
-   Pick `--segment-frames` so one segment is roughly 30–120 s of *accepted*
-   keyframes, not of wall-clock capture. `60` is a sensible starting point;
-   the recorded default of 120 is a guess, not a measurement.
-
-5. **Fallback + warm:** run the `put_shoes` preset with `--stage all` into a
-   throwaway home so a valid graph, `.rrd` and warm GPU containers exist even
-   if Wi-Fi fails.
+3. **Part B2 — first real Modal run / fallback + warm:** run the `put_shoes`
+   preset with `--stage all` into a throwaway home so a valid graph, `.rrd`
+   and warm GPU containers exist even if Wi-Fi fails.
 
 ## On the day
 

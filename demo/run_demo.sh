@@ -21,6 +21,12 @@ PREFLIGHT=1
 DETACHED=0
 STOP=0
 
+# demo/calibrate.py writes measured defaults here; explicit flags below win.
+if [ -f demo/demo.conf ]; then
+  # shellcheck disable=SC1091
+  . demo/demo.conf
+fi
+
 usage() {
   cat <<'EOF'
 Start the four local processes of the Aegis live showcase.
@@ -86,6 +92,7 @@ if [ "$PREFLIGHT" -eq 1 ]; then
   uv run python -m demo.preflight \
     --stream-url "$STREAM_URL" \
     --segment-frames "$SEGMENT_FRAMES" \
+    --vggt-window-result outputs/evaluation/vggt_window.json \
     || { echo "preflight failed — fix the NO-GO items above" >&2; exit 1; }
 fi
 

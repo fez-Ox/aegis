@@ -264,16 +264,38 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stream-url", default=os.getenv("AEGIS_STREAM_URL"))
     parser.add_argument("--config-path", type=Path, default=Path("config/live.yaml"))
-    parser.add_argument("--segment-frames", type=int, default=60)
-    parser.add_argument("--vggt-window-result", type=Path, default=None)
+    parser.add_argument(
+        "--segment-frames",
+        type=int,
+        default=None,
+        help="frames per segment (default: value in demo/demo.conf, else 60)",
+    )
+    parser.add_argument(
+        "--vggt-window-result",
+        type=Path,
+        default=Path("outputs/evaluation/vggt_window.json"),
+        help="result written by demo/calibrate.py (default: outputs/evaluation/vggt_window.json)",
+    )
     parser.add_argument("--quick", action="store_true", help="skip pytest and ruff")
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
     args = parser.parse_args(argv)
 
+    segment_frames = args.segment_frames
+    if segment_frames is None:
+        segment_frames = 60
+        conf = Path("demo/demo.conf")
+        if conf.is_file():
+            for line in conf.read_text(encoding="utf-8").splitlines():
+                if line.startswith("SEGMENT_FRAMES="):
+                    try:
+                        segment_frames = int(line.split("=", 1)[1])
+                    except ValueError:
+                        pass
+
     checks = run_checks(
         stream_url=args.stream_url,
         config_path=args.config_path,
-        segment_frames=args.segment_frames,
+        segment_frames=segment_frames,
         vggt_window=args.vggt_window_result,
         quick=args.quick,
     )
