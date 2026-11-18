@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+
 import 'services/api_service.dart';
 import 'theme/app_theme.dart';
-import 'views/home_screen.dart';
+import 'views/ask_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  final apiService = ApiService();
-  runApp(AegisApp(apiService: apiService));
+  runApp(AegisApp(apiService: ApiService()));
 }
 
+/// The app only asks questions and displays answers. No tracking, simulation,
+/// capture control, or dataset management lives here.
 class AegisApp extends StatelessWidget {
   final ApiService apiService;
 
@@ -20,7 +22,7 @@ class AegisApp extends StatelessWidget {
       title: 'Aegis Memory',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      home: HomeScreen(apiService: apiService),
+      home: AskScreen(apiService: apiService),
     );
   }
 }
