@@ -2,7 +2,7 @@
 
 This guide is for running the project on a machine that has never run it before. Part A runs it step by step. Part B is a checklist of what to confirm yourself before trusting the results.
 
-Commands run from the repository root unless a step says otherwise. Use the `feat/memory-plan` branch: everything below describes that code.
+Commands run from the repository root unless a step says otherwise. This runbook describes the full demo path including optional local downloads and the simulator. The canonical production path is shorter: `CONTEXT.md` §2, plus `aegis-ask` and `/api/v1/ask` served by `src/aegis/remote/serve.py`.
 
 ---
 
@@ -198,7 +198,7 @@ If the app cannot reach the server it shows *"Can't reach Aegis memory…"*. It 
   uv run aegis-memory compact --home-id home01
   ```
 
-- The measurement scripts are listed in `docs/evaluation_plan.md` §8. They need `--laptop` and `--phone`, and they warn when the working tree has uncommitted changes.
+- The measurement scripts are listed in `docs/evaluation_suite.md` §12 and `scripts/README.md`. They need `--laptop` and `--phone`, and they warn when the working tree has uncommitted changes.
 
 ---
 
@@ -269,6 +269,6 @@ These code paths were changed but have only been tested locally with fakes. Your
 
 - [ ] **Evidence crops** are kept past the 24-hour raw-frame rule by default. Confirm this with your supervisor (decision #9), or set `memory.evidence.enabled: false`.
 - [ ] **The 120-keyframe segment size is a guess.** Run `uv run modal run scripts/measure_vggt_window.py --dataset-id <a long dataset>` and set `vggt.max_keyframes` and `live.segment_frames` from its `recommended_max_keyframes`.
-- [ ] **The storage-growth figures in `context/todo.md` come from a synthetic stream.** Replace them with real measurements before they go into the report.
+- [ ] **The storage-growth figures come from a synthetic stream.** Replace them with real measurements before they go into the report.
 - [ ] **The capture-control and rename endpoints have no authentication yet** (Milestone 4). Do not expose the server outside your own network.
 - [ ] **Teammates who pulled `develop` before 15 November** need `git fetch origin && git reset --hard origin/develop`, because `develop` history was rewritten to remove a co-author line.

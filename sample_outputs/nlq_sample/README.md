@@ -1,6 +1,7 @@
 # `nlq_sample` — real sample-video run
 
-Artifacts from a full pipeline run of `NL Querying/sample_input_video.mp4` on
+Artifacts from a full pipeline run of the sample video (now archived in
+`docs/archive/NL-Querying/sample_input_video.mp4`) on
 Modal CPU (2026-11-09), using `AEGIS_GPU=cpu`, keyframe stride 10, and the
 unmodified public mirror `wincentIsMe/VGGT-Omega` of the VGGT-Ω checkpoint
 (FAIR Noncommercial Research License).
@@ -18,8 +19,7 @@ unmodified public mirror `wincentIsMe/VGGT-Omega` of the VGGT-Ω checkpoint
 ## Query locally
 
 ```bash
-uv run python "NL Querying/smoke_test.py" --dataset nlq_sample \
-    --ask "where is my laptop"
+uv run aegis-ask "where is my laptop" --dataset-id nlq_sample --transport local
 # >>> Your laptop is sitting on Desk #1 in the Bedroom.
 ```
 
@@ -27,7 +27,7 @@ uv run python "NL Querying/smoke_test.py" --dataset nlq_sample \
 
 The Rerun recording is **not** committed because the repository ignores
 `*.rrd` artifacts. After a pipeline run it is available locally at
-`NL Querying/outputs/nlq_sample/viewer/demo.rrd`; the canonical copy is on the
+`sample_outputs/nlq_sample/viewer/demo.rrd`; the canonical copy is on the
 Modal volume at `/data/nlq_sample/outputs/viewer/demo.rrd`. Download and open
 it with:
 

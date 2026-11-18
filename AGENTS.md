@@ -2,6 +2,10 @@
 
 Guidance for coding agents working in this repository.
 
+**Authoritative documents:** `CONTEXT.md` (facts/architecture) and `TODO.md`
+(work). Everything else that used to describe project status is in
+`docs/archive/` — do not follow it. Every substructure has its own README.
+
 ## Project
 
 **aegis** — A Spatio-Temporal Memory System for Assistive Care.
@@ -22,7 +26,8 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 
 - `config/vocabulary.yaml`: The single label ontology (detector prompts, roles: object / anchor / landmark / hand, synonyms, importance, anchor affordances). Every other label list is generated from it.
 - `config/demo.yaml`: Generic runtime configuration (prompts from the vocabulary); `config/demo01|03|04|06.yaml` keep task-scoped prompts; `config/live.yaml` processes live captures as segments.
-- `run_pipeline.py`: Modal pipeline entrypoint (`preprocess`, `reconstruct`, `detect`, `rerun`, `all`).
+- `run_pipeline.py`: Modal pipeline entrypoint (`preprocess`, `reconstruct`, `detect`, `rerun`, `all`, `live`). Artifacts stay on the Modal volume unless `--download` is passed.
+- `aegis-ask` (`src/aegis/nlq/cli.py`): terminal question/answer client; the app uses the same `/api/v1/ask` endpoint.
 - `docs/`: Design documents and implementation plans.
 - `data/demo01/`: Local input video metadata (`#05_iPhone_Put_Shoes_Into_The_Cabinet`) and extracted frames.
 - `outputs/`: Downloaded artifacts (`outputs/demo.rrd`, `outputs/demo01/objects/r4d_scene_graph.json`, etc.).

@@ -5,7 +5,7 @@ reports per class: mean IoU between the YOLOE mask and the SAM 2 mask of
 the same box, the share of boxes where the YOLOE mask is missing or too
 small (the boxes 'fallback' mode still sends to SAM 2), and the time spent
 in SAM 2. Keep sam2.mode=fallback only if mean IoU >= 0.80 on demo01 and
-demo04; record the numbers in context/todo.md (M1).
+demo04; record the numbers in TODO.md (P2 measurement items).
 
 Usage:
     uv run modal run scripts/compare_masks.py --dataset-id demo04 \

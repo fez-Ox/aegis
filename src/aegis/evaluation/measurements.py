@@ -188,7 +188,7 @@ def room_metrics(
     *,
     tolerance: float = 1.0,
 ) -> dict[str, Any]:
-    """AC-22 room metrics (docs/evaluation_plan.md, Rooms).
+    """AC-22 room metrics (docs/evaluation_suite.md, Rooms).
 
     ``keyframes``: (time, predicted room id). ``truth_rooms``: {"name",
     "intervals": [[start, end], ...]}. Predicted rooms are mapped one-to-one

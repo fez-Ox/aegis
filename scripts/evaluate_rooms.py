@@ -5,7 +5,7 @@ Ground truth JSON (times in seconds from the dataset's first frame):
    "transitions": [{"t": 41.5}, ...]}
 Targets: segmentation >= 0.90, room_change F1 >= 0.70. The correct-room
 query rate is measured with the API after renaming rooms to the ground
-truth names (see docs/evaluation_plan.md).
+truth names (see docs/evaluation_suite.md).
 
 Usage:
     uv run python scripts/evaluate_rooms.py --dataset-id <id> \

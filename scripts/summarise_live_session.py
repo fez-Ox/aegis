@@ -1,6 +1,6 @@
 """P1/P2/P4: summarise a capture (soak, disconnect recovery, backlog).
 
-Pass criteria (context/plan.md WP15):
+Pass criteria (see TODO.md, P2 measurement items):
   P1 soak:       wall duration >= 3600 s, effective received FPS >= 1, status not storage_error
   P2 disconnect: every disconnect resumes in <= 15 s and is recorded as a gap
   P4 backlog:    max_backlog_seconds <= 30 with the stall recorded
