@@ -2,7 +2,8 @@
 
 Accepts any input video (local file, URL, or egocentric dataset benchmark preset),
 inhabits open-vocabulary 3D scene perception and R4DSG memory generation, and
-downloads structured artifacts locally for the mobile app and Rerun visualizer.
+keeps structured artifacts on the Modal volume by default (use --download only
+for local Rerun/home-store demos).
 
 Usage examples:
     # 1. Run on any local video file:
@@ -37,8 +38,10 @@ from aegis.ingestion.live_handoff import (
     promote_live_session,
 )
 from aegis.remote.modal_app import (
+    CPU_ONLY,
     DATA_MOUNT,
     DATA_VOLUME_NAME,
+    GPU_TYPE,
     MODEL_CACHE_VOLUME_NAME,
     MODEL_MOUNT,
     Perception,
@@ -99,6 +102,7 @@ def main(
     follow: bool = False,
     keep_frames: bool = False,
     rerun: bool = False,
+    download: bool = False,
 ) -> None:
     """Submit one pipeline stage or the complete sequential pipeline to Modal.
 
@@ -168,6 +172,7 @@ def main(
                 follow=follow,
                 keep_frames=keep_frames,
                 rerun=rerun,
+                download=download,
             )
             return
         promotion = promote_live_session(
@@ -276,12 +281,23 @@ def main(
     if stage not in valid_stages:
         raise ValueError(f"unknown stage: {stage}")
 
+    if CPU_ONLY:
+        compute_line = (
+            "CPU 16 cores / 40 GiB (AEGIS_GPU=cpu). VGGT often takes several "
+            "minutes; the Modal URL is a run dashboard, not a coding workspace."
+        )
+    else:
+        compute_line = (
+            f"GPU {GPU_TYPE}. If Modal rejects this, add a payment method or "
+            "rerun with AEGIS_GPU=cpu."
+        )
     print("\n" + "=" * 80)
     print("  🛡️  AEGIS SPATIO-TEMPORAL MEMORY PIPELINE — LAUNCHING")
     print("=" * 80)
     print(f"  • Dataset ID:    {dataset_id}")
     print(f"  • Target Stage:  {stage}")
     print(f"  • Data Volume:   {DATA_VOLUME_NAME}")
+    print(f"  • Compute:       {compute_line}")
     print(
         f"  • Target Classes: {len(serialized_config['perception']['target_classes'])} classes"
     )
@@ -301,9 +317,12 @@ def main(
     )
 
     _print_benchmark_summary(results)
-    _download_outputs(dataset_id)
-    if not no_ingest:
-        _ingest_into_home(dataset_id, config, home_id or config.memory.home_id)
+    # Results stay on the Modal volume by default. The app and aegis-ask read
+    # them over HTTPS; pass --download only for local Rerun/home-store demos.
+    if download:
+        _download_outputs(dataset_id)
+        if not no_ingest:
+            _ingest_into_home(dataset_id, config, home_id or config.memory.home_id)
 
 
 def _run_stages(
@@ -366,8 +385,9 @@ def _run_live_segmented(
     follow: bool,
     keep_frames: bool,
     rerun: bool,
+    download: bool,
 ) -> None:
-    """Promote, process, download and ingest one segment at a time."""
+    """Promote and process one segment at a time; optionally download it."""
 
     from aegis.ingestion.segment_runner import run_live_segments
 
@@ -390,9 +410,10 @@ def _run_live_segmented(
             visualise=rerun,
         )
         _print_benchmark_summary(results)
-        _download_outputs(segment_id)
-        if ingest:
-            _ingest_into_home(segment_id, config, home_id)
+        if download:
+            _download_outputs(segment_id)
+            if ingest:
+                _ingest_into_home(segment_id, config, home_id)
 
     done = run_live_segments(
         live_path,
@@ -562,16 +583,14 @@ def _download_outputs(dataset_id: str) -> None:
             )
 
     print("\n" + "=" * 80)
-    print("  🚀 READY FOR LIVE DEMO & VISUALIZATION")
+    print("  🚀 LOCAL ARTIFACTS READY (optional demo fallback)")
     print("=" * 80)
     print(
         f"  • View 3D Scene Graph in Rerun:  rerun outputs/{dataset_id}/viewer/demo.rrd"
     )
     print(
-        f"  • Start Mobile Backend Server:   uv run python run_server.py --dataset-id {dataset_id}"
-    )
-    print(
-        f"  • Mobile API Health Endpoint:   http://localhost:8000/api/v1/health?dataset_id={dataset_id}"
+        "  • Normal path needs none of this: ask the Modal API with aegis-ask "
+        "or the mobile app."
     )
     print("=" * 80 + "\n")
 
@@ -660,6 +679,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Do not ingest the result into the home store",
     )
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Download artifacts locally for Rerun/home-store demos (default: keep on Modal)",
+    )
     args = parser.parse_args()
 
     # Dispatch to modal run
@@ -692,6 +716,8 @@ if __name__ == "__main__":
         cli_cmd.extend(["--home-id", args.home_id])
     if args.no_ingest:
         cli_cmd.append("--no-ingest")
+    if args.download:
+        cli_cmd.append("--download")
     if args.segment_frames is not None:
         cli_cmd.extend(["--segment-frames", str(args.segment_frames)])
     if args.follow:
