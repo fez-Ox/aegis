@@ -130,10 +130,22 @@ class DictionaryIndex:
         try:
             from aegis.memory.reasoning import QueryReasoningEngine
 
-            items = {
-                key: list(value)
-                for key, value in QueryReasoningEngine.ITEM_SYNONYMS.items()
-            }
+            if hasattr(QueryReasoningEngine, "ITEM_SYNONYMS"):
+                items = {
+                    key: list(value)
+                    for key, value in QueryReasoningEngine.ITEM_SYNONYMS.items()
+                }
+            else:
+                # Item synonyms now live in aegis.core.vocabulary; build the
+                # closed vocabulary from object-role entries there.
+                from aegis.core.vocabulary import default_vocabulary
+
+                vocab = default_vocabulary()
+                items = {
+                    entry.id: list(entry.synonyms)
+                    for entry in vocab.entries()
+                    if entry.role == "object" and entry.synonyms
+                }
             rooms = {
                 key: list(value)
                 for key, value in QueryReasoningEngine.ROOM_KEYWORDS.items()
@@ -164,11 +176,21 @@ class DictionaryIndex:
         existing = self.item_synonyms.setdefault(canonical, [])
         for synonym in [canonical, *synonyms]:
             if reassign:
+                # Remove the synonym from every other entry's synonym list so
+                # this canonical entry becomes its sole owner.
+                to_demote: list[str] = []
                 for other, other_synonyms in self.item_synonyms.items():
-                    if other == canonical or synonym == other:
+                    if other == canonical:
                         continue
                     while synonym in other_synonyms:
                         other_synonyms.remove(synonym)
+                    # If the synonym was itself a canonical item, demote it so
+                    # it no longer competes as an exact match (e.g. ``mug``
+                    # becomes a synonym of ``cup`` instead of its own entry).
+                    if synonym == other and synonym != canonical:
+                        to_demote.append(other)
+                for key in to_demote:
+                    del self.item_synonyms[key]
             if synonym not in existing:
                 existing.append(synonym)
 

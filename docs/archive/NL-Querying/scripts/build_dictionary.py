@@ -73,7 +73,20 @@ def load_aegis_tables() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     try:
         from aegis.memory.reasoning import QueryReasoningEngine
 
-        items = {k: list(v) for k, v in QueryReasoningEngine.ITEM_SYNONYMS.items()}
+        if hasattr(QueryReasoningEngine, "ITEM_SYNONYMS"):
+            items = {
+                k: list(v) for k, v in QueryReasoningEngine.ITEM_SYNONYMS.items()
+            }
+        else:
+            # Item synonyms now live in aegis.core.vocabulary.
+            from aegis.core.vocabulary import default_vocabulary
+
+            vocab = default_vocabulary()
+            items = {
+                entry.id: list(entry.synonyms)
+                for entry in vocab.entries()
+                if entry.role == "object" and entry.synonyms
+            }
         rooms = {k: list(v) for k, v in QueryReasoningEngine.ROOM_KEYWORDS.items()}
         return items, rooms
     except ImportError:  # pragma: no cover - sandbox without aegis on path
@@ -83,7 +96,11 @@ def load_aegis_tables() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
 
 
 def load_pipeline_classes() -> list[str]:
-    """Read ``COMPREHENSIVE_INDOOR_CLASSES`` without importing Modal."""
+    """Read ``COMPREHENSIVE_INDOOR_CLASSES`` without importing Modal.
+
+    Falls back to the object-role entry IDs/prompts in ``config/vocabulary.yaml``
+    when the constant was removed from ``run_pipeline.py``.
+    """
     source = (REPO_ROOT / "run_pipeline.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     for node in tree.body:
@@ -96,7 +113,19 @@ def load_pipeline_classes() -> list[str]:
             ):
                 value = ast.literal_eval(node.value)
                 return [str(entry) for entry in value]
-    return []
+    # Fallback: object classes from the shared vocabulary ontology.
+    import yaml
+
+    vocab_path = REPO_ROOT / "config" / "vocabulary.yaml"
+    if not vocab_path.is_file():
+        return []
+    data = yaml.safe_load(vocab_path.read_text(encoding="utf-8")) or {}
+    classes: list[str] = []
+    for entry in data.get("entries", []):
+        if isinstance(entry, dict) and entry.get("role") == "object":
+            classes.append(str(entry.get("id", "")))
+            classes.extend(str(p) for p in (entry.get("prompts") or []))
+    return [c for c in classes if c]
 
 
 def load_config_classes() -> list[str]:

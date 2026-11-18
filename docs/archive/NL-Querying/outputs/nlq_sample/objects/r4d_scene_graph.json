@@ -1,0 +1,2403 @@
+{
+  "anchors": [
+    {
+      "anchor_id": 1,
+      "center": [
+        -0.18435574489194811,
+        0.007719627670854573,
+        0.40500545501708984
+      ],
+      "label": "Desk #1",
+      "observations_count": 1,
+      "room_id": 1,
+      "room_label": "Bedroom",
+      "size": [
+        0.18382189013063907,
+        0.07727641612291337,
+        0.17796924710273743
+      ]
+    },
+    {
+      "anchor_id": 2,
+      "center": [
+        -0.1788150446376034,
+        -0.05113220463378046,
+        0.4616270661354065
+      ],
+      "label": "Storage Cabinet #2",
+      "observations_count": 1,
+      "room_id": 1,
+      "room_label": "Bedroom",
+      "size": [
+        0.12543837837874888,
+        0.05,
+        0.09284467548131936
+      ]
+    },
+    {
+      "anchor_id": 3,
+      "center": [
+        1.0031378854471569,
+        -0.618921067280733,
+        0.9668093919754028
+      ],
+      "label": "Storage Cabinet #3",
+      "observations_count": 1,
+      "room_id": 1,
+      "room_label": "Bedroom",
+      "size": [
+        0.33216482847928996,
+        0.05208417177200331,
+        0.29119158983230586
+      ]
+    }
+  ],
+  "dataset_id": "nlq_sample",
+  "events": [
+    {
+      "destination_anchor": "Storage Cabinet #2",
+      "destination_frame": 90,
+      "destination_relation": "moving_towards",
+      "destination_room": "Bedroom",
+      "end_time": 6.007488,
+      "event_id": "event_0001",
+      "event_type": "state_change",
+      "evidence_frames": [
+        0,
+        80,
+        90,
+        190
+      ],
+      "instance_id": 2,
+      "object": "Book #2",
+      "relative_displacement": 0.05985624864041815,
+      "source_anchor": "Storage Cabinet #2",
+      "source_frame": 80,
+      "source_relation": "inside",
+      "source_room": "Bedroom",
+      "stable_observations": 11,
+      "start_time": 5.366239
+    },
+    {
+      "destination_anchor": "Storage Cabinet #3",
+      "destination_frame": 200,
+      "destination_relation": "moving_towards",
+      "destination_room": "Bedroom",
+      "end_time": 13.364972,
+      "event_id": "event_0002",
+      "event_type": "anchor_change",
+      "evidence_frames": [
+        90,
+        190,
+        200
+      ],
+      "instance_id": 2,
+      "object": "Book #2",
+      "relative_displacement": 0.15184718078923812,
+      "source_anchor": "Storage Cabinet #2",
+      "source_frame": 190,
+      "source_relation": "moving_towards",
+      "source_room": "Bedroom",
+      "stable_observations": 1,
+      "start_time": 12.689974
+    }
+  ],
+  "rooms": [
+    {
+      "centroid": [
+        0.08063899725675583,
+        -0.24033990502357483,
+        0.2757996916770935
+      ],
+      "end_timestamp": 13.364972,
+      "evidence_labels": [
+        "Bed"
+      ],
+      "footprint": [
+        [
+          -0.005078604444861412,
+          -0.24033990502357483,
+          0.337898850440979
+        ],
+        [
+          -0.0025674868375062943,
+          -0.24033990502357483,
+          0.0007971007144078612
+        ],
+        [
+          0.0,
+          -0.24033990502357483,
+          0.0
+        ],
+        [
+          0.032805025577545166,
+          -0.24033990502357483,
+          0.011064833030104637
+        ],
+        [
+          0.23364165425300598,
+          -0.24033990502357483,
+          0.2711634337902069
+        ],
+        [
+          0.3001610338687897,
+          -0.24033990502357483,
+          0.3977774381637573
+        ],
+        [
+          0.4027773439884186,
+          -0.24033990502357483,
+          0.6096197366714478
+        ],
+        [
+          0.42702120542526245,
+          -0.24033990502357483,
+          0.754173755645752
+        ],
+        [
+          0.4115247428417206,
+          -0.24033990502357483,
+          0.7822383642196655
+        ],
+        [
+          0.4029009938240051,
+          -0.24033990502357483,
+          0.789822518825531
+        ]
+      ],
+      "keyframe_count": 21,
+      "label": "Bedroom",
+      "room_id": 1,
+      "room_type": "Bedroom",
+      "start_timestamp": 0.0
+    }
+  ],
+  "schema_version": 1,
+  "timeline": {
+    "0": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04668338100186663,
+          -0.07936372496212166,
+          0.5276862978935242
+        ],
+        "frame_id": 0,
+        "instance_id": 1,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 0.0,
+        "relation": "inside",
+        "relative_distance": 0.23666512376436424,
+        "relative_vector": [
+          0.22549842563947003,
+          -0.028231520328341198,
+          0.06605923175811768
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.880291145628158,
+          0.4744338720292483
+        ],
+        "size": [
+          0.2294153455644846,
+          0.18950702883303164,
+          0.16865134090185158
+        ],
+        "timestamp": 0.0,
+        "yaw": 2.1529510421637688
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.01609303821244091,
+          -0.02864122902494933,
+          0.5493929386138916
+        ],
+        "frame_id": 0,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 0.0,
+        "relation": "inside",
+        "relative_distance": 0.18624484887045165,
+        "relative_vector": [
+          0.1627220064251625,
+          0.022490975608831128,
+          0.08776587247848511
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9463795784297826,
+          0.323056796138182
+        ],
+        "size": [
+          0.09023667136207222,
+          0.06714763175696134,
+          0.07249671518802647
+        ],
+        "timestamp": 0.0,
+        "yaw": -2.483677246155452
+      }
+    ],
+    "10": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04721575345269703,
+          -0.07948749705572654,
+          0.5279239535331726
+        ],
+        "frame_id": 10,
+        "instance_id": 1,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 0.674999,
+        "relation": "inside",
+        "relative_distance": 0.23725349643852311,
+        "relative_vector": [
+          0.2260307980903004,
+          -0.02835529242194608,
+          0.06629688739776607
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8871054941187061,
+          0.46156672573356755
+        ],
+        "size": [
+          0.22948162307962774,
+          0.18950016574934125,
+          0.16859689258038993
+        ],
+        "timestamp": 0.674999,
+        "yaw": 2.1820716564802187
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.01575252263525046,
+          -0.028782160085145045,
+          0.5497203826904298
+        ],
+        "frame_id": 10,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 0.674999,
+        "relation": "inside",
+        "relative_distance": 0.1866797873224559,
+        "relative_vector": [
+          0.16306252200235294,
+          0.022350044548635414,
+          0.08809331655502328
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9445205979584,
+          0.32845218835061285
+        ],
+        "size": [
+          0.09077924472745508,
+          0.06739470048807561,
+          0.0723393674194813
+        ],
+        "timestamp": 0.674999,
+        "yaw": -2.4722638936421233
+      },
+      {
+        "anchor_id": 1,
+        "anchor_label": "Desk #1",
+        "center": [
+          -0.21340011200991305,
+          0.01197553233875677,
+          0.34700262546539307
+        ],
+        "frame_id": 10,
+        "instance_id": 3,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Laptop #3",
+        "last_seen_timestamp": 0.674999,
+        "relation": "on_surface",
+        "relative_distance": 0.06500781662099246,
+        "relative_vector": [
+          -0.02904436711796493,
+          0.004255904667902197,
+          -0.05800282955169678
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.48089923321963274,
+          0.8767758707268176
+        ],
+        "size": [
+          0.10056082904338837,
+          0.05,
+          0.06529753655195236
+        ],
+        "timestamp": 0.674999,
+        "yaw": 1.0033600756639056
+      }
+    ],
+    "100": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 100,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 6.682486,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 100,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 6.682486,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 100,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 6.682486,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "110": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 110,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 7.357485,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 110,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 7.357485,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 110,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 7.357485,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "120": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 120,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 8.032483,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 120,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 8.032483,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 120,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 8.032483,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "130": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 130,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 8.673732,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 130,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 8.673732,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 130,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 8.673732,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "140": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 140,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 9.348731,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 140,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 9.348731,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 140,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 9.348731,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "150": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 150,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 10.023729,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 150,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 10.023729,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 150,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 10.023729,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "160": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 160,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 10.698728,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 160,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 10.698728,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 160,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 10.698728,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "170": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 170,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 11.339977,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 170,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 11.339977,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 170,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 11.339977,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "180": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.14937478549943475,
+          -0.3129258806000256,
+          0.694894664559143
+        ],
+        "frame_id": 180,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 12.014975,
+        "relation": "moving_towards",
+        "relative_distance": 0.48026895158408367,
+        "relative_vector": [
+          0.3281898301370382,
+          -0.26179367596624514,
+          0.23326759842373646
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9720625014668692,
+          0.23472216180406322
+        ],
+        "size": [
+          0.12654375850810384,
+          0.07378456514526781,
+          0.09137747531881812
+        ],
+        "timestamp": 12.014975,
+        "yaw": -2.6677271839095624
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 180,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 12.014975,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 180,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 12.014975,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "190": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.2528604152739357,
+          -0.4654646195496928,
+          0.8402513399697296
+        ],
+        "frame_id": 190,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 12.689974,
+        "relation": "moving_towards",
+        "relative_distance": 0.7080758387887974,
+        "relative_vector": [
+          0.4316754599115391,
+          -0.41433241491591233,
+          0.37862427383432307
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9584111694037217,
+          0.2853910131069137
+        ],
+        "size": [
+          0.11673078629150942,
+          0.07340974354686436,
+          0.08478545735019524
+        ],
+        "timestamp": 12.689974,
+        "yaw": -2.5627638856972537
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 190,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 12.689974,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 190,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 12.689974,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "20": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 20,
+        "instance_id": 1,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 1.349997,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015553336663245775,
+          -0.029055682233259897,
+          0.5500309371948243
+        ],
+        "frame_id": 20,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.18696791850554276,
+        "relative_vector": [
+          0.16326170797435763,
+          0.022076522400520562,
+          0.08840387105941783
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.945890746461107,
+          0.32448527818569767
+        ],
+        "size": [
+          0.09102171180280857,
+          0.06769677042914554,
+          0.071623350687325
+        ],
+        "timestamp": 1.349997,
+        "yaw": -2.480657631553096
+      }
+    ],
+    "200": [
+      {
+        "anchor_id": 3,
+        "anchor_label": "Storage Cabinet #3",
+        "center": [
+          0.3209714387785969,
+          -0.562311727188735,
+          0.9353254822626729
+        ],
+        "frame_id": 200,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 13.364972,
+        "relation": "moving_towards",
+        "relative_distance": 0.6852349341042532,
+        "relative_vector": [
+          -0.68216644666856,
+          0.05660934009199803,
+          -0.03148390971272996
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9542547879658186,
+          0.29899464818673677
+        ],
+        "size": [
+          0.11076831691268801,
+          0.07363225940428535,
+          0.08042754027575003
+        ],
+        "timestamp": 13.364972,
+        "yaw": -2.5343147868900884
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 200,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 13.364972,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 200,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 13.364972,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "30": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.014604730062078752,
+          -0.027395823691288602,
+          0.5490316895246506
+        ],
+        "frame_id": 30,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 2.024996,
+        "relation": "inside",
+        "relative_distance": 0.18753136106543744,
+        "relative_vector": [
+          0.16421031457552465,
+          0.023736380942491857,
+          0.08740462338924415
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9408818078888286,
+          0.3387350344795315
+        ],
+        "size": [
+          0.09378391945323675,
+          0.06854457419707906,
+          0.07323967136926948
+        ],
+        "timestamp": 2.024996,
+        "yaw": -2.4504484039761465
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 30,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 2.024996,
+        "yaw": 2.1190932508269182
+      }
+    ],
+    "40": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.013864364622360577,
+          -0.025637132482727736,
+          0.5488161212146283
+        ],
+        "frame_id": 40,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 2.699994,
+        "relation": "inside",
+        "relative_distance": 0.1883100020367638,
+        "relative_vector": [
+          0.16495068001524282,
+          0.025495072151052723,
+          0.08718905507922181
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9436308953118406,
+          0.3309995973003202
+        ],
+        "size": [
+          0.09512215077703062,
+          0.06825115278399432,
+          0.07350943855138492
+        ],
+        "timestamp": 2.699994,
+        "yaw": -2.4668672770821187
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 40,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 2.699994,
+        "yaw": 2.1190932508269182
+      }
+    ],
+    "50": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 50,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 3.341243,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.013864364622360577,
+          -0.025637132482727736,
+          0.5488161212146283
+        ],
+        "frame_id": 50,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 2.699994,
+        "relation": "inside",
+        "relative_distance": 0.1883100020367638,
+        "relative_vector": [
+          0.16495068001524282,
+          0.025495072151052723,
+          0.08718905507922181
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9436308953118406,
+          0.3309995973003202
+        ],
+        "size": [
+          0.09512215077703062,
+          0.06825115278399432,
+          0.07350943855138492
+        ],
+        "timestamp": 3.341243,
+        "yaw": -2.4668672770821187
+      }
+    ],
+    "60": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015542307511037468,
+          -0.023165784008702076,
+          0.5541014671325684
+        ],
+        "frame_id": 60,
+        "instance_id": 4,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.016242,
+        "relation": "inside",
+        "relative_distance": 0.18971458091344323,
+        "relative_vector": [
+          0.16327273712656593,
+          0.027966420625078384,
+          0.09247440099716187
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9806540525231657,
+          0.19574889340655852
+        ],
+        "size": [
+          0.0984290426596999,
+          0.05,
+          0.05487574934959405
+        ],
+        "timestamp": 4.016242,
+        "yaw": -2.7475505349597156
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 60,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 4.016242,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.013864364622360577,
+          -0.025637132482727736,
+          0.5488161212146283
+        ],
+        "frame_id": 60,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 2.699994,
+        "relation": "inside",
+        "relative_distance": 0.1883100020367638,
+        "relative_vector": [
+          0.16495068001524282,
+          0.025495072151052723,
+          0.08718905507922181
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9436308953118406,
+          0.3309995973003202
+        ],
+        "size": [
+          0.09512215077703062,
+          0.06825115278399432,
+          0.07350943855138492
+        ],
+        "timestamp": 4.016242,
+        "yaw": -2.4668672770821187
+      }
+    ],
+    "70": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.0019845555478228585,
+          -0.004962870231355472,
+          0.5311091542243958
+        ],
+        "frame_id": 70,
+        "instance_id": 5,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Bottle #5",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.195520816989138,
+        "relative_vector": [
+          0.17683048908978052,
+          0.04616933440242499,
+          0.06948208808898926
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.9973136692576853,
+          0.07324919871078701
+        ],
+        "size": [
+          0.05,
+          0.05,
+          0.05
+        ],
+        "timestamp": 4.69124,
+        "yaw": 2.994962933997903
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 70,
+        "instance_id": 4,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 4.69124,
+        "yaw": -2.653412569254766
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 70,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 4.69124,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.013864364622360577,
+          -0.025637132482727736,
+          0.5488161212146283
+        ],
+        "frame_id": 70,
+        "instance_id": 2,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 2.699994,
+        "relation": "inside",
+        "relative_distance": 0.1883100020367638,
+        "relative_vector": [
+          0.16495068001524282,
+          0.025495072151052723,
+          0.08718905507922181
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9436308953118406,
+          0.3309995973003202
+        ],
+        "size": [
+          0.09512215077703062,
+          0.06825115278399432,
+          0.07350943855138492
+        ],
+        "timestamp": 4.69124,
+        "yaw": -2.4668672770821187
+      }
+    ],
+    "80": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.010892138190506965,
+          -0.04352508004534707,
+          0.5198834432026744
+        ],
+        "frame_id": 80,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 5.366239,
+        "relation": "inside",
+        "relative_distance": 0.17790384010230906,
+        "relative_vector": [
+          0.16792290644709643,
+          0.007607124588433392,
+          0.05825637706726794
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.6170716401472124,
+          0.7869069773016562
+        ],
+        "size": [
+          0.1575969030249731,
+          0.07897596678906359,
+          0.11813664010762887
+        ],
+        "timestamp": 5.366239,
+        "yaw": 1.3300317886142632
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 80,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 5.366239,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 80,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 5.366239,
+        "yaw": -2.653412569254766
+      }
+    ],
+    "90": [
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.009457220539089954,
+          -0.07649391129635061,
+          0.4699458053071946
+        ],
+        "frame_id": 90,
+        "instance_id": 2,
+        "is_active_view": true,
+        "is_in_hand": false,
+        "label": "Book #2",
+        "last_seen_timestamp": 6.007488,
+        "relation": "moving_towards",
+        "relative_distance": 0.17144821425033718,
+        "relative_vector": [
+          0.16935782409851344,
+          -0.02536170666257015,
+          0.008318739171788103
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9917573582276349,
+          0.12813017755916306
+        ],
+        "size": [
+          0.13957838369720682,
+          0.0739980208789596,
+          0.09947589552938754
+        ],
+        "timestamp": 6.007488,
+        "yaw": -2.8846258813886645
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          0.04225692696760702,
+          -0.07652418790546607,
+          0.5296573001146316
+        ],
+        "frame_id": 90,
+        "instance_id": 1,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Chair #1",
+        "last_seen_timestamp": 1.349997,
+        "relation": "inside",
+        "relative_distance": 0.23269224778482123,
+        "relative_vector": [
+          0.22107197160521042,
+          -0.02539198327168561,
+          0.06803023397922514
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          0.8721337505189086,
+          0.48926753540963863
+        ],
+        "size": [
+          0.23063290457334365,
+          0.18879053185973316,
+          0.16749725889787073
+        ],
+        "timestamp": 6.007488,
+        "yaw": 2.1190932508269182
+      },
+      {
+        "anchor_id": 2,
+        "anchor_label": "Storage Cabinet #2",
+        "center": [
+          -0.015053937322497296,
+          -0.023185434276789943,
+          0.5537311732769012
+        ],
+        "frame_id": 90,
+        "instance_id": 4,
+        "is_active_view": false,
+        "is_in_hand": false,
+        "label": "Cell Phone #4",
+        "last_seen_timestamp": 4.69124,
+        "relation": "inside",
+        "relative_distance": 0.1899523329543178,
+        "relative_vector": [
+          0.1637611073151061,
+          0.027946770356990516,
+          0.09210410714149475
+        ],
+        "room_id": 1,
+        "room_label": "Bedroom",
+        "rotation": [
+          0.0,
+          0.0,
+          -0.9703576393216301,
+          0.2416734404318214
+        ],
+        "size": [
+          0.09918629519175737,
+          0.050446778654586515,
+          0.05869326099753375
+        ],
+        "timestamp": 6.007488,
+        "yaw": -2.653412569254766
+      }
+    ]
+  }
+}

@@ -54,6 +54,9 @@ LOCAL_ROOTS: tuple[Path, ...] = (
 
 ENV_TRANSPORT = "AEGIS_COMM_TRANSPORT"  # "auto" | "modal" | "local"
 ENV_MODAL_BASE_URL = "AEGIS_MODAL_BASE_URL"
+DEFAULT_MODAL_BASE_URL = (
+    "https://i230683--aegis-memory-api-serve-memory-api.us-east.modal.run"
+)
 
 
 class TransportError(RuntimeError):
@@ -250,12 +253,7 @@ def create_source(
     base_url = base_url or os.environ.get(ENV_MODAL_BASE_URL)
 
     if transport in {"modal", "http"}:
-        if not base_url:
-            raise RemoteUnavailableError(
-                "modal transport requested without AEGIS_MODAL_BASE_URL "
-                "(deploy with: uv run modal deploy 'NL Querying/comm/"
-                "modal_serve.py')"
-            )
+        base_url = base_url or DEFAULT_MODAL_BASE_URL
         return ModalGraphSource(base_url)
     if transport in {"local", "offline"}:
         return LocalGraphSource()
