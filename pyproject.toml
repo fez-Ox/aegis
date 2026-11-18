@@ -34,6 +34,7 @@ testpaths = ["tests"]
 aegis = "aegis:main"
 aegis-ingest = "aegis.ingestion.live_cli:main"
 aegis-memory = "aegis.memory.cli:main"
+aegis-ask = "aegis.nlq.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
