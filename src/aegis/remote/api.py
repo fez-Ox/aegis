@@ -13,6 +13,7 @@ import html
 import json
 import logging
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ from aegis.memory.repository import (
     get_repository,
     latest_states_from_graph,
 )
+from aegis.nlq import AnswerEngine, memory_view_from_repo
 
 logger = logging.getLogger("aegis.api")
 
@@ -149,6 +151,33 @@ class MemoryQueryResponse(BaseModel):
     crop_url: str | None = None
     confidence: float | None = None
     other_instances: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AskRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=300)
+    dataset_id: str | None = None
+    home_id: str | None = None
+
+
+class AskResponse(BaseModel):
+    question: str
+    intent: str
+    status: str
+    answer: str
+    found: bool
+    abstained: bool
+    abstain_reason: str | None = None
+    instance_label: str | None = None
+    anchor_label: str | None = None
+    room_label: str | None = None
+    relation: str | None = None
+    confidence: float | None = None
+    last_seen_timestamp: float | None = None
+    last_seen_wallclock: str | None = None
+    suggestions: list[str] = Field(default_factory=list)
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    other_instances: list[str] = Field(default_factory=list)
+    dataset_id: str | None = None
 
 
 class TimelineEventModel(BaseModel):
@@ -535,6 +564,59 @@ def _crop_url(
             return None
         return f"/api/v1/crops/{instance_id}?home_id={key}"
     return f"/api/v1/crops/{instance_id}?dataset_id={key}"
+
+
+@lru_cache(maxsize=1)
+def _ask_engine() -> AnswerEngine:
+    return AnswerEngine()
+
+
+def _answer_question(
+    text: str, dataset_id: str | None, home_id: str | None
+) -> AskResponse:
+    """The single NLQ path: one memory view in, one grounded answer out."""
+    key, repo = resolve_repository(dataset_id, home_id)
+    memory = memory_view_from_repo(repo)
+    memory["dataset_id"] = key
+    # Evidence URLs use the same path rules as the lower-level query endpoint.
+    for state in memory["latest_objects"]:
+        state["crop_url"] = _crop_url(repo, key, state)
+    result = _ask_engine().ask(text, memory)
+    return AskResponse(
+        question=result.question,
+        intent=result.intent,
+        status=result.status,
+        answer=result.answer,
+        found=not result.abstained,
+        abstained=result.abstained,
+        abstain_reason=result.abstain_reason,
+        instance_label=result.instance_label,
+        anchor_label=result.anchor_label,
+        room_label=result.room_label,
+        relation=result.relation,
+        confidence=result.confidence,
+        last_seen_timestamp=result.last_seen_timestamp,
+        last_seen_wallclock=result.last_seen_wallclock,
+        suggestions=result.suggestions,
+        evidence=result.evidence,
+        other_instances=result.other_instances,
+        dataset_id=result.dataset_id,
+    )
+
+
+@app.get("/api/v1/ask", response_model=AskResponse)
+def ask_question(
+    text: str = Query(..., description="A question, e.g. 'where are my keys?'"),
+    dataset_id: str | None = None,
+    home_id: str | None = None,
+) -> AskResponse:
+    """Ask Aegis memory in natural language. No fabricated locations."""
+    return _answer_question(text, dataset_id, home_id)
+
+
+@app.post("/api/v1/ask", response_model=AskResponse)
+def ask_question_post(body: AskRequest) -> AskResponse:
+    return _answer_question(body.text, body.dataset_id, body.home_id)
 
 
 @app.get("/api/v1/query", response_model=MemoryQueryResponse)
