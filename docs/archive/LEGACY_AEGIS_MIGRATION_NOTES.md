@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 # Legacy Aegis Migration Notes
 
 Source reviewed: `../../aegis/` on 2026-10-11. This document identifies useful pieces from the older FR1/FR2-focused repository that can be carried into the current Aegis repo. No migration has been performed yet.

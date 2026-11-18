@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 Project: F26-062-Aegis
 Decision: Approved with Minor Modifications
 Comments / Recommended Modifications:

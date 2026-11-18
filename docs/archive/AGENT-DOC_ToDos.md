@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 # **Any model/LLM/Agent working on this project must read this to see what is to be implemented and update this file according to what it has implemented.**  
 Aegis — Remaining Work by Milestone
 

@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 # Aegis — Implementation Plan for Milestone 1, Milestone 2 and §6 Improvements
 
 **Written:** 2026-11-14 against `develop` @ `8183015` (129 tests pass, Ruff clean).

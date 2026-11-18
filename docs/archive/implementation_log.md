@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 # Implementation Log — Milestone 1, Milestone 2 and §6 improvements
 
 **Date:** 2026-11-15

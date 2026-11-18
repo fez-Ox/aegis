@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 # Aegis Pipeline Evaluation Plan
 
 > **Superseded design note.** The single source of truth for evaluation is now

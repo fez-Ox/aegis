@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 # Aegis — Master TODO (done + remaining, by milestone)
 
 **Sources:** `fyp_report/main.pdf` (FYP-1 mid-report: scope, FR/NFR, AC-01…AC-31, SC1–SC9) and `context/specification.md`.

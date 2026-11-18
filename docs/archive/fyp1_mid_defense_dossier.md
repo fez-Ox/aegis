@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 # Aegis: FYP-1 Mid-Term Evaluation Dossier
 **Project Title:** Aegis — A Spatio-Temporal Memory System for Assistive Care  
 **Core Module Under Defense:** Spatio-Temporal Memory Engine (R4DSG) alongside Live Prototype  

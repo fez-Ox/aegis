@@ -1,3 +1,5 @@
+> **ARCHIVED — historical snapshot.** Current facts: `CONTEXT.md`; current work: `TODO.md`.
+
 # Aegis — Answers: retention budget, elevation, vocabulary
 
 Written 2026-11-12 against `develop` @ `940a09e`. File references are to the current tree.
