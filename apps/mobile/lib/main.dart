@@ -6,7 +6,11 @@ import 'views/ask_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(AegisApp(apiService: ApiService()));
+  const baseUrl = String.fromEnvironment(
+    'AEGIS_BASE_URL',
+    defaultValue: 'http://127.0.0.1:8000',
+  );
+  runApp(AegisApp(apiService: ApiService(baseUrl: baseUrl)));
 }
 
 /// The app only asks questions and displays answers. No tracking, simulation,
