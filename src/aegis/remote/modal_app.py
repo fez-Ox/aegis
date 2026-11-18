@@ -111,7 +111,9 @@ PERCEPTION_IMAGE = (
         "transformers>=4.48,<5",
     )
     .run_commands(
-        "pip install git+https://github.com/facebookresearch/sam2.git || true"
+        "pip install git+https://github.com/facebookresearch/sam2.git || true",
+        # YOLOE pulls CLIP at runtime otherwise, which stalls the first detect.
+        "pip install 'git+https://github.com/ultralytics/CLIP.git' ftfy",
     )
     .env(
         {
@@ -154,9 +156,10 @@ WARM_SECONDS = 300
     secrets=SECRETS,
     timeout=7200,
     scaledown_window=WARM_SECONDS,
+    **_compute(gpu_memory_mb=24576, cpu_memory_mb=40960),
 )
 class Reconstructor:
-    """VGGT-Ω reconstruction on an L4 GPU."""
+    """VGGT-Ω reconstruction on an L4 GPU, or 16-core CPU when AEGIS_GPU=cpu."""
 
     @modal.enter()
     def setup(self) -> None:
@@ -188,9 +191,10 @@ class Reconstructor:
     secrets=SECRETS,
     timeout=7200,
     scaledown_window=WARM_SECONDS,
+    **_compute(gpu_memory_mb=16384, cpu_memory_mb=40960),
 )
 class Perception:
-    """Detection, SAM 2 masks, 3D lifting and the memory graph on an L4 GPU."""
+    """Detection, SAM 2, lifting and memory on L4, or 16-core CPU when AEGIS_GPU=cpu."""
 
     @modal.enter()
     def setup(self) -> None:
