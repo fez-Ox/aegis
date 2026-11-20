@@ -6,6 +6,7 @@ traced. A result from a dirty tree is flagged as invalid evidence.
 
 | Script | Measures |
 |---|---|
+| `run_e2e.py` | Runs the whole pipeline (capture → Modal → deploy → ask), blocking at human-only steps. `--dry-run` prints the commands. Not a measurement script. |
 | `summarise_live_session.py` | One-hour soak, disconnect gaps, frame counts/backlog. |
 | `evaluate_keyframes.py` | Scripted scene changes vs kept keyframes. |
 | `evaluate_placements.py` | Object anchor/relation against ground truth. |
