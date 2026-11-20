@@ -34,6 +34,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -265,15 +266,40 @@ class Runner:
         return REPO_ROOT.joinpath(*parts)
 
 
-def probe_stream(url: str, timeout: float = 6.0) -> bool:
-    """Return True when an MJPEG/HTTP stream answers with 2xx."""
+def normalise_stream_url(raw: str) -> str:
+    """Accept ``192.168.1.23:8080`` and turn it into the actual MJPEG endpoint."""
+    url = raw.strip()
+    if not url:
+        return url
+    if "://" not in url:
+        url = f"http://{url}"
+    parts = urllib.parse.urlsplit(url)
+    path = parts.path.rstrip("/")
+    if not path:
+        path = "/video"
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, parts.query, ""))
+
+
+def probe_stream(url: str, timeout: float = 6.0) -> tuple[bool, str]:
+    """Return (reachable video stream, human-readable reason)."""
     try:
         request = urllib.request.Request(url, headers={"User-Agent": "aegis-e2e"})
         with urllib.request.urlopen(request, timeout=timeout) as response:
+            content_type = (response.headers.get("Content-Type") or "").lower()
             body = response.read(64)
-            return bool(response.status < 400 and body)
-    except (urllib.error.URLError, OSError, ValueError):
-        return False
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return False, f"cannot reach it ({exc})"
+    if not body:
+        return False, "the server answered with an empty body"
+    if content_type.startswith("text/") or "html" in content_type:
+        return (
+            False,
+            (
+                "that is the IP Webcam web page, not the stream "
+                f"(Content-Type: {content_type or 'unknown'}); use .../video"
+            ),
+        )
+    return True, content_type or "unknown content type"
 
 
 def probe_health(base_url: str, dataset_id: str) -> dict[str, Any] | None:
@@ -395,6 +421,47 @@ def phase_modal(r: Runner) -> None:
 # ---------------------------------------------------------------------------
 # Phase 3 — capture
 # ---------------------------------------------------------------------------
+def choose_capture_target(r: Runner, base: str) -> tuple[str, bool]:
+    """Return ``(session_id, resume)`` without ever overwriting a capture."""
+    if r.args.resume_capture:
+        return base, True
+    session_dir = r.path("captures", base)
+    if not session_dir.exists():
+        return base, False
+    if session_dir.is_dir() and not any(session_dir.iterdir()):
+        session_dir.rmdir()
+        r.note(f"removed empty leftover session {session_dir}")
+        return base, False
+
+    frames = 0
+    index = session_dir / "index.jsonl"
+    if index.is_file():
+        frames = sum(1 for line in index.read_text().splitlines() if line.strip())
+    r.warn(f"session {base!r} already exists ({frames} frames)")
+
+    if r.args.dry_run:
+        return f"{base}-2", False
+    while True:
+        answer = (
+            input(
+                f"  [n] new session {base}-2 (default)   "
+                f"[r] resume {base}   [a] abort: "
+            )
+            .strip()
+            .lower()
+        )
+        if answer in {"", "n"}:
+            suffix = 2
+            while r.path("captures", f"{base}-{suffix}").exists():
+                suffix += 1
+            return f"{base}-{suffix}", False
+        if answer == "r":
+            return base, True
+        if answer == "a":
+            raise SystemExit(0)
+        r.warn("type n, r or a")
+
+
 def phase_capture(r: Runner) -> None:
     r.header("Capture video")
 
@@ -405,13 +472,14 @@ def phase_capture(r: Runner) -> None:
         r.save_state()
         return
 
-    session_id = r.args.session_id or "walk01"
-    session_dir = r.path("captures", session_id)
-    r.state["session_id"] = session_id
-    r.state["dataset_id"] = r.args.dataset_id or session_id
-    r.save_state()
+    base_session = r.args.session_id or "walk01"
 
     if r.args.skip_capture:
+        session_id = base_session
+        session_dir = r.path("captures", session_id)
+        r.state["session_id"] = session_id
+        r.state["dataset_id"] = r.args.dataset_id or session_id
+        r.save_state()
         index = session_dir / "index.jsonl"
         if not index.is_file() and not r.args.dry_run:
             r.fail(f"--skip-capture was set but {index} does not exist.")
@@ -419,27 +487,42 @@ def phase_capture(r: Runner) -> None:
         r.ok(f"using existing capture {session_dir}")
         return
 
-    url = r.args.stream_url or r.env.get("AEGIS_STREAM_URL", "")
-    if not url and not r.args.dry_run:
-        r.info("IP Webcam must be running on the phone (same Wi-Fi as this laptop).")
-        url = r.ask_text(
-            "Paste the IP Webcam /video URL",
-            default=DEFAULT_STREAM_URL,
-        )
-    if not url:
-        url = DEFAULT_STREAM_URL
+    session_id, resume = choose_capture_target(r, base_session)
+    if resume and not r.path("captures", session_id).is_dir():
+        r.fail(f"--resume-capture was set but captures/{session_id} does not exist.")
+        raise SystemExit(2)
+    session_dir = r.path("captures", session_id)
+    r.state["session_id"] = session_id
+    r.state["dataset_id"] = r.args.dataset_id or session_id
+    r.save_state()
+    r.info(f"session: {session_id}" + (" (resuming)" if resume else ""))
+    r.info(f"dataset: {r.state['dataset_id']}")
 
-    while True:
-        if r.args.dry_run or probe_stream(url):
+    raw_url = r.args.stream_url or r.env.get("AEGIS_STREAM_URL", "")
+    if not raw_url and not r.args.dry_run:
+        r.info("IP Webcam must be running on the phone (same Wi-Fi as this laptop).")
+        raw_url = r.ask_text(
+            "Paste the IP Webcam URL (…:8080 or …:8080/video)",
+            default="192.168.1.23:8080",
+        )
+    url = normalise_stream_url(raw_url or DEFAULT_STREAM_URL)
+    if raw_url and url != raw_url.strip():
+        r.note(f"using {url}")
+
+    while not r.args.dry_run:
+        ok, detail = probe_stream(url)
+        if ok:
+            r.ok(f"stream reachable ({detail})")
             break
-        r.fail(f"no video response from {url}")
+        r.fail(f"no video stream at {url}: {detail}")
         r.info("On the phone: open IP Webcam, tap 'Start server', read the URL.")
         r.info("Check the phone and laptop share a network and the IP is current.")
-        new_url = r.ask_text("IP Webcam URL (Enter to retry)", default=url)
-        if new_url:
-            url = new_url
+        new_raw = r.ask_text("IP Webcam URL (Enter to retry)", default=url)
+        if new_raw:
+            url = normalise_stream_url(new_raw)
     r.state["stream_url"] = url
-    r.ok(f"stream reachable: {url}")
+    if r.args.dry_run:
+        r.ok(f"stream would be checked at {url}")
 
     cmd = r.uv_cmd(
         "run",
@@ -455,6 +538,8 @@ def phase_capture(r: Runner) -> None:
         "--pause-file",
         "captures/.pause",
     )
+    if resume:
+        cmd.append("--resume")
     if r.args.capture_seconds:
         cmd.extend(["--max-duration", str(r.args.capture_seconds)])
         r.info(f"capturing for ~{r.args.capture_seconds:g}s")
@@ -464,6 +549,10 @@ def phase_capture(r: Runner) -> None:
     code, _ = r.stream(cmd)
     if code not in (0, 130):
         r.fail(f"aegis-ingest exited with {code}.")
+        r.info(
+            "If the session was already recorded, rerun with --resume-capture "
+            "or choose a new session id."
+        )
         raise SystemExit(code)
 
     index = session_dir / "index.jsonl"
@@ -769,6 +858,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--skip-capture", action="store_true", help="Use captures/<session-id>"
+    )
+    parser.add_argument(
+        "--resume-capture",
+        action="store_true",
+        help="Append to an interrupted captures/<session-id>",
     )
     parser.add_argument("--skip-pipeline", action="store_true", help="Do not run Modal")
     parser.add_argument(

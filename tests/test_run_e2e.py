@@ -60,11 +60,28 @@ def test_dry_run_creates_no_state(runner_module):
 
 
 def test_probe_stream_reports_unreachable(runner_module):
-    assert runner_module.probe_stream("http://127.0.0.1:9/video", timeout=0.5) is False
+    ok, reason = runner_module.probe_stream("http://127.0.0.1:9/video", timeout=0.5)
+    assert ok is False
+    assert reason
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("192.168.1.23:8080", "http://192.168.1.23:8080/video"),
+        ("http://192.168.1.23:8080/", "http://192.168.1.23:8080/video"),
+        ("http://192.168.1.23:8080/video", "http://192.168.1.23:8080/video"),
+        ("http://host:8080/videofeed?x=1", "http://host:8080/videofeed?x=1"),
+        ("", ""),
+    ],
+)
+def test_normalise_stream_url(runner_module, raw, expected):
+    assert runner_module.normalise_stream_url(raw) == expected
 
 
 def test_parser_documents_human_steps(runner_module):
     help_text = runner_module.build_parser().format_help()
     assert "--dry-run" in help_text
     assert "--skip-capture" in help_text
+    assert "--resume-capture" in help_text
     assert "--cpu" in help_text
