@@ -637,6 +637,12 @@ if __name__ == "__main__":
         help="Keyframe stride for 3D reconstruction",
     )
     parser.add_argument(
+        "--vggt-model",
+        type=str,
+        default=None,
+        help="Override the VGGT checkpoint (e.g. wincentIsMe/VGGT-Omega)",
+    )
+    parser.add_argument(
         "--stage",
         type=str,
         default="all",
@@ -706,6 +712,8 @@ if __name__ == "__main__":
         cli_cmd.extend(["--live-session", args.live_session])
     if args.classes:
         cli_cmd.extend(["--classes", args.classes])
+    if args.vggt_model:
+        cli_cmd.extend(["--vggt-model", args.vggt_model])
     if args.sample_fps:
         cli_cmd.extend(["--sample-fps", str(args.sample_fps)])
     if args.keyframe_stride:
