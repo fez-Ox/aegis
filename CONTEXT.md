@@ -125,6 +125,9 @@ Archived history: `docs/archive/` (see `docs/archive/README.md`).
 ## 7. Commands
 
 ```bash
+# everything, one command (stops and waits when a human step is required)
+uv run python scripts/run_e2e.py
+
 # ingest from a phone (laptop CLI)
 uv run aegis-ingest --url 'http://PHONE:8080/video' --output-root ./captures \
   --session-id walk01 --config-path config/live.yaml

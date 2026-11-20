@@ -36,6 +36,11 @@ the old standalone NLQ tests were archived with the old folder).
 - [x] **P0.7 One CI-covered suite.** `tests/test_nlq.py` covers dictionary,
       engine, abstentions, GET/POST `/ask` and the CLI; all 365 tests run under
       the standard `pytest` command. Ruff check/format clean on touched code.
+- [x] **P0.8 One-command end-to-end runner.** `scripts/run_e2e.py` performs
+      setup → Modal auth/secret → IP Webcam capture → Modal pipeline → deploy →
+      terminal ask, and blocks with explicit instructions at human-only steps
+      (Modal sign-in, phone stream, GPU billing, Flutter install). Checkpoints
+      to `.aegis/e2e_state.json`; `--dry-run` prints every command.
 
 ## P1 — required before final delivery
 
