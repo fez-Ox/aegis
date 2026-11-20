@@ -37,7 +37,7 @@ from aegis.nlq import AnswerEngine, memory_view_from_repo
 
 logger = logging.getLogger("aegis.api")
 
-API_VERSION = "0.2.0"
+API_VERSION = "0.2.1"
 
 app = FastAPI(
     title="Aegis Spatio-Temporal Memory API",

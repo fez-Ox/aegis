@@ -22,6 +22,13 @@ import modal
 DATA_VOLUME_NAME = os.getenv("AEGIS_DATA_VOLUME", "aegis-poc-data")
 DATA_MOUNT = "/data"
 
+# ``add_local_python_source`` ships Python modules only. The NLQ lexicon and the
+# label ontology are data, so they are added explicitly -- otherwise the app
+# silently falls back to ~30 built-in words and cannot answer about anything
+# else ("I don't know that word. Try: book").
+VOCABULARY_REMOTE = "/root/config/vocabulary.yaml"
+NLQ_DATA_REMOTE = "/root/aegis/nlq/data"
+
 # Separate app so serving never redeploys the GPU pipeline functions.
 app = modal.App("aegis-memory-api")
 data_volume = modal.Volume.from_name(DATA_VOLUME_NAME, create_if_missing=True)
@@ -34,7 +41,14 @@ SERVE_IMAGE = (
         "pyyaml>=6.0,<7",
     )
     .add_local_python_source("aegis", copy=True)
+    .add_local_file("config/vocabulary.yaml", VOCABULARY_REMOTE, copy=True)
+    .add_local_dir("src/aegis/nlq/data", NLQ_DATA_REMOTE, copy=True)
 )
+
+SERVE_ENV = {
+    "AEGIS_DATASET_ID": os.getenv("AEGIS_DATASET_ID", "demo01"),
+    "AEGIS_VOCABULARY_FILE": VOCABULARY_REMOTE,
+}
 
 
 @app.function(
@@ -43,7 +57,7 @@ SERVE_IMAGE = (
     cpu=1.0,
     memory=2048,
     timeout=600,
-    env={"AEGIS_DATASET_ID": os.getenv("AEGIS_DATASET_ID", "demo01")},
+    env=SERVE_ENV,
 )
 @modal.asgi_app()
 def serve_memory_api() -> Any:
