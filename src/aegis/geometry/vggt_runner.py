@@ -5,6 +5,7 @@ This module is imported inside the Modal GPU VGGT worker.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Sequence
 from pathlib import Path
@@ -15,21 +16,64 @@ import numpy as np
 
 from aegis.core.config import VggtConfig
 
+logger = logging.getLogger(__name__)
+
 CHECKPOINT_FILENAME = "vggt_omega_1b_512.pt"
+# Same weights, no gated-repo approval needed (FAIR Noncommercial Research
+# License). Used only when the configured repo denies access.
+FALLBACK_REPO = "wincentIsMe/VGGT-Omega"
+
+
+def download_checkpoint(
+    model_id: str,
+    *,
+    hf_token: str | None = None,
+    cache_dir: str | None = None,
+) -> str:
+    """Download the checkpoint; fall back to the public mirror when gated.
+
+    A token can be perfectly valid and still be refused: the Hugging Face
+    account must be on the gated repo's authorized list. Rather than failing a
+    reconstruction after the GPU is already warm, the same weights are fetched
+    from the public mirror, with a warning in the worker log.
+    """
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.errors import GatedRepoError
+
+    try:
+        return hf_hub_download(
+            repo_id=model_id,
+            filename=CHECKPOINT_FILENAME,
+            token=hf_token,
+            cache_dir=cache_dir,
+        )
+    except GatedRepoError:
+        if model_id == FALLBACK_REPO:
+            raise
+        logger.warning(
+            "Access to %s was refused (gated repo: the token's account is not "
+            "authorized). Falling back to the public mirror %s.",
+            model_id,
+            FALLBACK_REPO,
+        )
+        return hf_hub_download(
+            repo_id=FALLBACK_REPO,
+            filename=CHECKPOINT_FILENAME,
+            token=hf_token,
+            cache_dir=cache_dir,
+        )
 
 
 def load_model(config: VggtConfig, *, hf_token: str | None = None) -> Any:
     """Load VGGT-Ω once (a warm Modal container reuses it across calls)."""
 
     import torch
-    from huggingface_hub import hf_hub_download
     from vggt_omega.models import VGGTOmega
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    ckpt_path = hf_hub_download(
-        repo_id=config.model_id,
-        filename=CHECKPOINT_FILENAME,
-        token=hf_token,
+    ckpt_path = download_checkpoint(
+        config.model_id,
+        hf_token=hf_token,
         cache_dir=os.environ.get("HF_HOME"),
     )
     model = VGGTOmega().to(device).eval()

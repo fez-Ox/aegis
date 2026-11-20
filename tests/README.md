@@ -1,6 +1,6 @@
 # `tests` — automated test suite
 
-Run: `uv run pytest -q` (currently **379 passed**). CI adds
+Run: `uv run pytest -q` (currently **385 passed**). CI adds
 `--cov=aegis --cov-fail-under=75`. `pyproject.toml` sets
 `testpaths = ["tests"]`.
 

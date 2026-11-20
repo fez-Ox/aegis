@@ -93,6 +93,9 @@ Archived history: `docs/archive/` (see `docs/archive/README.md`).
   pause/gap records, crash resume, and resumable live segments.
 - VGGT-Ω reconstruction in **raw world coordinates**; per-session gravity from
   a RANSAC floor fit, stored beside the coordinates, never baked into them.
+  The checkpoint comes from `facebook/VGGT-Omega` when the HF account is on the
+  gated repo's authorized list; otherwise the worker logs a warning and uses
+  the public mirror `wincentIsMe/VGGT-Omega` (same weights, same license).
 - Open-vocab detection + SAM 2 masks + mask-grounded oriented 3D boxes;
   multi-instance identity with appearance re-ID and object permanence through
   occlusion.
@@ -167,4 +170,4 @@ See `TODO.md`. The short version: temporal/activity answering, calibrated
 confidence and freshness, evidence refs in NLQ, auth/encryption/privacy, and
 all physical measurements are still open. Documentation numbers in archived
 files (84, 129, 326, 55 tests, `S=5.0×`, Z-up) are wrong — current counts are
-**379 tests in one suite**.
+**385 tests in one suite**.

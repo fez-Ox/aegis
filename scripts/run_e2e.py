@@ -47,6 +47,8 @@ STATE_FILE = STATE_DIR / "e2e_state.json"
 DEFAULT_QUESTIONS = ("where are my keys",)
 DEFAULT_STREAM_URL = "http://192.168.1.23:8080/video"
 MIRROR_VGGT = "wincentIsMe/VGGT-Omega"  # public mirror of the gated checkpoint
+GATED_VGGT = "facebook/VGGT-Omega"  # the upstream repo (needs approved access)
+CHECKPOINT_FILENAME = "vggt_omega_1b_512.pt"
 SECRET_NAME = "aegis-secrets"
 SERVE_APP = "aegis-memory-api"
 
@@ -352,6 +354,30 @@ def phase_preflight(r: Runner) -> None:
 # ---------------------------------------------------------------------------
 # Phase 2 — Modal account, secret, checkpoint choice
 # ---------------------------------------------------------------------------
+def checkpoint_reachable(
+    repo_id: str, token: str | None = None, timeout: float = 15.0
+) -> bool | None:
+    """Can we actually download the checkpoint file?
+
+    ``None`` means "could not tell" (network problem), so callers never
+    silently switch models on a flaky connection.
+    """
+    url = f"https://huggingface.co/{repo_id}/resolve/main/{CHECKPOINT_FILENAME}"
+    headers = {"User-Agent": "aegis-e2e"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers, method="HEAD")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return bool(response.status < 400)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403, 404):
+            return False
+        return None
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
 def phase_modal(r: Runner) -> None:
     r.header("Modal account, secret and VGGT checkpoint")
 
@@ -407,7 +433,34 @@ def phase_modal(r: Runner) -> None:
         else:
             r.ok(f"secret {SECRET_NAME} is present")
 
-    model = r.args.vggt_model or (None if token else MIRROR_VGGT)
+    model = r.args.vggt_model
+    if model is None:
+        if not token:
+            model = MIRROR_VGGT
+        else:
+            reachable = (
+                None if r.args.dry_run else checkpoint_reachable(GATED_VGGT, token)
+            )
+            if reachable is False:
+                r.warn(
+                    "HF_TOKEN works, but that account is not on the gated repo's "
+                    "authorized list"
+                )
+                r.info(f"request access: https://huggingface.co/{GATED_VGGT}")
+                r.info(f"using the public mirror meanwhile: {MIRROR_VGGT}")
+                model = MIRROR_VGGT
+            elif reachable is None and not r.args.dry_run:
+                r.warn(f"could not verify access to {GATED_VGGT}; trying it anyway")
+
+    if model == MIRROR_VGGT and not r.args.dry_run:
+        mirror_ok = checkpoint_reachable(MIRROR_VGGT, None)
+        if mirror_ok is False:
+            r.fail(
+                f"neither {GATED_VGGT} nor the mirror {MIRROR_VGGT} is downloadable."
+            )
+            r.info("Check the network, or pass --vggt-model <repo-id>.")
+            raise SystemExit(2)
+
     r.state["vggt_model"] = model
     r.state["gpu"] = "cpu" if r.args.cpu else "gpu"
     r.save_state()
@@ -705,6 +758,13 @@ def phase_pipeline(r: Runner) -> None:
                 code, tail = r.stream(cmd, env=env)
 
     if code != 0:
+        lowered = tail.lower()
+        if "gatedrepo" in lowered or "gated repo" in lowered:
+            r.warn("the VGGT checkpoint was refused by the gated repo")
+            r.info(
+                "the worker falls back to the public mirror automatically; "
+                "rerun to continue with the same capture"
+            )
         r.fail(f"pipeline failed with exit code {code}.")
         if r.args.cpu:
             r.info("CPU mode is slow but honest; check the log above for the cause.")
@@ -943,7 +1003,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--vggt-model",
-        help=f"VGGT checkpoint (default: {MIRROR_VGGT} without HF_TOKEN)",
+        help=(
+            "VGGT checkpoint repo id (default: facebook/VGGT-Omega with an "
+            f"authorized HF_TOKEN, else the mirror {MIRROR_VGGT})"
+        ),
     )
     parser.add_argument("--segment-frames", type=int, help="Frames per live segment")
     parser.add_argument("--config-path", help="Runtime YAML override")

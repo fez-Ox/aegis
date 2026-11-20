@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import urllib.error
 from pathlib import Path
 from types import ModuleType
 
@@ -128,3 +129,41 @@ def test_base_dataset_id_is_not_the_last_segment(runner_module, monkeypatch, tmp
         "dataset_id": "walk01_seg0002",
     }
     assert runner_module.dataset_for_session(runner, "walk01") == "walk01"
+
+
+class _FakeResponse:
+    def __init__(self, status=200):
+        self.status = status
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_checkpoint_reachable_reports_gated_denial(runner_module, monkeypatch):
+    def deny(request, timeout=None):
+        raise urllib.error.HTTPError(
+            request.full_url, 403, "Forbidden", hdrs=None, fp=None
+        )
+
+    monkeypatch.setattr(runner_module.urllib.request, "urlopen", deny)
+    assert runner_module.checkpoint_reachable("facebook/VGGT-Omega", "hf_x") is False
+
+
+def test_checkpoint_reachable_reports_success(runner_module, monkeypatch):
+    monkeypatch.setattr(
+        runner_module.urllib.request,
+        "urlopen",
+        lambda request, timeout=None: _FakeResponse(200),
+    )
+    assert runner_module.checkpoint_reachable("wincentIsMe/VGGT-Omega") is True
+
+
+def test_checkpoint_reachable_returns_none_when_offline(runner_module, monkeypatch):
+    def offline(request, timeout=None):
+        raise urllib.error.URLError("no route to host")
+
+    monkeypatch.setattr(runner_module.urllib.request, "urlopen", offline)
+    assert runner_module.checkpoint_reachable("wincentIsMe/VGGT-Omega") is None

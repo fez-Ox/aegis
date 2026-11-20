@@ -8,7 +8,7 @@ Legend: `[x]` done and evidenced · `[~]` partly done · `[ ]` open.
 Priority: **P0** blocks the single pipeline · **P1** required before final
 delivery · **P2** measurement/documentation.
 
-Measured verification today: `uv run pytest -q` → **379 passed** (one suite;
+Measured verification today: `uv run pytest -q` → **385 passed** (one suite;
 the old standalone NLQ tests were archived with the old folder).
 
 ---
@@ -34,7 +34,7 @@ the old standalone NLQ tests were archived with the old folder).
       Flutter SDK is absent locally; CI remains the Dart check.
 - [x] **P0.6 Terminal ask script.** `aegis-ask` with local/http transports.
 - [x] **P0.7 One CI-covered suite.** `tests/test_nlq.py` covers dictionary,
-      engine, abstentions, GET/POST `/ask` and the CLI; all 379 tests run under
+      engine, abstentions, GET/POST `/ask` and the CLI; all 385 tests run under
       the standard `pytest` command. Ruff check/format clean on touched code.
 - [x] **P0.8 One-command end-to-end runner.** `scripts/run_e2e.py` performs
       setup → Modal auth/secret → IP Webcam capture → Modal pipeline → deploy →
