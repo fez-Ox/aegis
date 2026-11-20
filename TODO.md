@@ -8,7 +8,7 @@ Legend: `[x]` done and evidenced · `[~]` partly done · `[ ]` open.
 Priority: **P0** blocks the single pipeline · **P1** required before final
 delivery · **P2** measurement/documentation.
 
-Measured verification today: `uv run pytest -q` → **376 passed** (one suite;
+Measured verification today: `uv run pytest -q` → **379 passed** (one suite;
 the old standalone NLQ tests were archived with the old folder).
 
 ---

@@ -48,7 +48,7 @@ Each directory has its own `README.md` describing its modules and contracts.
 
 ```bash
 uv sync --dev
-uv run pytest -q                 # 376 passed
+uv run pytest -q                 # 379 passed
 uvx ruff check src tests run_pipeline.py run_server.py
 uvx ruff format --check src tests run_pipeline.py run_server.py
 
