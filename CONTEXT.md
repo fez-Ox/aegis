@@ -167,4 +167,4 @@ See `TODO.md`. The short version: temporal/activity answering, calibrated
 confidence and freshness, evidence refs in NLQ, auth/encryption/privacy, and
 all physical measurements are still open. Documentation numbers in archived
 files (84, 129, 326, 55 tests, `S=5.0×`, Z-up) are wrong — current counts are
-**365 tests in one suite**.
+**376 tests in one suite**.
