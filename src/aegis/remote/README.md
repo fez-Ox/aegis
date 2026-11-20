@@ -9,7 +9,10 @@
 
 `api.py` is also the app served by the Modal ASGI deployment: the same code
 runs locally (`run_server.py`) and over HTTPS, reading the graph from the
-volume so the normal path needs no local artifact download.
+volume so the normal path needs no local artifact download. It resolves the
+graph at `<mount>/<dataset>/outputs/objects/r4d_scene_graph.json`
+(`AEGIS_DATA_MOUNT`, default `/data`), which is exactly where the pipeline
+writes; a flat `<dataset>/objects` path is only a fallback for old volumes.
 
 The single NLQ entry point is `GET/POST /api/v1/ask`, implemented by
 `aegis.nlq`. `GET /api/v1/query` remains as a lower-level, bare-item endpoint.

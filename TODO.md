@@ -8,7 +8,7 @@ Legend: `[x]` done and evidenced · `[~]` partly done · `[ ]` open.
 Priority: **P0** blocks the single pipeline · **P1** required before final
 delivery · **P2** measurement/documentation.
 
-Measured verification today: `uv run pytest -q` → **385 passed** (one suite;
+Measured verification today: `uv run pytest -q` → **387 passed** (one suite;
 the old standalone NLQ tests were archived with the old folder).
 
 ---
@@ -34,13 +34,20 @@ the old standalone NLQ tests were archived with the old folder).
       Flutter SDK is absent locally; CI remains the Dart check.
 - [x] **P0.6 Terminal ask script.** `aegis-ask` with local/http transports.
 - [x] **P0.7 One CI-covered suite.** `tests/test_nlq.py` covers dictionary,
-      engine, abstentions, GET/POST `/ask` and the CLI; all 385 tests run under
+      engine, abstentions, GET/POST `/ask` and the CLI; all 387 tests run under
       the standard `pytest` command. Ruff check/format clean on touched code.
 - [x] **P0.8 One-command end-to-end runner.** `scripts/run_e2e.py` performs
       setup → Modal auth/secret → IP Webcam capture → Modal pipeline → deploy →
       terminal ask, and blocks with explicit instructions at human-only steps
       (Modal sign-in, phone stream, GPU billing, Flutter install). Checkpoints
       to `.aegis/e2e_state.json`; `--dry-run` prints every command.
+      Measured end to end on 2026-11-20 (CPU, capture `walk01-2`, 79 frames →
+      segment `walk01-2_seg0001`): VGGT 831 s, detect+lift 27 s, deploy 8 s,
+      `aegis-ask` over HTTPS answered from the volume with no local artifacts.
+      The runner now reuses the existing capture, adopts the processed segment
+      id for deploy/ask, verifies real checkpoint access (public mirror when
+      the gated repo refuses the token), and diagnoses an empty API by listing
+      the volume instead of asking the user to press Enter.
 
 ## P1 — required before final delivery
 

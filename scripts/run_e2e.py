@@ -49,6 +49,7 @@ DEFAULT_STREAM_URL = "http://192.168.1.23:8080/video"
 MIRROR_VGGT = "wincentIsMe/VGGT-Omega"  # public mirror of the gated checkpoint
 GATED_VGGT = "facebook/VGGT-Omega"  # the upstream repo (needs approved access)
 CHECKPOINT_FILENAME = "vggt_omega_1b_512.pt"
+DATA_VOLUME_NAME = "aegis-poc-data"
 SECRET_NAME = "aegis-secrets"
 SERVE_APP = "aegis-memory-api"
 
@@ -790,6 +791,31 @@ def phase_pipeline(r: Runner) -> None:
 MODAL_URL = re.compile(r"(https://[A-Za-z0-9._-]+\.modal\.run)")
 
 
+def deploy_api(r: Runner, dataset_id: str) -> str | None:
+    """Deploy the small serving app; return its URL, or None on failure.
+
+    The deploy is captured rather than streamed: a successful build prints
+    hundreds of pip lines that hide the one line the user needs. Full output is
+    shown when it fails, or when ``--verbose`` is passed.
+    """
+
+    env = dict(r.env)
+    env["AEGIS_DATASET_ID"] = dataset_id
+    cmd = r.uv_cmd("run", "modal", "deploy", "src/aegis/remote/serve.py")
+    if r.args.verbose:
+        code, output = r.stream(cmd, env=env)
+    else:
+        result = r.run(cmd, env=env, capture=True)
+        output = f"{result.stdout or ''}{result.stderr or ''}"
+        code = result.returncode
+        if code != 0:
+            print(output.rstrip())
+    if code != 0:
+        return None
+    matches = MODAL_URL.findall(output)
+    return matches[-1] if matches else None
+
+
 def phase_deploy(r: Runner) -> None:
     r.header("Deploy the memory + ask API")
 
@@ -798,22 +824,15 @@ def phase_deploy(r: Runner) -> None:
         return
 
     dataset_id = r.state.get("dataset_id") or r.args.dataset_id or "demo01"
-    env = dict(r.env)
-    env["AEGIS_DATASET_ID"] = dataset_id
     r.info(f"AEGIS_DATASET_ID={dataset_id}")
-    code, output = r.stream(
-        r.uv_cmd("run", "modal", "deploy", "src/aegis/remote/serve.py"), env=env
-    )
-    if code != 0:
-        r.fail("deployment failed; see the log above.")
-        raise SystemExit(code)
-
-    matches = MODAL_URL.findall(output)
-    url = matches[-1] if matches else ""
+    url = deploy_api(r, dataset_id)
     if not url and r.args.dry_run:
         url = "https://example--aegis-memory-api-serve-memory-api.modal.run"
     if not url:
-        url = r.ask_text("Deployment URL printed above (paste it)")
+        r.fail("deployment failed; the output above is the full log.")
+        if not r.args.verbose:
+            r.info("rerun with --verbose to see every step.")
+        raise SystemExit(2)
     if not url.startswith("http"):
         r.fail("No deployment URL. Rerun deploy and copy the URL it prints.")
         raise SystemExit(2)
@@ -825,6 +844,28 @@ def phase_deploy(r: Runner) -> None:
 # ---------------------------------------------------------------------------
 # Phase 6 — health check and terminal ask
 # ---------------------------------------------------------------------------
+def volume_has_graph(r: Runner, dataset_id: str) -> bool | None:
+    """Does the volume hold this dataset's scene graph? ``None`` = unknown."""
+
+    result = r.run(
+        r.uv_cmd(
+            "run",
+            "modal",
+            "volume",
+            "ls",
+            DATA_VOLUME_NAME,
+            f"{dataset_id}/outputs/objects",
+        ),
+        capture=True,
+    )
+    if result.returncode != 0:
+        output = f"{result.stdout or ''}{result.stderr or ''}".lower()
+        if "no such file" in output or "not found" in output:
+            return False
+        return None
+    return "r4d_scene_graph.json" in result.stdout
+
+
 def phase_ask(r: Runner) -> None:
     r.header("Ask Aegis memory")
 
@@ -834,30 +875,65 @@ def phase_ask(r: Runner) -> None:
         r.fail("No base URL: deploy first, or pass --base-url.")
         raise SystemExit(2)
 
+    # A live capture is processed as segments, so the graph may live under
+    # <session>_segNNNN even when state still names the session. Ask the API
+    # which candidate actually has memory instead of guessing.
+    candidates = [dataset_id]
+    session_id = str(r.state.get("session_id") or "")
+    segment_id = latest_segment_dataset(r, session_id) if session_id else None
+    if segment_id and segment_id not in candidates:
+        candidates.append(segment_id)
+
     health = None
+    chosen = dataset_id
     for attempt in range(1, 13):
         if r.args.dry_run:
             break
-        health = probe_health(base_url, dataset_id)
-        if health and health.get("scene_graph_ready"):
+        for candidate in candidates:
+            info = probe_health(base_url, candidate)
+            if info and info.get("scene_graph_ready"):
+                health, chosen = info, candidate
+                break
+        if health:
             break
         r.note(f"waiting for memory to answer ({attempt}/12, cold start is normal)")
         time.sleep(5)
+    if chosen != dataset_id:
+        r.note(f"{dataset_id} has no memory; using the processed segment {chosen}")
+    dataset_id = chosen
 
     if not r.args.dry_run and not (health and health.get("scene_graph_ready")):
-        r.pause(
-            "The API is up but this dataset has no memory yet",
-            [
-                f"URL: {base_url}",
-                f"dataset_id: {dataset_id}",
-                "Confirm the pipeline wrote objects/r4d_scene_graph.json for it:",
-                f"  uv run modal volume ls aegis-poc-data {dataset_id}/outputs/objects",
-            ],
-            check=lambda: bool(
-                (probe_health(base_url, dataset_id) or {}).get("scene_graph_ready")
-            ),
-            can_skip=True,
-        )
+        r.fail("the API answers but reports no memory for this dataset")
+        r.info(f"URL: {base_url}")
+        r.info(f"dataset_id: {dataset_id}")
+        on_volume = volume_has_graph(r, dataset_id)
+        if on_volume:
+            r.warn("the graph is on the volume, so the running API is stale")
+            r.info("redeploying the API so it sees the same files...")
+            redeployed = deploy_api(r, dataset_id)
+            if redeployed:
+                r.state["base_url"] = redeployed
+                r.save_state()
+                base_url = redeployed
+            health = probe_health(base_url, dataset_id)
+            if health and health.get("scene_graph_ready"):
+                r.ok(f"recovered after redeploy: API {base_url}")
+            else:
+                r.info("if this persists, check AEGIS_DATA_MOUNT matches /data")
+                raise SystemExit(2)
+        elif on_volume is False:
+            r.info(
+                f"nothing was written for {dataset_id}; rerun without --skip-pipeline:"
+            )
+            r.info(
+                "  uv run python run_e2e.py --stage live --session-id "
+                f"{r.state.get('session_id', dataset_id)}"
+            )
+            raise SystemExit(2)
+        else:
+            r.info("could not list the volume; check it manually:")
+            r.info(f"  uv run modal volume ls {DATA_VOLUME_NAME} {dataset_id}/outputs")
+            raise SystemExit(2)
     elif health:
         r.ok(
             "memory ready: "
@@ -866,6 +942,7 @@ def phase_ask(r: Runner) -> None:
         )
 
     r.state["base_url"] = base_url
+    r.state["dataset_id"] = dataset_id
     r.save_state()
 
     questions = r.args.question or list(DEFAULT_QUESTIONS)
@@ -1029,6 +1106,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--yes", action="store_true", help="Answer yes to optional confirmations"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Stream full deploy/pipeline logs instead of a summary",
     )
     return parser
 

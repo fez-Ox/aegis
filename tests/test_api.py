@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -483,3 +484,37 @@ def test_simulator_routes_absent_without_flag(monkeypatch) -> None:
 def test_query_does_not_match_inside_words() -> None:
     res = client.get("/api/v1/query?item=cup&dataset_id=Demo06-Self").json()
     assert res["found"] is False
+
+
+def test_graph_is_found_in_the_canonical_volume_layout(tmp_path, monkeypatch) -> None:
+    """<mount>/<dataset>/outputs/objects/r4d_scene_graph.json is where the
+    pipeline actually writes; the gateway must look there, not only in a flat
+    <dataset>/objects directory."""
+
+    import json as json_module
+
+    import aegis.remote.api as api_module
+    from aegis.memory.repository import clear_cache
+
+    source = (
+        Path(__file__).parent
+        / "fixtures"
+        / "demo01"
+        / "objects"
+        / "r4d_scene_graph.json"
+    )
+    mount = tmp_path / "volume"
+    target = mount / "live01" / "outputs" / "objects" / "r4d_scene_graph.json"
+    target.parent.mkdir(parents=True)
+    graph = json_module.loads(source.read_text(encoding="utf-8"))
+    graph["dataset_id"] = "live01"
+    target.write_text(json_module.dumps(graph), encoding="utf-8")
+
+    monkeypatch.setattr(api_module, "DATA_MOUNT", mount)
+    monkeypatch.delenv("AEGIS_TEST_FIXTURE_ROOT", raising=False)
+    clear_cache("live01")
+    try:
+        assert api_module.get_search_paths("live01")[0] == target
+        assert api_module.repository_for("live01").ready is True
+    finally:
+        clear_cache("live01")

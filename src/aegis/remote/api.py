@@ -56,6 +56,9 @@ app.add_middleware(
 
 DEFAULT_DATASET_ID = "demo01"
 ACTIVE_DATASET_ID = os.getenv("AEGIS_DATASET_ID", DEFAULT_DATASET_ID)
+# Mount point of the Modal data volume; overridable so tests (and local runs)
+# can point the gateway at any directory that mirrors the volume layout.
+DATA_MOUNT = Path(os.getenv("AEGIS_DATA_MOUNT", "/data"))
 
 
 def _validated(dataset_id: str) -> str:
@@ -243,9 +246,13 @@ def get_search_paths(dataset_id: str) -> list[Path]:
         paths.append(
             Path(fixture_root) / dataset_id / "objects" / "r4d_scene_graph.json"
         )
+    # The canonical layout is <mount>/<dataset>/outputs/objects/... (see
+    # aegis.core.paths). The flat <dataset>/objects variant is kept for older
+    # volumes so an existing deployment keeps working.
     paths.extend(
         [
-            Path(f"/data/{dataset_id}/objects/r4d_scene_graph.json"),
+            DATA_MOUNT / dataset_id / "outputs" / "objects" / "r4d_scene_graph.json",
+            DATA_MOUNT / dataset_id / "objects" / "r4d_scene_graph.json",
             Path(f"outputs/{dataset_id}/objects/r4d_scene_graph.json"),
             Path(f"data/{dataset_id}/objects/r4d_scene_graph.json"),
             Path(f"outputs/{dataset_id}/r4d_scene_graph.json"),
@@ -285,7 +292,7 @@ def list_available_datasets() -> list[str]:
     """Datasets with an input video, metadata or a processed graph."""
 
     discovered: set[str] = set()
-    roots = [Path("outputs"), Path("data"), Path("/data")]
+    roots = [Path("outputs"), Path("data"), DATA_MOUNT]
     fixture_root = os.getenv("AEGIS_TEST_FIXTURE_ROOT")
     if fixture_root:
         roots.append(Path(fixture_root))
@@ -1121,24 +1128,13 @@ def quick_simulate_bottle_table2(
 
 
 # ---------------------------------------------------------------------------
-# Modal serverless wrapper
+# Local development entrypoint
+#
+# Deployment lives in ``aegis/remote/serve.py``: a small, self-contained Modal
+# app. This module must never import ``aegis.remote.modal_app`` -- that would
+# make every deploy rebuild the CUDA/VGGT images (and a stray
+# ``from ... import DATA_MOUNT`` there once shadowed the mount point below).
 # ---------------------------------------------------------------------------
-
-try:
-    import modal
-
-    from aegis.remote.modal_app import CPU_IMAGE, DATA_MOUNT, data_volume
-    from aegis.remote.modal_app import app as modal_app
-
-    @modal_app.function(image=CPU_IMAGE, volumes={DATA_MOUNT: data_volume})
-    @modal.asgi_app()
-    def fastapi_gateway() -> FastAPI:
-        """Modal ASGI entrypoint for serverless deployment."""
-        return app
-
-except ImportError:
-    pass
-
 
 if __name__ == "__main__":
     import uvicorn

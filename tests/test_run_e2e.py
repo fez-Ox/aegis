@@ -167,3 +167,34 @@ def test_checkpoint_reachable_returns_none_when_offline(runner_module, monkeypat
 
     monkeypatch.setattr(runner_module.urllib.request, "urlopen", offline)
     assert runner_module.checkpoint_reachable("wincentIsMe/VGGT-Omega") is None
+
+
+def test_volume_has_graph_detects_the_file(runner_module, monkeypatch, tmp_path):
+    runner = _fake_runner(runner_module, monkeypatch, tmp_path)
+
+    class Result:
+        def __init__(self, code: int, out: str) -> None:
+            self.returncode = code
+            self.stdout = out
+            self.stderr = ""
+
+    monkeypatch.setattr(
+        runner_module.Runner,
+        "run",
+        lambda self, cmd, **kw: Result(
+            0, "walk01/outputs/objects/r4d_scene_graph.json"
+        ),
+    )
+    assert runner_module.volume_has_graph(runner, "walk01") is True
+
+    monkeypatch.setattr(
+        runner_module.Runner,
+        "run",
+        lambda self, cmd, **kw: Result(0, "walk01/outputs/objects/events.json"),
+    )
+    assert runner_module.volume_has_graph(runner, "walk01") is False
+
+    monkeypatch.setattr(
+        runner_module.Runner, "run", lambda self, cmd, **kw: Result(1, "")
+    )
+    assert runner_module.volume_has_graph(runner, "walk01") is None
