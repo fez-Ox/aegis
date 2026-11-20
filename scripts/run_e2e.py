@@ -421,17 +421,20 @@ def phase_modal(r: Runner) -> None:
 # ---------------------------------------------------------------------------
 # Phase 3 — capture
 # ---------------------------------------------------------------------------
-def choose_capture_target(r: Runner, base: str) -> tuple[str, bool]:
-    """Return ``(session_id, resume)`` without ever overwriting a capture."""
+def choose_capture_target(r: Runner, base: str) -> tuple[str, str]:
+    """Return ``(session_id, mode)`` with mode in new/resume/reuse.
+
+    Existing captures are never overwritten.
+    """
     if r.args.resume_capture:
-        return base, True
+        return base, "resume"
     session_dir = r.path("captures", base)
     if not session_dir.exists():
-        return base, False
+        return base, "new"
     if session_dir.is_dir() and not any(session_dir.iterdir()):
         session_dir.rmdir()
         r.note(f"removed empty leftover session {session_dir}")
-        return base, False
+        return base, "new"
 
     frames = 0
     index = session_dir / "index.jsonl"
@@ -440,26 +443,37 @@ def choose_capture_target(r: Runner, base: str) -> tuple[str, bool]:
     r.warn(f"session {base!r} already exists ({frames} frames)")
 
     if r.args.dry_run:
-        return f"{base}-2", False
+        return base, "reuse"
     while True:
         answer = (
             input(
-                f"  [n] new session {base}-2 (default)   "
-                f"[r] resume {base}   [a] abort: "
+                f"  [e] use existing {base} (default)   [n] new session   "
+                "[r] resume capture   [a] abort: "
             )
             .strip()
             .lower()
         )
-        if answer in {"", "n"}:
+        if answer in {"", "e"}:
+            return base, "reuse"
+        if answer == "n":
             suffix = 2
             while r.path("captures", f"{base}-{suffix}").exists():
                 suffix += 1
-            return f"{base}-{suffix}", False
+            return f"{base}-{suffix}", "new"
         if answer == "r":
-            return base, True
+            return base, "resume"
         if answer == "a":
             raise SystemExit(0)
-        r.warn("type n, r or a")
+        r.warn("type e, n, r or a")
+
+
+def dataset_for_session(r: Runner, session_id: str) -> str:
+    """Keep an explicit dataset id stable across a resumed run."""
+    if r.args.dataset_id:
+        return r.args.dataset_id
+    if r.state.get("session_id") == session_id and r.state.get("dataset_id"):
+        return str(r.state["dataset_id"])
+    return session_id
 
 
 def phase_capture(r: Runner) -> None:
@@ -472,13 +486,13 @@ def phase_capture(r: Runner) -> None:
         r.save_state()
         return
 
-    base_session = r.args.session_id or "walk01"
+    base_session = r.args.session_id or r.state.get("session_id") or "walk01"
 
     if r.args.skip_capture:
         session_id = base_session
         session_dir = r.path("captures", session_id)
         r.state["session_id"] = session_id
-        r.state["dataset_id"] = r.args.dataset_id or session_id
+        r.state["dataset_id"] = dataset_for_session(r, session_id)
         r.save_state()
         index = session_dir / "index.jsonl"
         if not index.is_file() and not r.args.dry_run:
@@ -487,16 +501,26 @@ def phase_capture(r: Runner) -> None:
         r.ok(f"using existing capture {session_dir}")
         return
 
-    session_id, resume = choose_capture_target(r, base_session)
-    if resume and not r.path("captures", session_id).is_dir():
+    session_id, mode = choose_capture_target(r, base_session)
+    session_dir = r.path("captures", session_id)
+    if mode == "resume" and not session_dir.is_dir():
         r.fail(f"--resume-capture was set but captures/{session_id} does not exist.")
         raise SystemExit(2)
-    session_dir = r.path("captures", session_id)
     r.state["session_id"] = session_id
-    r.state["dataset_id"] = r.args.dataset_id or session_id
+    r.state["dataset_id"] = dataset_for_session(r, session_id)
     r.save_state()
-    r.info(f"session: {session_id}" + (" (resuming)" if resume else ""))
+    r.info(f"session: {session_id}" + (f" ({mode})" if mode != "new" else ""))
     r.info(f"dataset: {r.state['dataset_id']}")
+
+    if mode == "reuse":
+        index = session_dir / "index.jsonl"
+        if not index.is_file():
+            r.fail(f"{session_dir} has no index.jsonl; pick a new session.")
+            raise SystemExit(2)
+        r.ok(f"using existing capture {session_dir}")
+        return
+
+    resume = mode == "resume"
 
     raw_url = r.args.stream_url or r.env.get("AEGIS_STREAM_URL", "")
     if not raw_url and not r.args.dry_run:
@@ -847,7 +871,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--dataset-id", help="Dataset id (default: session id)")
     parser.add_argument(
-        "--session-id", default="walk01", help="Live capture session (default: walk01)"
+        "--session-id",
+        default=None,
+        help="Live capture session (default: last used, else walk01)",
     )
     parser.add_argument("--stream-url", help="IP Webcam /video URL")
     parser.add_argument("--video", help="Batch video path or preset; skips capture")
