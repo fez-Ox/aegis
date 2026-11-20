@@ -85,3 +85,46 @@ def test_parser_documents_human_steps(runner_module):
     assert "--skip-capture" in help_text
     assert "--resume-capture" in help_text
     assert "--cpu" in help_text
+
+
+def _fake_runner(runner_module, monkeypatch, tmp_path):
+    args = runner_module.build_parser().parse_args(["--dry-run", "--skip-capture"])
+    monkeypatch.setattr(runner_module, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(runner_module, "STATE_DIR", tmp_path / ".aegis")
+    monkeypatch.setattr(runner_module, "STATE_FILE", tmp_path / ".aegis" / "state.json")
+    return runner_module.Runner(args)
+
+
+def test_latest_segment_dataset_reads_pipeline_state(
+    runner_module, monkeypatch, tmp_path
+):
+    session = tmp_path / "captures" / "walk01"
+    session.mkdir(parents=True)
+    (session / "pipeline_state.json").write_text(
+        '{"segments_done": ["walk01_seg0001", "walk01_seg0002"]}'
+    )
+    runner = _fake_runner(runner_module, monkeypatch, tmp_path)
+    assert runner_module.latest_segment_dataset(runner, "walk01") == "walk01_seg0002"
+
+
+def test_latest_segment_dataset_absent_or_empty(runner_module, monkeypatch, tmp_path):
+    session = tmp_path / "captures" / "walk01"
+    session.mkdir(parents=True)
+    runner = _fake_runner(runner_module, monkeypatch, tmp_path)
+    assert runner_module.latest_segment_dataset(runner, "walk01") is None
+
+    (session / "pipeline_state.json").write_text("{not json")
+    assert runner_module.latest_segment_dataset(runner, "walk01") is None
+
+    (session / "pipeline_state.json").write_text('{"segments_done": []}')
+    assert runner_module.latest_segment_dataset(runner, "walk01") is None
+
+
+def test_base_dataset_id_is_not_the_last_segment(runner_module, monkeypatch, tmp_path):
+    runner = _fake_runner(runner_module, monkeypatch, tmp_path)
+    runner.state = {
+        "session_id": "walk01",
+        "base_dataset_id": "walk01",
+        "dataset_id": "walk01_seg0002",
+    }
+    assert runner_module.dataset_for_session(runner, "walk01") == "walk01"

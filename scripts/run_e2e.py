@@ -468,12 +468,38 @@ def choose_capture_target(r: Runner, base: str) -> tuple[str, str]:
 
 
 def dataset_for_session(r: Runner, session_id: str) -> str:
-    """Keep an explicit dataset id stable across a resumed run."""
+    """Keep an explicit dataset id stable across a resumed run.
+
+    For a live capture this is the *base* id (usually the session id); the
+    graph ends up under ``<base>_segNNNN`` once the segments are processed.
+    """
     if r.args.dataset_id:
         return r.args.dataset_id
-    if r.state.get("session_id") == session_id and r.state.get("dataset_id"):
-        return str(r.state["dataset_id"])
+    if r.state.get("session_id") == session_id:
+        base = r.state.get("base_dataset_id")
+        if base:
+            return str(base)
     return session_id
+
+
+def latest_segment_dataset(r: Runner, session_id: str) -> str | None:
+    """Return the newest dataset the segmented live runner actually produced.
+
+    A live capture is processed in segments, and each segment is promoted to
+    its own dataset (``<session>_segNNNN``). The graph, and therefore the API
+    and ``aegis-ask``, live under the segment id -- not the session id.
+    """
+    state_path = r.path("captures", session_id, "pipeline_state.json")
+    if not state_path.is_file():
+        return None
+    try:
+        payload = json.loads(state_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    done = payload.get("segments_done") or []
+    if not done:
+        return None
+    return str(done[-1])
 
 
 def phase_capture(r: Runner) -> None:
@@ -492,7 +518,9 @@ def phase_capture(r: Runner) -> None:
         session_id = base_session
         session_dir = r.path("captures", session_id)
         r.state["session_id"] = session_id
-        r.state["dataset_id"] = dataset_for_session(r, session_id)
+        base_id = dataset_for_session(r, session_id)
+        r.state["base_dataset_id"] = base_id
+        r.state["dataset_id"] = base_id
         r.save_state()
         index = session_dir / "index.jsonl"
         if not index.is_file() and not r.args.dry_run:
@@ -507,7 +535,9 @@ def phase_capture(r: Runner) -> None:
         r.fail(f"--resume-capture was set but captures/{session_id} does not exist.")
         raise SystemExit(2)
     r.state["session_id"] = session_id
-    r.state["dataset_id"] = dataset_for_session(r, session_id)
+    base_id = dataset_for_session(r, session_id)
+    r.state["base_dataset_id"] = base_id
+    r.state["dataset_id"] = base_id
     r.save_state()
     r.info(f"session: {session_id}" + (f" ({mode})" if mode != "new" else ""))
     r.info(f"dataset: {r.state['dataset_id']}")
@@ -615,6 +645,8 @@ def phase_pipeline(r: Runner) -> None:
     config_path = r.args.config_path or (
         "config/live.yaml" if is_live else "config/demo.yaml"
     )
+    if is_live and not r.args.dataset_id:
+        dataset_id = str(r.state.get("base_dataset_id") or dataset_id)
 
     cmd = r.uv_cmd(
         "run",
@@ -680,6 +712,15 @@ def phase_pipeline(r: Runner) -> None:
 
     r.ok(f"pipeline finished for {dataset_id}")
     r.state["pipeline_done"] = True
+    if is_live:
+        segment_id = latest_segment_dataset(r, r.state.get("session_id", dataset_id))
+        if segment_id:
+            if segment_id != dataset_id:
+                r.note(f"the live pipeline processed segment {segment_id}")
+                r.info("the graph, the API and aegis-ask use the segment id")
+            r.state["dataset_id"] = segment_id
+        elif r.args.dry_run:
+            r.note("a live run stores the graph under <session>_segNNNN")
     r.save_state()
 
 
