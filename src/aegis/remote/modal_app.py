@@ -238,8 +238,8 @@ def fetch_egolife_day(
 # GPU stages are classes: a warm container keeps the model loaded between
 # calls (one call per live segment) instead of reloading weights every time.
 # Each batch app handles exactly one segment, so a warm container only bills
-# idle L4 time after the task. Modal requires a positive scaledown window.
-WARM_SECONDS = 1
+# idle GPU time after the task. Modal requires 2..3600 seconds.
+WARM_SECONDS = 2
 
 
 @app.cls(
