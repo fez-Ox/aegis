@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -41,6 +42,16 @@ def _session(name, start, runs, **kwargs):
     return make_session_graph(
         name, start, rooms=BEDROOM, anchors=ANCHORS, objects=[_keys(runs)], **kwargs
     )
+
+
+def test_room_signature_is_case_normalised(store) -> None:
+    ingest_session(
+        store,
+        _session("s1", "2026-11-15T09:00:00Z", [("on_surface", 2, 1, 1.0, 50.0, 10)]),
+    )
+    signature = set(json.loads(store.rooms()[0]["signature"]))
+    assert "bed" in signature
+    assert "Bed" not in signature
 
 
 def test_first_session_creates_rooms_anchors_instances(store) -> None:

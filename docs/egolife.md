@@ -1,5 +1,11 @@
 # EgoLife multi-day memory evaluation
 
+**Result (2026-11-22):** the run completed all 74 segments for **$8.71 metered,
+$0 billed**. The frozen class-level queries do not demonstrate long-term memory
+(full history never beats the 24 h ablation), but an oracle-assisted instance
+diagnostic found that **12/12 matched ground-truth instances were still in the
+store 1–4 days later**. See `outputs/evaluation/egolife_scored/FINAL_SUMMARY.md`.
+
 Tests whether Aegis still knows where an object is after days of intervening
 activity, using a public 7-day egocentric dataset instead of a home recording.
 

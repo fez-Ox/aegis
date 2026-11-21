@@ -193,8 +193,6 @@ def extract_room_regions(
     vocab = vocabulary or default_vocabulary()
     frame = gravity or GravityFrame.assumed()
     link_radius = zone_link_radius * unit
-    frame = gravity or GravityFrame.assumed()
-    link_radius = zone_link_radius * unit
 
     if zone_link_radius <= 0:
         raise ValueError("zone_link_radius must be positive")
