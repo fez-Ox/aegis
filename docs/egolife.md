@@ -20,6 +20,7 @@ survive the days in between.
 | Segments | 5 minutes, one Modal dataset per segment |
 | Keyframes | every 3 s (5 fps, stride 15), 100 per segment |
 | Ingest order | chronological; a query on day N sees only days 1..N |
+| Ground truth | EgoLife's own DenseCaption SRT for the same 12:00 hour, A1_JAKE |
 
 `vggt.max_keyframes` is 120, so a one-hour video cannot be reconstructed in one
 pass; each day is cut into 5-minute segments. `recorded_at` is taken from the
@@ -41,23 +42,48 @@ uv run python scripts/egolife_eval.py --days 1-7
 
 # Run it (~7.5 h wall clock, ~$5 GPU)
 uv run python scripts/egolife_eval.py --days 1-7 --execute --cleanup
+
+# Re-score from the downloaded graphs without any GPU (fresh store, chronological)
+uv run python scripts/egolife_eval.py --days 1-7 --replay \
+  --out outputs/evaluation/egolife_scored
 ```
 
-Outputs: `outputs/evaluation/egolife/report.json`, `report.md`, and
-`dayN_states.json` (the store's belief at the end of each day, used to build
-the query bank).
+Outputs: `report.json`, `report.md`, and `dayN_states.json` (the store's belief at
+the end of each day). The report records the query bank's SHA-256. `--replay`
+re-ingests the graphs into a separate `<home>_replay` store, so scoring is
+reproducible from artifacts alone and never mutates the live evaluation store.
 
 ## Query bank
 
-`evaluation/annotations/egolife_queries.json` is empty by design. Fill it after
-the first run by checking `dayN_states.json` against the video, then freeze the
-file's SHA-256 before scoring. Filling it in after seeing the answers
-invalidates the result.
+`evaluation/annotations/egolife_queries.json` contains 17 frozen queries. Ground
+truth is **third-party and independent of Aegis**: EgoLife ships one dense
+caption `.srt` per hour per participant, so `A1_JAKE_DAY*_12000000.srt` describes
+exactly the hour the system processes. The bank was written before the run
+finished, and its SHA-256 (`16e7c83f…`) is recorded in the report.
 
-Each query is scored on presence, room, anchor, and — as an ablation — the same
-question answered from only the last 24 hours of evidence. The ablation is the
-headline: if full history beats "last day only" on day-5 questions about day-1
-objects, that is the long-term memory claim.
+Selection rule:
+
+1. Find a caption that explicitly places a vocabulary object at a named place
+   (e.g. `我把数据线放到桌子上`, "I put the cable on the table", DAY1 12:04:19).
+2. Keep the query only if no later caption places that object at a *different*
+   named place. Placement-free mentions (holding, looking, pointing) do not
+   invalidate it.
+3. Ask on one or more later days. The longest clean gap is the garbage bag
+   placed on DAY3 and asked about on DAY7.
+
+`expect_place` is a coarse noun list, not a system label. Chinese `桌子` does not
+distinguish desk from dining table, so both are accepted. This avoids the
+circularity of writing ground truth by copying Aegis's own anchor names.
+
+Scoring is on **presence** (is the object still remembered?) and **place** (does
+the anchor label name the right surface?). Room and anchor exact-match rates are
+still computed as diagnostics but carry no expected values in the bank.
+
+The headline is the ablation: each query is answered twice, once from full
+history and once from only the last 24 hours of state runs. If full history
+beats "last day only" on a DAY7 question about a DAY3 placement, that is the
+long-term-memory claim. `keys` and `wallet` (zero caption mentions all week) are
+abstention tests in both conditions.
 
 ## Measured cost
 
@@ -67,8 +93,7 @@ One 5-minute segment on an L4: VGGT 200 s + detection 108 s = 0.086 GPU-hours
 ## Known limitations
 
 1. **EgoLifeQA cannot carry this evaluation.** Of 500 questions, 24 are about
-   object location and only 5 span more than one day. It is a secondary,
-   independent check; the main result depends on the manual query bank.
+   object location and only 5 span more than one day. It is not used.
 2. **Room identity is unstable across sessions.** Measured on two consecutive
    segments: session 1 produced four rooms, session 2 one, and session 2's room
    matched the wrong home room, so none of its anchors matched. The cause is
@@ -80,5 +105,12 @@ One 5-minute segment on an L4: VGGT 200 s + detection 108 s = 0.086 GPU-hours
    video", not "this helps dementia care".
 4. **Temporal resolution.** One keyframe every 3 s will miss placements shorter
    than that.
-5. **The query bank is written by us**, not an independent annotator. Two
-   annotators on a subset and the pre-run hash are the only mitigations.
+5. **Captions are machine-generated.** The dense captions are third-party but
+   not human-verified end to end; one placement (DAY1 12:04:19, cable on table)
+   was checked against the video frame, which also confirmed the burned-in
+   timestamp matches `recorded_at`. A panel should spot-check a larger sample.
+6. **Short observable gaps.** Because only one hour per day is sampled, most GT
+   placements are re-mentioned within a day or two; the longest clean gap is
+   four days. This tests multi-day persistence, not week-long persistence.
+7. **Coarse place granularity.** `桌子` maps to both "desk" and "dining table".
+   Exact anchor identity is not scored against the captions.

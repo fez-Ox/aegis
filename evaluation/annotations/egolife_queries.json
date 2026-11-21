@@ -1,15 +1,180 @@
 {
   "_instructions": [
-    "Freeze this file (sha256) before the first scoring run. Filling it in after",
-    "seeing the system's answers invalidates the result.",
-    "asked_day is the day whose end the query is asked at: the store only holds",
-    "history up to and including that day.",
-    "asked_at must be an ISO-8601 UTC timestamp; it anchors the 24-hour ablation.",
-    "expect_room / expect_anchor must use the store's labels. Run",
-    "scripts/egolife_eval.py once, read outputs/evaluation/egolife/dayN_states.json",
-    "to see the labels, then verify each answer against the video before writing",
-    "it here. Never copy the system's answer without checking.",
-    "expect_present=false marks an abstention test: the item is not in the video."
+    "Ground truth comes from EgoLife's own DenseCaption SRT files for the 12:00 hour (lmms-lab/EgoLife), NOT from Aegis output. 'observed_at' is the caption timestamp of the placement.",
+    "'expect_place' is the place noun stated in the caption. It is deliberately coarse because Chinese 桌子 does not distinguish desk from dining table; 'desk' and 'table' are both accepted.",
+    "A query is kept only if no later caption places the same object at a different named place. Placement-free mentions (holding, seeing, pointing) do not invalidate it.",
+    "Freeze this file (sha256) before scoring. It was written before the 7-day run finished.",
+    "asked_at is the end of the asking day's 12:00-13:00 window. The 24 h ablation keeps only evidence with state_run.end_at >= asked_at - 24 h."
   ],
-  "queries": []
+  "ground_truth_source": "lmms-lab/EgoLife EgoLifeCap/DenseCaption/A1_JAKE/DAY*/A1_JAKE_DAY*_12000000.srt",
+  "queries": [
+    {
+      "id": "mug_d3_ask_d4",
+      "item": "mug",
+      "asked_day": 4,
+      "asked_at": "2026-01-08T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-07T12:02:07+00:00",
+      "note": "将纸杯放到桌子上面 (DAY3 12:02:07)"
+    },
+    {
+      "id": "mug_d3_ask_d5",
+      "item": "mug",
+      "asked_day": 5,
+      "asked_at": "2026-01-09T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-07T12:02:07+00:00",
+      "note": "same placement; 2 evidence-free days"
+    },
+    {
+      "id": "mug_d3_ask_d6",
+      "item": "mug",
+      "asked_day": 6,
+      "asked_at": "2026-01-10T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-07T12:02:07+00:00",
+      "note": "same placement; 3 evidence-free days"
+    },
+    {
+      "id": "bag_d3_ask_d5",
+      "item": "garbage bag",
+      "asked_day": 5,
+      "asked_at": "2026-01-09T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["sofa"],
+      "observed_at": "2026-01-07T12:05:45+00:00",
+      "note": "将垃圾袋放到一旁的沙发上 (DAY3 12:05:45)"
+    },
+    {
+      "id": "bag_d3_ask_d6",
+      "item": "garbage bag",
+      "asked_day": 6,
+      "asked_at": "2026-01-10T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["sofa"],
+      "observed_at": "2026-01-07T12:05:45+00:00",
+      "note": "same placement; no later caption names a different place"
+    },
+    {
+      "id": "bag_d3_ask_d7",
+      "item": "garbage bag",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["sofa"],
+      "observed_at": "2026-01-07T12:05:45+00:00",
+      "note": "longest gap: placement on DAY3, asked on DAY7"
+    },
+    {
+      "id": "plate_d5_ask_d6",
+      "item": "plate",
+      "asked_day": 6,
+      "asked_at": "2026-01-10T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-09T12:00:35+00:00",
+      "note": "我把盘子放到了桌子上 (DAY5 12:00:35)"
+    },
+    {
+      "id": "plate_d5_ask_d7",
+      "item": "plate",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-09T12:00:35+00:00",
+      "note": "same placement, 2 days later"
+    },
+    {
+      "id": "food_d5_ask_d6",
+      "item": "food",
+      "asked_day": 6,
+      "asked_at": "2026-01-10T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-09T12:12:58+00:00",
+      "note": "我把煎饼放在了桌子上 (DAY5 12:12:58)"
+    },
+    {
+      "id": "food_d5_ask_d7",
+      "item": "food",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-09T12:12:58+00:00",
+      "note": "same placement, 2 days later"
+    },
+    {
+      "id": "bottle_d5_ask_d7",
+      "item": "bottle",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-09T12:15:13+00:00",
+      "note": "把ad钙奶放回了桌子上; DAY6 places it on a table again, so the place is stable"
+    },
+    {
+      "id": "charger_d5_ask_d7",
+      "item": "charger",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-09T12:33:51+00:00",
+      "note": "把充电宝放到桌子上; DAY6 repeats a table placement"
+    },
+    {
+      "id": "laptop_d6_ask_d7",
+      "item": "laptop",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["bed"],
+      "observed_at": "2026-01-10T12:27:50+00:00",
+      "note": "我把电脑放在了床上 (DAY6 12:27:50); DAY7 has no laptop placement"
+    },
+    {
+      "id": "box_d6_ask_d7",
+      "item": "box",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-10T12:06:18+00:00",
+      "note": "我把包裹都放在了桌子上 (DAY6 12:06:18)"
+    },
+    {
+      "id": "phone_d6_ask_d7",
+      "item": "cell phone",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": true,
+      "expect_place": ["table", "desk"],
+      "observed_at": "2026-01-10T12:05:14+00:00",
+      "note": "我把手机放在桌子上 (DAY6 12:05:14)"
+    },
+    {
+      "id": "keys_d7_absent",
+      "item": "keys",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": false,
+      "observed_at": null,
+      "note": "钥匙 appears 0 times in all seven 12:00 caption files; abstention test"
+    },
+    {
+      "id": "wallet_d7_absent",
+      "item": "wallet",
+      "asked_day": 7,
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_present": false,
+      "observed_at": null,
+      "note": "钱包 appears 0 times in all seven 12:00 caption files; abstention test"
+    }
+  ]
 }

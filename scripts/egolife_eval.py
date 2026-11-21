@@ -15,7 +15,9 @@ Without ``--execute`` it prints the plan and cost estimate only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -35,7 +37,7 @@ from aegis.evaluation.egolife import (
     snapshot,
     summarise,
 )
-from aegis.memory.store import open_store
+from aegis.memory.store import home_dir, open_store
 
 API = "https://huggingface.co/api/datasets/lmms-lab/EgoLife/tree/main"
 DATA_VOLUME = "aegis-poc-data"
@@ -140,7 +142,7 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
     if report.get("queries"):
         lines += [
             "",
-            "| Day | n | Present | Room | Anchor | Room (last 24 h) |",
+            "| Day | n | Present | Place | Present (24 h) | Place (24 h) |",
             "|---|---|---|---|---|---|",
         ]
         for day in report["days"]:
@@ -148,11 +150,11 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
             if not scores:
                 continue
             full = scores["summary"]
-            recent = scores["last_24h"]["room"]
+            recent = scores["last_24h"]
             lines.append(
                 f"| {day['day']} | {full['n']} | "
-                f"{_fmt(full['present'])} | {_fmt(full['room'])} | "
-                f"{_fmt(full['anchor'])} | {_fmt(recent)} |"
+                f"{_fmt(full['present'])} | {_fmt(full['place'])} | "
+                f"{_fmt(recent['present'])} | {_fmt(recent['place'])} |"
             )
 
     cost = report["cost"]
@@ -199,10 +201,21 @@ def main(argv: list[str] | None = None) -> int:
         "--cleanup", action="store_true", help="delete frames from the Volume"
     )
     parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument(
+        "--replay",
+        action="store_true",
+        help="re-ingest downloaded graphs into a fresh store and score, no Modal",
+    )
     args = parser.parse_args(argv)
 
     config = load_config(args.config_path)
     home_id = args.home_id or config.memory.home_id
+    active_home = f"{home_id}_replay" if args.replay else home_id
+    bank_hash = (
+        hashlib.sha256(args.bank.read_bytes()).hexdigest()
+        if args.bank.exists()
+        else None
+    )
     queries = []
     if args.bank.exists():
         payload = json.loads(args.bank.read_text(encoding="utf-8"))
@@ -216,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"{len(plan)} segments, ~{keyframes} keyframes, estimated ~${estimate:.2f} GPU"
     )
-    if not args.execute:
+    if not args.execute and not args.replay:
         for day, index, name, start, clips in plan:
             print(
                 f"  DAY{day} s{index:02d} {name} from {start.isoformat()} "
@@ -225,7 +238,13 @@ def main(argv: list[str] | None = None) -> int:
         print("Dry run. Add --execute to run Modal.")
         return 0
 
-    store = open_store(home_id, config.memory.store_root)
+    if args.replay:
+        fresh = home_dir(active_home, config.memory.store_root)
+        if fresh.exists():
+            shutil.rmtree(fresh)
+        print(f"replaying {len(plan)} graphs into {active_home}")
+
+    store = open_store(active_home, config.memory.store_root)
     report: dict[str, Any] = {
         "protocol": {
             "participant": args.participant,
@@ -238,6 +257,8 @@ def main(argv: list[str] | None = None) -> int:
         },
         "days": [],
         "queries": bool(queries),
+        "bank_sha256": bank_hash,
+        "ground_truth": "EgoLife DenseCaption SRT, 12:00 hour, A1_JAKE DAY1-7",
         "coverage": {
             str(day): {
                 "segments": sum(1 for item in plan if item[0] == day),
@@ -252,6 +273,31 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for day in parse_days(args.days):
             for _, _, name, start, _clips in [item for item in plan if item[0] == day]:
+                if args.replay:
+                    graph = Path("outputs") / name / "objects" / "r4d_scene_graph.json"
+                    if not graph.exists():
+                        raise FileNotFoundError(
+                            f"{graph} missing; wait for the run to produce it"
+                        )
+                    print(f"--- replay {name}")
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "aegis.memory.cli",
+                            "ingest",
+                            str(graph),
+                            "--config-path",
+                            args.config_path,
+                            "--home-id",
+                            active_home,
+                        ],
+                        check=True,
+                    )
+                    measured = segment_cost(name)
+                    cost["gpu_hours"] += measured["gpu_hours"]
+                    cost["cpu_hours"] += measured["cpu_hours"]
+                    continue
                 video = Path("data") / name / "video.mp4"
                 if not video.exists():
                     raise FileNotFoundError(

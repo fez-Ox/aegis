@@ -15,6 +15,7 @@ from aegis.evaluation.egolife import (
     group_segments,
     latest_recent_run,
     parse_clip,
+    place_of,
     recent_state,
     score_bank,
     score_query,
@@ -253,6 +254,58 @@ def test_recent_state_is_none_when_all_evidence_is_old() -> None:
     )
     state = {"instance_id": 5}
     assert recent_state(store, state, "2026-01-08T00:00:00+00:00") is None
+
+
+def test_place_of_strips_the_instance_suffix() -> None:
+    assert place_of("Dining Table #3") == "dining table"
+    assert place_of("Bed #1") == "bed"
+    assert place_of(None) is None
+
+
+def test_score_query_matches_the_caption_place_noun() -> None:
+    query = Query(id="q5", item="mug", asked_day=7, expect_place=["table", "desk"])
+    state = {"anchor_label": "Dining Table #2"}
+    score = score_query(query, state)
+    assert score["place"] == "dining table"
+    assert score["place_ok"] is True
+
+
+def test_score_query_rejects_a_different_place() -> None:
+    query = Query(id="q6", item="mug", asked_day=7, expect_place=["table"])
+    assert score_query(query, {"anchor_label": "Sofa #1"})["place_ok"] is False
+    # A missing object cannot be in the expected place.
+    assert score_query(query, None)["place_ok"] is False
+
+
+def test_summarise_reports_the_place_rate() -> None:
+    scores = [
+        {"present_ok": True, "place_ok": True},
+        {"present_ok": True, "place_ok": False},
+    ]
+    assert summarise(scores)["place"] == {"correct": 1, "n": 2, "accuracy": 0.5}
+
+
+def test_frozen_bank_loads_and_is_well_formed() -> None:
+    import json
+
+    bank = (
+        Path(__file__).resolve().parent.parent
+        / "evaluation"
+        / "annotations"
+        / "egolife_queries.json"
+    )
+    payload = json.loads(bank.read_text(encoding="utf-8"))
+    queries = [Query(**item) for item in payload["queries"]]
+    assert len(queries) >= 15
+    ids = [q.id for q in queries]
+    assert len(ids) == len(set(ids))
+    for query in queries:
+        assert 1 <= query.asked_day <= 7
+        assert query.asked_at is not None
+        if query.expect_present:
+            assert query.expect_place and query.observed_at
+        else:
+            assert query.expect_place is None
 
 
 def test_score_bank_matches_by_canonical_and_runs_the_ablation() -> None:

@@ -44,6 +44,20 @@ class Query:
     expect_present: bool = True
     expect_room: str | None = None
     expect_anchor: str | None = None
+    # Accepted anchor nouns, e.g. ("table", "desk"). Written from the caption
+    # annotation, never from the system's own label, so scoring stays blind.
+    expect_place: Sequence[str] | None = None
+    # Caption timestamp that established the ground truth, for provenance.
+    observed_at: str | None = None
+    note: str | None = None
+
+
+def place_of(anchor_label: str | None) -> str | None:
+    """``"Dining Table #3"`` -> ``"dining table"``."""
+
+    if not anchor_label:
+        return None
+    return anchor_label.split("#")[0].strip().lower()
 
 
 def parse_clip(path: str, size_bytes: int = 0) -> tuple[int, Clip] | None:
@@ -143,12 +157,19 @@ def score_query(query: Query, state: dict[str, Any] | None) -> dict[str, Any]:
         "found": state is not None,
     }
     if state is None:
-        result.update(present_ok=not query.expect_present, room_ok=None, anchor_ok=None)
+        result.update(
+            present_ok=not query.expect_present,
+            room_ok=None,
+            anchor_ok=None,
+            place_ok=False if query.expect_place else None,
+        )
         return result
+    place = place_of(state.get("anchor_label"))
     result.update(
         present_ok=query.expect_present,
         room=state.get("room_label"),
         anchor=state.get("anchor_label"),
+        place=place,
         last_seen=state.get("last_seen_wallclock"),
         room_ok=(
             None
@@ -159,6 +180,11 @@ def score_query(query: Query, state: dict[str, Any] | None) -> dict[str, Any]:
             None
             if query.expect_anchor is None
             else state.get("anchor_label") == query.expect_anchor
+        ),
+        place_ok=(
+            None
+            if query.expect_place is None
+            else place is not None and any(noun in place for noun in query.expect_place)
         ),
     )
     return result
@@ -179,6 +205,7 @@ def summarise(scores: Sequence[dict[str, Any]]) -> dict[str, Any]:
     return {
         "n": len(scores),
         "present": rate("present_ok"),
+        "place": rate("place_ok"),
         "room": rate("room_ok"),
         "anchor": rate("anchor_ok"),
     }

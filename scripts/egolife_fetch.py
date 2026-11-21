@@ -144,6 +144,25 @@ def main(argv: list[str] | None = None) -> int:
             target.write_bytes(client.get(url).raise_for_status().content)
         print(f"QA -> {target}")
 
+    # The dense captions for the processed hour are the query bank's ground
+    # truth. They are tiny (~100 KB/day) and make the selection rule auditable.
+    hour = args.start.split(":")[0]
+    cap_dir = Path("outputs/evaluation/egolife/captions")
+    cap_dir.mkdir(parents=True, exist_ok=True)
+    with httpx.Client(follow_redirects=True, timeout=60) as client:
+        for day in days:
+            target = cap_dir / f"DAY{day}_{hour}00.srt"
+            if target.exists():
+                continue
+            url = (
+                f"{RESOLVE}/EgoLifeCap/DenseCaption/{args.participant}/DAY{day}/"
+                f"{args.participant}_DAY{day}_{hour}000000.srt"
+            )
+            response = client.get(url)
+            if response.is_success:
+                target.write_bytes(response.content)
+                print(f"captions DAY{day} -> {target}")
+
     with (
         httpx.Client(follow_redirects=True, timeout=120) as client,
         ThreadPoolExecutor(max_workers=args.jobs) as pool,
