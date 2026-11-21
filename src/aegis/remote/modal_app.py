@@ -237,7 +237,10 @@ def fetch_egolife_day(
 
 # GPU stages are classes: a warm container keeps the model loaded between
 # calls (one call per live segment) instead of reloading weights every time.
-WARM_SECONDS = 300
+# Each batch app handles exactly one segment, so a warm container only bills
+# idle L4 time after the task. Live mode relies on warm containers, but this
+# branch is the 7-day batch evaluation.
+WARM_SECONDS = 0
 
 
 @app.cls(
