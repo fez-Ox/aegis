@@ -58,6 +58,7 @@ Stage = Literal[
     "rerun",
     "memory",
     "detect_and_rerun",
+    "full",
     "all",
 ]
 
@@ -264,6 +265,7 @@ def main(
         "rerun",
         "memory",
         "detect_and_rerun",
+        "full",
         "all",
     }
     if stage not in valid_stages:
@@ -286,10 +288,10 @@ def main(
     results = _run_stages(
         dataset_id,
         serialized_config,
-        preprocess=stage in {"live", "preprocess", "all"},
-        reconstruct=stage in {"live", "vggt", "reconstruct", "all"},
+        preprocess=stage in {"live", "preprocess", "full", "all"},
+        reconstruct=stage in {"live", "vggt", "reconstruct", "full", "all"},
         detect=stage
-        in {"live", "detect", "objects", "memory", "detect_and_rerun", "all"},
+        in {"live", "detect", "objects", "memory", "detect_and_rerun", "full", "all"},
         visualise=stage in {"live", "rerun", "memory", "detect_and_rerun", "all"},
     )
 
@@ -614,7 +616,7 @@ if __name__ == "__main__":
         "--stage",
         type=str,
         default="all",
-        help="Pipeline stage (all, live, preprocess, vggt, detect, rerun)",
+        help="Pipeline stage (all, full, live, preprocess, vggt, detect, rerun)",
     )
     parser.add_argument(
         "--config-path",

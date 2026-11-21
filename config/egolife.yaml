@@ -1,0 +1,89 @@
+# EgoLife 7-day memory evaluation.
+#
+# Aria clips are 1408x1408 @ 20 fps. The square aspect is kept (preprocess
+# resizes with cv2.resize, which stretches, so a 960x540 target would distort
+# geometry). Segments are cut to 5 min at 5 fps: 100 keyframes per segment at
+# stride 15 (one keyframe every 3 s), safely under vggt.max_keyframes = 120.
+
+storage:
+  data_volume: aegis-poc-data
+  model_cache_volume: aegis-model-cache
+  data_mount: /data
+  model_mount: /models
+
+video:
+  filename: video.mp4
+  sample_fps: 5
+  width: 704
+  height: 704
+
+camera:
+  calibration_filename: calib.txt
+  calibration_mode: provided
+  intrinsics: null
+  intrinsics_resolution: null
+  allow_approximate: false
+
+vggt:
+  model_id: facebook/VGGT-Omega
+  image_size: 512
+  keyframe_stride: 15
+  max_keyframes: 120
+  dtype: bfloat16
+
+sam2:
+  model_id: facebook/sam2-hiera-large
+  prompt_confidence_threshold: 0.35
+  multimask_output: false
+
+perception:
+  detector_backend: yoloe
+  detector_model: yoloe-11l-seg.pt
+  confidence_threshold: 0.45
+  iou_threshold: 0.45
+  min_points_in_box: 25
+  track_max_gap: 3
+  reid_max_gap: 30
+  reid_appearance_threshold: 0.35
+  track_smoothing: 0.65
+  hand_contact_iou_threshold: 0.10
+  hand_contact_max_distance: 0.35
+
+memory:
+  home_id: egolife_jake
+  retention:
+    # The 7-day run is scored from state runs, so keep full detail throughout;
+    # the default 3-day hot window would compact day 1 before day 7 is scored.
+    hot_days: 365
+    important_hot_days: 365
+  rooms:
+    enabled: true
+    zone_link_radius: 1.5
+    min_zone_keyframes: 3
+  gravity:
+    enabled: true
+    min_confidence: 0.5
+    assumed_camera_height: 1.4
+    ransac_iterations: 500
+
+live:
+  sample_fps: 2
+  max_duration_seconds: 3600
+  reconnect_interval_seconds: 3
+  reconnect_timeout_seconds: 30
+  buffer_capacity: 30
+  checkpoint_every: 5
+  keyframe:
+    enabled: true
+    min_sharpness: 15.0
+    min_brightness: 20.0
+    max_brightness: 245.0
+    min_visual_change: 0.008
+    max_interval_seconds: 2.0
+
+visualization:
+  # No Rerun recording for the 7-day run: it is 84 segments and ~30 MB each.
+  log_video: false
+  video_stride: 1
+  point_radius: 0.01
+  camera_radius: 0.04

@@ -1,0 +1,15 @@
+{
+  "_instructions": [
+    "Freeze this file (sha256) before the first scoring run. Filling it in after",
+    "seeing the system's answers invalidates the result.",
+    "asked_day is the day whose end the query is asked at: the store only holds",
+    "history up to and including that day.",
+    "asked_at must be an ISO-8601 UTC timestamp; it anchors the 24-hour ablation.",
+    "expect_room / expect_anchor must use the store's labels. Run",
+    "scripts/egolife_eval.py once, read outputs/evaluation/egolife/dayN_states.json",
+    "to see the labels, then verify each answer against the video before writing",
+    "it here. Never copy the system's answer without checking.",
+    "expect_present=false marks an abstention test: the item is not in the video."
+  ],
+  "queries": []
+}
