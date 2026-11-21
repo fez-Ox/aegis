@@ -655,6 +655,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Do not ingest the result into the home store",
     )
+    parser.add_argument(
+        "--no-upload",
+        action="store_true",
+        help="Video is already in the Modal volume; skip the local upload",
+    )
     args = parser.parse_args()
 
     # Dispatch to modal run
@@ -687,6 +692,8 @@ if __name__ == "__main__":
         cli_cmd.extend(["--home-id", args.home_id])
     if args.no_ingest:
         cli_cmd.append("--no-ingest")
+    if args.no_upload:
+        cli_cmd.append("--no-upload")
     if args.segment_frames is not None:
         cli_cmd.extend(["--segment-frames", str(args.segment_frames)])
     if args.follow:

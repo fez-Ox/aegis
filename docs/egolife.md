@@ -34,14 +34,12 @@ day". The run therefore also produces an accuracy-vs-days curve for free.
 ## Commands
 
 ```bash
-# Download 7 hours (cached, ~10 GB) and cut segments
-uv run python scripts/egolife_fetch.py --days 1-7
+# Fetch into the Modal volume (~15-30 min; nothing downloads locally)
+uv run python scripts/egolife_fetch.py --days 1-7 --modal
 
-# Plan and cost only
-uv run python scripts/egolife_eval.py --days 1-7
-
-# Run it (~7.5 h wall clock, ~$5 GPU)
-uv run python scripts/egolife_eval.py --days 1-7 --execute --cleanup
+# Run it (~7.5 h wall clock, ~$5 GPU) using the videos already in the volume
+uv run python scripts/egolife_eval.py --days 1-7 --execute --cleanup \
+  --skip-existing --no-upload --out outputs/evaluation/egolife_modal
 
 # Re-score from the downloaded graphs without any GPU (fresh store, chronological)
 uv run python scripts/egolife_eval.py --days 1-7 --replay \

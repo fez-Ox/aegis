@@ -127,6 +127,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true", help="re-cut existing segments")
     parser.add_argument("--dry-run", action="store_true", help="plan only")
     parser.add_argument(
+        "--modal",
+        action="store_true",
+        help="fetch into the Modal volume; the local machine downloads nothing",
+    )
+    parser.add_argument(
         "--qa",
         action="store_true",
         help="also download the EgoLifeQA file to evaluation/annotations/",
@@ -162,6 +167,38 @@ def main(argv: list[str] | None = None) -> int:
             if response.is_success:
                 target.write_bytes(response.content)
                 print(f"captions DAY{day} -> {target}")
+
+    if args.modal:
+        from aegis.remote.modal_app import app, fetch_egolife_day
+
+        with app.run(), httpx.Client(follow_redirects=True, timeout=120) as client:
+            for day in days:
+                clips = select_window(
+                    list_day(client, args.participant, day), args.start, args.minutes
+                )
+                groups = group_segments(
+                    clips, args.start, args.segment_minutes, min_clips=3
+                )
+                print(
+                    f"DAY{day}: {len(clips)} clips in {args.start}+{args.minutes}m "
+                    f"-> {len(groups)} segments (Modal)"
+                )
+                payload = [
+                    {
+                        "dataset_id": dataset_id(day, index),
+                        "clips": [clip.path for clip in group],
+                        "recorded_at": to_utc_iso(
+                            segment_start(day, group[0].stamp, args.base_date)
+                        ),
+                    }
+                    for index, group in enumerate(groups)
+                ]
+                if not args.dry_run and payload:
+                    result = fetch_egolife_day.remote(
+                        payload, args.width, args.height, args.fps
+                    )
+                    print(f"  {result}")
+        return 0
 
     with (
         httpx.Client(follow_redirects=True, timeout=120) as client,

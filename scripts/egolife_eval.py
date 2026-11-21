@@ -202,6 +202,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--skip-existing", action="store_true")
     parser.add_argument(
+        "--no-upload",
+        action="store_true",
+        help="videos are already in the Modal volume (Modal-hosted fetch)",
+    )
+    parser.add_argument(
         "--replay",
         action="store_true",
         help="re-ingest downloaded graphs into a fresh store and score, no Modal",
@@ -299,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
                     cost["cpu_hours"] += measured["cpu_hours"]
                     continue
                 video = Path("data") / name / "video.mp4"
-                if not video.exists():
+                if not args.no_upload and not video.exists():
                     raise FileNotFoundError(
                         f"{video} missing; run scripts/egolife_fetch.py first"
                     )
@@ -307,25 +312,25 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"skip {name} (already ingested)")
                     continue
                 print(f"--- {name} from {start.isoformat()}")
-                subprocess.run(
-                    [
-                        sys.executable,
-                        "run_pipeline.py",
-                        "--config-path",
-                        args.config_path,
-                        "--dataset-id",
-                        name,
-                        "--video",
-                        str(video),
-                        "--recorded-at",
-                        start.isoformat(),
-                        "--stage",
-                        "full",
-                        "--home-id",
-                        home_id,
-                    ],
-                    check=True,
-                )
+                command = [
+                    sys.executable,
+                    "run_pipeline.py",
+                    "--config-path",
+                    args.config_path,
+                    "--dataset-id",
+                    name,
+                    "--recorded-at",
+                    start.isoformat(),
+                    "--stage",
+                    "full",
+                    "--home-id",
+                    home_id,
+                ]
+                if args.no_upload:
+                    command.append("--no-upload")
+                else:
+                    command.extend(["--video", str(video)])
+                subprocess.run(command, check=True)
                 measured = segment_cost(name)
                 cost["gpu_hours"] += measured["gpu_hours"]
                 cost["cpu_hours"] += measured["cpu_hours"]
