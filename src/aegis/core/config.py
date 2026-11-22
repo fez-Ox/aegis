@@ -355,6 +355,49 @@ class MemoryBuildConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RankingConfig:
+    """Explainable candidate ranking for ambiguous class-level queries.
+
+    Defaults follow ``w_vip > w_act > w_disp > w_rec``: an enrolled personal
+    item outranks a recently handled object, which outranks a displaced object,
+    which outranks a passive sighting.  The cue term is a small boost, not a
+    hard override; room cues are filtered by the caller.
+    """
+
+    candidate_limit: int = 3
+    ambiguity_margin: float = 0.08
+    recency_half_life_hours: float = 24.0
+    w_vip: float = 1.0
+    w_act: float = 0.45
+    w_disp: float = 0.25
+    w_rec: float = 0.20
+    w_cue: float = 0.10
+    w_visual: float = 0.10
+
+    def __post_init__(self) -> None:
+        if self.candidate_limit < 1:
+            raise ValueError("memory.ranking.candidate_limit must be at least 1")
+        if not 0 <= self.ambiguity_margin <= 1:
+            raise ValueError("memory.ranking.ambiguity_margin must be in [0, 1]")
+        if self.recency_half_life_hours <= 0:
+            raise ValueError("memory.ranking.recency_half_life_hours must be positive")
+        weights = (
+            self.w_vip,
+            self.w_act,
+            self.w_disp,
+            self.w_rec,
+            self.w_cue,
+            self.w_visual,
+        )
+        if any(weight < 0 for weight in weights):
+            raise ValueError("memory.ranking weights must be non-negative")
+        if not self.w_vip > self.w_act > self.w_disp > self.w_rec:
+            raise ValueError(
+                "memory.ranking weights must satisfy w_vip > w_act > w_disp > w_rec"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class EvidenceConfig:
     """Object-only evidence crops kept after raw frames are purged.
 
@@ -409,6 +452,7 @@ class MemoryConfig:
     rooms: RoomMemoryConfig = field(default_factory=RoomMemoryConfig)
     gravity: GravityConfig = field(default_factory=GravityConfig)
     build: MemoryBuildConfig = field(default_factory=MemoryBuildConfig)
+    ranking: RankingConfig = field(default_factory=RankingConfig)
     evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
     retention: RetentionConfig = field(default_factory=RetentionConfig)
     # Durable per-home memory (laptop side): <store_root>/<home_id>/memory.db
@@ -799,6 +843,9 @@ class RuntimeConfig:
                 ),
                 build=_section(
                     MemoryBuildConfig, memory_raw.get("build"), "memory.build"
+                ),
+                ranking=_section(
+                    RankingConfig, memory_raw.get("ranking"), "memory.ranking"
                 ),
                 evidence=_section(
                     EvidenceConfig, memory_raw.get("evidence"), "memory.evidence"

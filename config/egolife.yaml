@@ -51,6 +51,16 @@ perception:
 
 memory:
   home_id: egolife_jake
+  ranking:
+    candidate_limit: 3
+    ambiguity_margin: 0.08
+    recency_half_life_hours: 24.0
+    w_vip: 1.0
+    w_act: 0.45
+    w_disp: 0.25
+    w_rec: 0.20
+    w_cue: 0.10
+    w_visual: 0.10
   retention:
     # The 7-day run is scored from state runs, so keep full detail throughout;
     # the default 3-day hot window would compact day 1 before day 7 is scored.

@@ -39,16 +39,20 @@ def match_rooms(
     *,
     continuity: tuple[int, int] | None = None,
     min_similarity: float = 0.5,
-    min_margin: float = 0.1,
+    min_margin: float = 0.05,
+    min_overlap: int = 1,
 ) -> dict[int, int | None]:
     """Map session room ids to home room ids (None = create a new room).
 
     1. Continuity: a session that starts within seconds of the previous one
        starts in the room the wearer was last in.
     2. Signature: Jaccard similarity of landmark/anchor signatures, same room
-       type when both are typed, with a margin over the runner-up.
+       type when both are typed, with a margin over the runner-up. The margin
+       is tight because noisy detectors rarely give a large gap; a larger one
+       made every session create new rooms. A minimum shared-label count
+       stops a single common landmark from matching unrelated rooms.
     3. A single remaining bare room matches the single remaining bare home
-       room.
+       room. Matches are one-to-one across the session.
     """
 
     result: dict[int, int | None] = {room.room_id: None for room in session_rooms}
@@ -72,6 +76,8 @@ def match_rooms(
                 continue
             typed = room.room_type != "Room" and home.room_type != "Room"
             if typed and room.room_type != home.room_type:
+                continue
+            if len(room.signature & home.signature) < min_overlap:
                 continue
             scores.append((_jaccard(room.signature, home.signature), home.room_id))
         if not scores:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -339,3 +340,194 @@ def test_score_bank_matches_by_canonical_and_runs_the_ablation() -> None:
     # Six-day-old evidence is outside the 24-hour ablation window.
     assert result["last_24h"][0]["found"] is False
     assert result["last_24h"][0]["present_ok"] is False
+
+
+class _FakeTierStore:
+    """Minimal store surface used by the tiered scorer."""
+
+    def __init__(
+        self, state: dict[str, object] | list[dict[str, object]], *, oracle: bool = True
+    ) -> None:
+        self.states = state if isinstance(state, list) else [state]
+        self.state = self.states[0]
+        self.oracle = oracle
+
+    def states_as_of(self, as_of: str, *, since: str | None = None):
+        return list(self.states) if (self.oracle or since is None) else []
+
+    def state_at(self, canonical: str, at: str, **_kwargs):
+        if not self.oracle:
+            return None
+        return {**self.state, "delta_seconds": 12.0}
+
+
+def test_tier_sidecar_loads_and_annotates(tmp_path) -> None:
+    from aegis.evaluation.egolife import apply_tier_annotations, load_tier_sidecar
+
+    bank = Path("evaluation/annotations/egolife_queries.json")
+    sidecar = Path("evaluation/annotations/egolife_tiers.json")
+    payload = load_tier_sidecar(sidecar, bank)
+    assert payload["bank_sha256"] == (
+        "16e7c83ff27f04d5667abc81bf082aaeaaba7ac0abccd67cb09b8f553fef1ceb"
+    )
+    query = Query(
+        id="mug_d3_ask_d4",
+        item="mug",
+        asked_day=4,
+        observed_at="2026-01-07T12:02:07+00:00",
+    )
+    annotated = apply_tier_annotations([query], payload)
+    assert len(annotated) == 3
+    assert annotated[0].tier == "T2"
+    assert annotated[0].ambiguity_expected is True
+    assert annotated[1].tier == "T3"
+    assert annotated[1].cue_prompt == "Where is the mug I used yesterday?"
+    assert annotated[2].tier == "T4"
+
+
+def test_score_tiered_bank_t2_t3_t4() -> None:
+    from aegis.core.vocabulary import default_vocabulary
+    from aegis.evaluation.egolife import score_tiered_bank, summarise_tier
+
+    state = {
+        "instance_id": 1,
+        "label": "Mug #1",
+        "canonical": "mug",
+        "room_id": 1,
+        "room_label": "Room #1",
+        "anchor_id": 1,
+        "anchor_label": "Dining Table #1",
+        "relation": "on",
+        "relation_certain": True,
+        "confidence": 0.9,
+        "last_seen_wallclock": "2026-01-07T12:02:07+00:00",
+        "last_moved_wallclock": "2026-01-07T12:02:07+00:00",
+        "placement_count": 1,
+        "pickup_count": 0,
+        "observation_count": 4,
+        "first_room_id": 1,
+        "first_anchor_id": 1,
+        "evidence_id": 3,
+    }
+    store = _FakeTierStore(state)
+    queries = [
+        Query(
+            id="t2",
+            item="mug",
+            asked_day=4,
+            asked_at="2026-01-08T12:59:00+00:00",
+            expect_place=["table", "desk"],
+            ambiguity_expected=False,
+            tier="T2",
+        ),
+        Query(
+            id="t3",
+            item="mug",
+            asked_day=4,
+            asked_at="2026-01-08T12:59:00+00:00",
+            expect_place=["table", "desk"],
+            cue_prompt="Where is the mug I used yesterday?",
+            tier="T3",
+        ),
+        Query(
+            id="t4",
+            item="mug",
+            asked_day=4,
+            asked_at="2026-01-08T12:59:00+00:00",
+            expect_place=["table", "desk"],
+            observed_at="2026-01-07T12:02:07+00:00",
+            tier="T4",
+        ),
+    ]
+    results = score_tiered_bank(store, queries, default_vocabulary())
+    assert results["T2"][0]["top1_correct"] is True
+    assert results["T3"][0]["prompt"].endswith("yesterday?")
+    assert results["T4"][0]["delta_seconds"] == 12.0
+    summary = summarise_tier(results["T2"])
+    assert summary["top1"]["correct"] == 1
+    assert summary["crop_rate"] == 1.0
+    assert results["T3"][0]["cue_filter_precision"] == 1.0
+    assert results["T4"][0]["temporal_ok"] is True
+    assert summarise_tier(results["T3"])["cue_filter_precision"] == 1.0
+    assert summarise_tier(results["T4"])["temporal_index"] == {
+        "correct": 1,
+        "n": 1,
+        "accuracy": 1.0,
+    }
+
+
+def test_t1_enrollment_path_scores_the_registered_instance() -> None:
+    from aegis.core.vocabulary import default_vocabulary
+    from aegis.evaluation.egolife import score_tiered_bank, summarise_tier
+
+    state = {
+        "instance_id": 1,
+        "label": "Mug #1",
+        "canonical": "mug",
+        "room_id": 1,
+        "room_label": "Kitchen",
+        "anchor_id": 1,
+        "anchor_label": "Kitchen Counter #1",
+        "relation": "on",
+        "relation_certain": True,
+        "confidence": 0.9,
+        "last_seen_wallclock": "2026-01-08T12:00:00+00:00",
+        "evidence_id": 1,
+    }
+    decoy = {
+        **state,
+        "instance_id": 2,
+        "label": "Mug #2",
+        "anchor_id": 2,
+        "anchor_label": "Desk #1",
+        "last_seen_wallclock": "2026-01-08T12:30:00+00:00",
+        "last_moved_wallclock": None,
+        "placement_count": 0,
+        "evidence_id": 2,
+    }
+    store = _FakeTierStore([state, decoy])
+    query = Query(
+        id="vip_mug",
+        item="mug",
+        asked_day=8,
+        asked_at="2026-01-08T12:59:00+00:00",
+        tier="T1",
+        t1_prompt="Where is my mug?",
+        t1_expected_instance_id=1,
+    )
+    enrolled = score_tiered_bank(store, [query], default_vocabulary(), personal_ids=[1])
+    assert enrolled["T1"][0]["top1_correct"] is True
+    assert enrolled["T1"][0]["enrolled"] is True
+    assert summarise_tier(enrolled["T1"])["top1"]["accuracy"] == 1.0
+
+    unenrolled = score_tiered_bank(store, [query], default_vocabulary())
+    assert unenrolled["T1"][0]["top1_correct"] is False
+    assert unenrolled["T1"][0]["enrolled"] is False
+    assert summarise_tier(unenrolled["T1"])["top1"]["accuracy"] == 0.0
+
+    # An annotation without an enrolled id is NOT RUN, never a silent zero.
+    assert (
+        score_tiered_bank(
+            store, [replace(query, t1_expected_instance_id=None)], default_vocabulary()
+        )["T1"]
+        == []
+    )
+
+
+def test_tier_sidecar_supports_t1_annotations() -> None:
+    from aegis.evaluation.egolife import apply_tier_annotations
+
+    query = Query(id="vip", item="mug", asked_day=4)
+    sidecar = {
+        "annotations": {
+            "vip": {
+                "tier": "T1",
+                "t1_prompt": "Where is my mug?",
+                "t1_expected_instance_id": 7,
+            }
+        }
+    }
+    expanded = apply_tier_annotations([query], sidecar)
+    assert len(expanded) == 1
+    assert expanded[0].tier == "T1"
+    assert expanded[0].t1_expected_instance_id == 7

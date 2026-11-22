@@ -182,6 +182,136 @@ def _fmt(rate: dict[str, Any]) -> str:
     return f"{rate['correct']}/{rate['n']} ({rate['accuracy']:.0%})"
 
 
+def _fmt_number(value: Any) -> str:
+    return "n/a" if value is None or isinstance(value, str) else f"{value:.3f}"
+
+
+def write_tier_report(path: Path, report: dict[str, Any]) -> None:
+    """Write the tiered rescore as JSON plus a compact Markdown table."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+    lines = [
+        "# EgoLife tiered, as-of evaluation",
+        "",
+        (
+            f"Bank SHA-256 `{report['bank_sha256']}` · tier sidecar "
+            f"`{report['sidecar_sha256']}`"
+        ),
+        "",
+        f"Store at scoring time: {report['counts']}",
+        "",
+        "| Ranker | Tier | n | Presence | Top-1 | R@3 | MRR | Ambiguity F1 | FCR | Crops | CuePrec | Temporal |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for mode, tiers in report["modes"].items():
+        for tier, payload in tiers.items():
+            summary = payload["summary"]
+            if not summary["n"]:
+                lines.append(
+                    f"| {mode} | {tier} | 0 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |"
+                )
+                continue
+            ambiguity = summary["ambiguity_f1"]
+            fcr = summary["false_confidence"]
+            temporal = summary.get("temporal_index")
+            if isinstance(temporal, dict):
+                temporal_text = (
+                    f"{temporal['correct']}/{temporal['n']} "
+                    f"({temporal['accuracy']:.3f})"
+                )
+            else:
+                temporal_text = "n/a"
+            lines.append(
+                f"| {mode} | {tier} | {summary['n']} | {_fmt(summary['present'])} "
+                f"| {_fmt(summary['top1'])} | {_fmt_number(summary['recall_at_3'])} "
+                f"| {_fmt_number(summary['mrr'])} "
+                f"| {(ambiguity['f1'] if isinstance(ambiguity, dict) else ambiguity)} "
+                f"| {(fcr['rate'] if isinstance(fcr, dict) else fcr)} "
+                f"| {_fmt_number(summary['crop_rate'])} "
+                f"| {_fmt_number(summary.get('cue_filter_precision'))} "
+                f"| {temporal_text} |"
+            )
+    lines += [
+        "",
+        (
+            "T1 is NOT RUN on EgoLife: there is no enrolled personal object or "
+            "independent T1 ground truth. Visual-trait and activity cues are NOT "
+            "IMPLEMENTED on this dataset: the captions have no per-instance labels."
+        ),
+        "",
+    ]
+    path.with_suffix(".md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def rescore(
+    args: argparse.Namespace, config: Any, queries: list[Query], home_id: str
+) -> int:
+    """Score an existing store against all four tiers without re-ingesting."""
+
+    from aegis.evaluation.egolife import (
+        apply_tier_annotations,
+        load_tier_sidecar,
+        score_tiered_bank,
+        summarise_tier,
+    )
+    from aegis.memory.personal import enrolled_instances
+
+    if not args.sidecar.exists():
+        raise FileNotFoundError(f"tier sidecar missing: {args.sidecar}")
+    sidecar = load_tier_sidecar(args.sidecar, args.bank)
+    annotated = apply_tier_annotations(queries, sidecar)
+    modes = (
+        ["recency_only", "salience", "full"] if args.ranker == "all" else [args.ranker]
+    )
+
+    store = open_store(home_id, config.memory.store_root)
+    report: dict[str, Any] = {
+        "protocol": {
+            "home_id": home_id,
+            "ranker_modes": modes,
+            "scoring": "states_as_of(asked_at); T4 state_at(observed_at)",
+        },
+        "bank_sha256": hashlib.sha256(args.bank.read_bytes()).hexdigest(),
+        "sidecar_sha256": hashlib.sha256(args.sidecar.read_bytes()).hexdigest(),
+        "counts": store.counts(),
+        "modes": {},
+    }
+    try:
+        personal = enrolled_instances(store)
+        for mode in modes:
+            tiered = score_tiered_bank(
+                store,
+                annotated,
+                config.vocab(),
+                mode=mode,
+                personal_ids=personal,
+            )
+            report["modes"][mode] = {
+                tier: {"summary": summarise_tier(rows), "detail": rows}
+                for tier, rows in tiered.items()
+            }
+        legacy = score_tiered_bank(
+            store,
+            annotated,
+            config.vocab(),
+            mode=modes[-1],
+            personal_ids=personal,
+            legacy_24h=True,
+        )
+        report["ablation_24h"] = {
+            tier: {"summary": summarise_tier(rows), "detail": rows}
+            for tier, rows in legacy.items()
+        }
+    finally:
+        store.close()
+
+    write_tier_report(args.tier_out / "report.json", report)
+    print(f"Wrote {args.tier_out / 'report.json'} and report.md")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config-path", default="config/egolife.yaml")
@@ -211,6 +341,26 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="re-ingest downloaded graphs into a fresh store and score, no Modal",
     )
+    parser.add_argument(
+        "--rescore",
+        action="store_true",
+        help="score an existing store as-of each query time; no ingest, no Modal",
+    )
+    parser.add_argument(
+        "--sidecar",
+        type=Path,
+        default=Path("evaluation/annotations/egolife_tiers.json"),
+    )
+    parser.add_argument(
+        "--ranker",
+        default="full",
+        choices=("recency_only", "salience", "full", "all"),
+    )
+    parser.add_argument(
+        "--tier-out",
+        type=Path,
+        default=Path("outputs/evaluation/egolife_scored_tiered"),
+    )
     args = parser.parse_args(argv)
 
     config = load_config(args.config_path)
@@ -225,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.bank.exists():
         payload = json.loads(args.bank.read_text(encoding="utf-8"))
         queries = [Query(**item) for item in payload.get("queries", [])]
+
+    if args.rescore:
+        return rescore(args, config, queries, home_id)
 
     with httpx.Client(follow_redirects=True, timeout=120) as client:
         plan = plan_segments(client, args.participant, parse_days(args.days), args)

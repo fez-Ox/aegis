@@ -13,15 +13,32 @@ protocol and its limits.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from aegis.core.timeutil import parse_iso
+from aegis.evaluation.metrics import (
+    ambiguity_f1,
+    cue_filter_precision,
+    evidence_crop_rate,
+    false_confidence_rate,
+    mrr,
+    recall_at_k,
+    reciprocal_rank,
+    temporal_index_accuracy,
+)
+from aegis.memory.reasoning import QueryCues, parse_query_cues, rank_candidates
 
 _CLIP = re.compile(r"^DAY(?P<day>\d+)_(?P<who>[A-Z0-9]+_[A-Z]+)_(?P<stamp>\d{8})\.mp4$")
+
+# state_at() resolves the closest episode within this many seconds of the cue.
+_T4_TOLERANCE_S = 180.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +67,15 @@ class Query:
     # Caption timestamp that established the ground truth, for provenance.
     observed_at: str | None = None
     note: str | None = None
+    # Optional tier metadata from the frozen sidecar. Legacy annotations keep
+    # the T2 defaults, so old loaders and tests are unaffected.
+    tier: str = "T2"
+    cue_prompt: str | None = None
+    ambiguity_expected: bool | None = None
+    # T1 enrollment ground truth; T4 optional independent time window.
+    t1_prompt: str | None = None
+    t1_expected_instance_id: int | None = None
+    expected_time_window: tuple[str, str] | None = None
 
 
 def place_of(anchor_label: str | None) -> str | None:
@@ -275,3 +301,390 @@ def score_bank(store: Any, queries: Sequence[Query], vocabulary: Any) -> dict[st
         cutoff = (parse_iso(query.asked_at) - timedelta(hours=24)).isoformat()
         recent.append(score_query(query, recent_state(store, state, cutoff)))
     return {"full": full, "last_24h": recent}
+
+
+# ---------------------------------------------------------------------------
+# Tiered, as-of scoring with candidate-aware answers
+# ---------------------------------------------------------------------------
+
+
+def load_tier_sidecar(path: str | Path, bank_path: str | Path) -> dict[str, Any]:
+    """Load the frozen tier annotations, refusing a mutated query bank."""
+
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    expected = payload.get("bank_sha256")
+    if expected:
+        actual = hashlib.sha256(Path(bank_path).read_bytes()).hexdigest()
+        if actual != expected:
+            raise ValueError(
+                "tier sidecar was annotated against a different query bank; "
+                f"expected {expected}, got {actual}"
+            )
+    return payload
+
+
+def apply_tier_annotations(
+    queries: Sequence[Query], sidecar: dict[str, Any]
+) -> list[Query]:
+    """Expand the frozen bank into non-overlapping T1–T4 rows using the sidecar.
+
+    The bank stays a set of class-level T2 questions.  The sidecar adds an
+    independent ambiguity label, optional enrollment ground truth (T1), and
+    mechanically derived fuzzy-time (T3) and exact-timestamp (T4) variants, so
+    no tier's ground truth is written into the bank file itself.
+    """
+
+    annotations = sidecar.get("annotations", {})
+    expanded: list[Query] = []
+    for query in queries:
+        annotation = annotations.get(query.id, {})
+        if str(annotation.get("tier", "")).upper().startswith("T1"):
+            expanded.append(
+                replace(
+                    query,
+                    id=f"{query.id}__t1",
+                    tier="T1",
+                    t1_prompt=annotation.get("t1_prompt"),
+                    t1_expected_instance_id=annotation.get("t1_expected_instance_id"),
+                )
+            )
+            continue
+        expanded.append(
+            replace(
+                query,
+                tier="T2",
+                ambiguity_expected=annotation.get(
+                    "ambiguity_expected", query.ambiguity_expected
+                ),
+            )
+        )
+        cue_prompt = annotation.get("t3_prompt")
+        if cue_prompt:
+            expanded.append(
+                replace(
+                    query,
+                    id=f"{query.id}__t3",
+                    tier="T3",
+                    cue_prompt=cue_prompt,
+                    ambiguity_expected=None,
+                )
+            )
+        if annotation.get("t4_prompt") and query.observed_at:
+            expanded.append(
+                replace(
+                    query,
+                    id=f"{query.id}__t4",
+                    tier="T4",
+                    ambiguity_expected=None,
+                    expected_time_window=(
+                        tuple(annotation["expected_time_window"])
+                        if annotation.get("expected_time_window")
+                        else None
+                    ),
+                )
+            )
+    return expanded
+
+
+def _cues_match_state(state: dict[str, Any], cues: QueryCues | None) -> bool:
+    """Whether a state's most recent move falls in a fuzzy time window."""
+
+    if not cues or not cues.window_start or not cues.window_end:
+        return True
+    stamp = state.get("last_moved_wallclock") or state.get("last_seen_wallclock")
+    if not stamp:
+        return False
+    text = str(stamp)
+    return cues.window_start <= text < cues.window_end
+
+
+def _state_matches_place(state: dict[str, Any], expected: Sequence[str]) -> bool:
+    """Whether a retained state's place matches the annotated ground truth."""
+
+    place = place_of(state.get("anchor_label")) or ""
+    room = str(state.get("room_label") or "").lower()
+    return any(noun in place or noun in room for noun in expected)
+
+
+def _place_candidates(candidates: Sequence[dict[str, Any]]) -> list[str]:
+    return [
+        place_of(candidate.get("anchor_label"))
+        or str(candidate.get("room_label") or "").lower().strip()
+        for candidate in candidates
+    ]
+
+
+def _score_ranked_query(
+    query: Query,
+    states: Sequence[dict[str, Any]],
+    vocabulary: Any,
+    *,
+    mode: str,
+    now: datetime | None,
+    personal_ids: Sequence[int],
+) -> dict[str, Any]:
+    """Score one T2/T3 query with the production ranker."""
+
+    prompt = query.cue_prompt if query.tier == "T3" and query.cue_prompt else query.item
+    cues = parse_query_cues(prompt, now=now)
+    in_window = [state for state in states if _cues_match_state(state, cues)]
+    # A cue with no matching evidence falls back to the full snapshot rather
+    # than manufacturing a "not found" from missing event data.
+    effective_states = in_window or list(states)
+    entry = vocabulary.resolve_query(query.item) if vocabulary else None
+    target = entry.id if entry else query.item
+    ranking = rank_candidates(
+        effective_states,
+        target,
+        mode=mode,
+        now=now,
+        cues=cues,
+        personal_ids=personal_ids,
+    )
+    candidates = ranking["candidates"]
+    places = _place_candidates(candidates)
+    expected = list(query.expect_place or [])
+    top1_correct = bool(candidates) and any(noun in places[0] for noun in expected)
+    crop_rate = evidence_crop_rate(candidates)
+    has_window = bool(cues.window_start and cues.window_end)
+    precision = (
+        round(
+            sum(_state_matches_place(s, expected) for s in in_window) / len(in_window),
+            4,
+        )
+        if has_window and in_window and expected
+        else None
+    )
+    return {
+        "id": query.id,
+        "item": query.item,
+        "tier": query.tier,
+        "prompt": prompt,
+        "asked_at": query.asked_at,
+        "resolution_mode": ranking["resolution_mode"],
+        "is_ambiguous": ranking["is_ambiguous"],
+        "ambiguity_reason": ranking["ambiguity_reason"],
+        "ambiguity_expected": query.ambiguity_expected,
+        "candidates": candidates,
+        "found": bool(candidates),
+        "present_ok": bool(candidates) == query.expect_present,
+        "top1_correct": top1_correct,
+        "top1_place": places[0] if places else None,
+        "recall_at_3": recall_at_k(places, expected, k=3),
+        "mrr": reciprocal_rank(places, expected),
+        "crop_rate": crop_rate,
+        "cue_filter_precision": precision,
+    }
+
+
+def _score_oracle_query(query: Query, store: Any, vocabulary: Any) -> dict[str, Any]:
+    """T4: resolve the exact placement time without using its expected place."""
+
+    entry = vocabulary.resolve_query(query.item) if vocabulary else None
+    target = entry.id if entry else query.item
+    state = store.state_at(target, query.observed_at) if query.observed_at else None
+    if state is None:
+        return {
+            "id": query.id,
+            "item": query.item,
+            "tier": "T4",
+            "prompt": f"Where was the {query.item} at {query.observed_at}?",
+            "resolution_mode": "not_found",
+            "found": False,
+            "present_ok": not query.expect_present,
+            "top1_correct": False,
+            "top1_place": None,
+            "delta_seconds": None,
+            "temporal_ok": False,
+        }
+    place = place_of(state.get("anchor_label"))
+    expected = list(query.expect_place or [])
+    delta = state.get("delta_seconds")
+    temporal_ok = None if delta is None else abs(float(delta)) <= _T4_TOLERANCE_S
+    if query.expected_time_window:
+        stamp = str(state.get("last_seen_wallclock") or "")
+        low, high = query.expected_time_window
+        temporal_ok = bool(stamp and low <= stamp < high)
+    return {
+        "id": query.id,
+        "item": query.item,
+        "tier": "T4",
+        "prompt": f"Where was the {query.item} at {query.observed_at}?",
+        "resolution_mode": "direct",
+        "is_ambiguous": False,
+        "found": True,
+        "present_ok": query.expect_present,
+        "top1_correct": any(noun in place for noun in expected) if place else False,
+        "top1_place": place,
+        "top1_instance": state.get("label"),
+        "delta_seconds": state.get("delta_seconds"),
+        "temporal_ok": temporal_ok,
+    }
+
+
+def _score_enrolled_query(
+    query: Query,
+    states: Sequence[dict[str, Any]],
+    vocabulary: Any,
+    *,
+    mode: str,
+    now: datetime | None,
+    personal_ids: Sequence[int],
+) -> dict[str, Any]:
+    """T1: the enrolled personal instance must be the top-ranked answer."""
+
+    entry = vocabulary.resolve_query(query.item) if vocabulary else None
+    target = entry.id if entry else query.item
+    prompt = query.t1_prompt or query.item
+    ranking = rank_candidates(
+        states,
+        target,
+        mode=mode,
+        now=now,
+        cues=parse_query_cues(prompt, now=now),
+        personal_ids=personal_ids,
+    )
+    candidates = ranking["candidates"]
+    primary = candidates[0] if candidates else None
+    expected = query.t1_expected_instance_id
+    return {
+        "id": query.id,
+        "item": query.item,
+        "tier": "T1",
+        "prompt": prompt,
+        "resolution_mode": ranking["resolution_mode"],
+        "is_ambiguous": ranking["is_ambiguous"],
+        "found": primary is not None,
+        "present_ok": (primary is not None) == query.expect_present,
+        "top1_correct": bool(
+            primary and expected is not None and primary["instance_id"] == expected
+        ),
+        "top1_instance": primary["label"] if primary else None,
+        "expected_instance_id": expected,
+        "enrolled": expected in personal_ids,
+        "candidates": candidates,
+        "crop_rate": evidence_crop_rate(candidates),
+    }
+
+
+def _snapshot(
+    query: Query, store: Any, legacy_24h: bool
+) -> tuple[list[dict[str, Any]], datetime | None]:
+    if query.asked_at:
+        since = None
+        if legacy_24h:
+            since = (parse_iso(query.asked_at) - timedelta(hours=24)).isoformat()
+        return store.states_as_of(query.asked_at, since=since), parse_iso(
+            query.asked_at
+        )
+    return store.latest_states(), None
+
+
+def score_tiered_bank(
+    store: Any,
+    queries: Sequence[Query],
+    vocabulary: Any,
+    *,
+    mode: str = "full",
+    personal_ids: Sequence[int] = (),
+    legacy_24h: bool = False,
+) -> dict[str, Any]:
+    """Score T1–T4 as of each query's ``asked_at``.
+
+    T1 needs an enrolled instance id in the annotation; without it the query is
+    NOT RUN rather than a silent zero. ``legacy_24h`` replaces the snapshot with
+    a real recency-limited one: every instance whose evidence ended before
+    ``asked_at - 24 h`` is removed, so the ranker can choose differently.
+    """
+
+    results: dict[str, list[dict[str, Any]]] = {"T1": [], "T2": [], "T3": [], "T4": []}
+    for query in queries:
+        if query.tier == "T4":
+            results["T4"].append(_score_oracle_query(query, store, vocabulary))
+            continue
+        if query.tier == "T1":
+            if query.t1_expected_instance_id is None:
+                continue
+            states, now = _snapshot(query, store, legacy_24h)
+            results["T1"].append(
+                _score_enrolled_query(
+                    query,
+                    states,
+                    vocabulary,
+                    mode=mode,
+                    now=now,
+                    personal_ids=personal_ids,
+                )
+            )
+            continue
+        if query.tier not in {"T2", "T3"}:
+            continue
+        states, now = _snapshot(query, store, legacy_24h)
+        results[query.tier].append(
+            _score_ranked_query(
+                query,
+                states,
+                vocabulary,
+                mode=mode,
+                now=now,
+                personal_ids=personal_ids,
+            )
+        )
+    return results
+
+
+def summarise_tier(results: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate one tier's candidate metrics, marking unmeasured items."""
+
+    def rate(key: str) -> dict[str, Any]:
+        values = [bool(item[key]) for item in results if item.get(key) is not None]
+        correct = sum(values)
+        return {
+            "correct": correct,
+            "n": len(values),
+            "accuracy": round(correct / len(values), 4) if values else None,
+        }
+
+    def mean(key: str) -> float | None:
+        values = [float(item[key]) for item in results if item.get(key) is not None]
+        return round(sum(values) / len(values), 4) if values else None
+
+    expected = [item.get("ambiguity_expected") for item in results]
+    predicted = [item.get("is_ambiguous") for item in results]
+    if any(value is not None for value in expected) and all(
+        value is not None for value in predicted
+    ):
+        ambiguity = ambiguity_f1(
+            [bool(value) for value in expected], [bool(value) for value in predicted]
+        )
+    else:
+        ambiguity = "NOT RUN: no independent ambiguity labels"
+
+    if any(item.get("resolution_mode") == "direct" for item in results):
+        false_confidence = false_confidence_rate(results)
+    else:
+        false_confidence = "NOT RUN: no direct answers"
+
+    return {
+        "n": len(results),
+        "present": rate("present_ok"),
+        "top1": rate("top1_correct"),
+        "recall_at_3": mean("recall_at_3"),
+        "mrr": mrr(results),
+        "ambiguity_f1": ambiguity,
+        "false_confidence": false_confidence,
+        "crop_rate": mean("crop_rate"),
+        "cue_filter_precision": cue_filter_precision(results),
+        "temporal_index": temporal_index_accuracy(results),
+        "direct": flag_direct(results),
+    }
+
+
+def flag_direct(results: Sequence[dict[str, Any]]) -> dict[str, int]:
+    """Count answer modes so a report can show abstention and triage rates."""
+
+    counts: dict[str, int] = {}
+    for item in results:
+        mode = str(item.get("resolution_mode") or "unknown")
+        counts[mode] = counts.get(mode, 0) + 1
+    return counts

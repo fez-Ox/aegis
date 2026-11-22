@@ -1,0 +1,149 @@
+{
+  "_instructions": [
+    "Sidecar for the frozen egolife_queries.json bank. The bank file is never edited; tier and cue metadata live here keyed by query id.",
+    "bank_sha256 is the hash of egolife_queries.json at annotation time; the scoring harness refuses to score if it has changed.",
+    "ambiguity_expected is a manual pass over the EgoLife 12:00 DenseCaption SRT files BEFORE scoring: true where captions mention multiple instances of the class (e.g. 我将纸杯叠到一起) or two distinct placements of it in the same period. These are independent human labels, not derived from Aegis candidates.",
+    "t3_prompt cue words (yesterday / two days ago / ...) are derived mechanically from asked_at.date - observed_at.date. They deliberately avoid naming the anchor. There are no per-instance visual-trait or activity labels in EgoLife, so those cue types are NOT IMPLEMENTED on this dataset.",
+    "t4_prompt uses the caption observed_at as the oracle timestamp. It is a diagnostic upper bound, not a patient-facing prompt.",
+    "Freeze this file and record its sha256 in the report before the first score. Do not relabel after seeing results."
+  ],
+  "bank_sha256": "16e7c83ff27f04d5667abc81bf082aaeaaba7ac0abccd67cb09b8f553fef1ceb",
+  "annotations": {
+    "mug_d3_ask_d4": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "DAY3: 我将纸杯叠到一起 (stacked paper cups); multiple instances",
+      "cue": "yesterday",
+      "t3_prompt": "Where is the mug I used yesterday?",
+      "t4_prompt": "Where was the mug at 2026-01-07T12:02:07Z?"
+    },
+    "mug_d3_ask_d5": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "same stacked paper cups as mug_d3_ask_d4",
+      "cue": "two days ago",
+      "t3_prompt": "Where is the mug I used two days ago?",
+      "t4_prompt": "Where was the mug at 2026-01-07T12:02:07Z?"
+    },
+    "mug_d3_ask_d6": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "same stacked paper cups as mug_d3_ask_d4",
+      "cue": "three days ago",
+      "t3_prompt": "Where is the mug I used three days ago?",
+      "t4_prompt": "Where was the mug at 2026-01-07T12:02:07Z?"
+    },
+    "bag_d3_ask_d5": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "DAY3 has two placements: 12:05:45 on the sofa and 16:24 on the floor by the door",
+      "cue": "two days ago",
+      "t3_prompt": "Where is the garbage bag I put down two days ago?",
+      "t4_prompt": "Where was the garbage bag at 2026-01-07T12:05:45Z?"
+    },
+    "bag_d3_ask_d6": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "two garbage-bag placements in DAY3",
+      "cue": "three days ago",
+      "t3_prompt": "Where is the garbage bag I put down three days ago?",
+      "t4_prompt": "Where was the garbage bag at 2026-01-07T12:05:45Z?"
+    },
+    "bag_d3_ask_d7": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "two garbage-bag placements in DAY3",
+      "cue": "four days ago",
+      "t3_prompt": "Where is the garbage bag I put down four days ago?",
+      "t4_prompt": "Where was the garbage bag at 2026-01-07T12:05:45Z?"
+    },
+    "plate_d5_ask_d6": {
+      "tier": "T2",
+      "ambiguity_expected": false,
+      "ambiguity_note": "DAY5: 我端起了盘子和菜刀, a single plate is handled",
+      "cue": "yesterday",
+      "t3_prompt": "Where is the plate I used yesterday?",
+      "t4_prompt": "Where was the plate at 2026-01-09T12:00:35Z?"
+    },
+    "plate_d5_ask_d7": {
+      "tier": "T2",
+      "ambiguity_expected": false,
+      "ambiguity_note": "single handled plate",
+      "cue": "two days ago",
+      "t3_prompt": "Where is the plate I used two days ago?",
+      "t4_prompt": "Where was the plate at 2026-01-09T12:00:35Z?"
+    },
+    "food_d5_ask_d6": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "multiple food items in DAY5 (煎饼, 披萨, 芒果)",
+      "cue": "yesterday",
+      "t3_prompt": "Where is the food I left out yesterday?",
+      "t4_prompt": "Where was the food at 2026-01-09T12:12:58Z?"
+    },
+    "food_d5_ask_d7": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "multiple food items in DAY5",
+      "cue": "two days ago",
+      "t3_prompt": "Where is the food I left out two days ago?",
+      "t4_prompt": "Where was the food at 2026-01-09T12:12:58Z?"
+    },
+    "bottle_d5_ask_d7": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "DAY5: Tasha拿了一把ad钙奶, multiple drinks",
+      "cue": "two days ago",
+      "t3_prompt": "Where is the drink I had two days ago?",
+      "t4_prompt": "Where was the bottle at 2026-01-09T12:15:13Z?"
+    },
+    "charger_d5_ask_d7": {
+      "tier": "T2",
+      "ambiguity_expected": false,
+      "ambiguity_note": "DAY2/DAY5 mention one 充电宝 (Tasha's power bank)",
+      "cue": "two days ago",
+      "t3_prompt": "Where is the charger I used two days ago?",
+      "t4_prompt": "Where was the charger at 2026-01-09T12:33:51Z?"
+    },
+    "laptop_d6_ask_d7": {
+      "tier": "T2",
+      "ambiguity_expected": false,
+      "ambiguity_note": "one ThinkPad laptop in DAY6",
+      "cue": "yesterday",
+      "t3_prompt": "Where is the laptop I used yesterday?",
+      "t4_prompt": "Where was the laptop at 2026-01-10T12:27:50Z?"
+    },
+    "box_d6_ask_d7": {
+      "tier": "T2",
+      "ambiguity_expected": true,
+      "ambiguity_note": "DAY6: 我把包裹都放在了桌子上 (plural parcels) and 我在用左手挪动盒子",
+      "cue": "yesterday",
+      "t3_prompt": "Where are the boxes I moved yesterday?",
+      "t4_prompt": "Where was the box at 2026-01-10T12:06:18Z?"
+    },
+    "phone_d6_ask_d7": {
+      "tier": "T2",
+      "ambiguity_expected": false,
+      "ambiguity_note": "one phone handled in DAY6",
+      "cue": "yesterday",
+      "t3_prompt": "Where is the phone I used yesterday?",
+      "t4_prompt": "Where was the phone at 2026-01-10T12:05:14Z?"
+    },
+    "keys_d7_absent": {
+      "tier": "T2",
+      "ambiguity_expected": false,
+      "ambiguity_note": "absent probe; 钥匙 appears in no 12:00 caption",
+      "cue": "yesterday",
+      "t3_prompt": "Where are the keys I used yesterday?",
+      "t4_prompt": null
+    },
+    "wallet_d7_absent": {
+      "tier": "T2",
+      "ambiguity_expected": false,
+      "ambiguity_note": "absent probe; 钱包 appears in no 12:00 caption",
+      "cue": "yesterday",
+      "t3_prompt": "Where is the wallet I used yesterday?",
+      "t4_prompt": null
+    }
+  }
+}

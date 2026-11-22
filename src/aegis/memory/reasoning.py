@@ -9,8 +9,13 @@ from the vocabulary (:mod:`aegis.core.vocabulary`).
 from __future__ import annotations
 
 import re
+from collections.abc import Collection, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar
 
+from aegis.core.config import RankingConfig
+from aegis.core.timeutil import parse_iso, to_utc_iso, utc_now
 from aegis.core.vocabulary import Vocabulary, default_vocabulary
 
 UNCERTAIN_SENTENCE = "I'm not fully sure about the exact spot."
@@ -248,6 +253,337 @@ class QueryReasoningEngine:
             "explanation": explanation,
             "edge_case_handled": edge_case,
         }
+
+
+# Coarse, culture-neutral clock buckets for human cues. They are generic
+# language mappings, not dataset-specific rules.
+COARSE_WINDOWS: dict[str, tuple[int, int]] = {
+    "this morning": (6, 12),
+    "this afternoon": (12, 17),
+    "this evening": (17, 22),
+    "tonight": (17, 23),
+    "last night": (0, 6),
+}
+
+ACTIVITY_WINDOWS: dict[str, tuple[int, int]] = {
+    "after breakfast": (9, 12),
+    "after lunch": (13, 16),
+    "after dinner": (19, 23),
+}
+
+# Generic English descriptors, not dataset-specific. A stored visual caption
+# is matched against these when a patient says e.g. "the blue mug".
+VISUAL_TRAITS: dict[str, tuple[str, ...]] = {
+    "blue": ("blue",),
+    "red": ("red",),
+    "green": ("green",),
+    "white": ("white",),
+    "black": ("black",),
+    "yellow": ("yellow",),
+    "brown": ("brown",),
+    "large": ("large", "big"),
+    "small": ("small", "little", "tiny"),
+    "metal": ("metal", "metallic"),
+    "plastic": ("plastic",),
+    "ceramic": ("ceramic",),
+    "leather": ("leather",),
+}
+
+_DAYS_AGO_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class QueryCues:
+    """Human-scale constraints parsed from a natural query."""
+
+    room: str | None = None
+    days_ago: int | None = None
+    window_start: str | None = None
+    window_end: str | None = None
+    activity: str | None = None
+    visual_terms: tuple[str, ...] = ()
+
+
+def _day_bounds(moment: datetime) -> tuple[datetime, datetime]:
+    start = moment.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start, start + timedelta(days=1)
+
+
+def parse_query_cues(query: str, now: datetime | None = None) -> QueryCues:
+    """Parse room, coarse time, and routine cues without exact timestamps.
+
+    "yesterday", "two days ago", "this morning", "after lunch", and "just now"
+    become UTC windows relative to ``now``.  Exact day/clock strings are left
+    to the T4 oracle; they are never required from the patient.
+    """
+
+    moment = now or utc_now()
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    text = " ".join(query.strip().lower().split())
+    room = QueryReasoningEngine.extract_room_filter(query)
+
+    days_ago: int | None = None
+    if "yesterday" in text:
+        days_ago = 1
+    elif "today" in text:
+        days_ago = 0
+    elif "last week" in text:
+        days_ago = 7
+    else:
+        match = re.search(r"\b(\d+)\s+days?\s+ago\b", text)
+        if match:
+            days_ago = int(match.group(1))
+        else:
+            for word, value in _DAYS_AGO_WORDS.items():
+                if re.search(rf"\b{word}\s+days?\s+ago\b", text):
+                    days_ago = value
+                    break
+
+    activity = next((key for key in ACTIVITY_WINDOWS if key in text), None)
+    start: datetime | None = None
+    end: datetime | None = None
+    if days_ago is not None:
+        start, end = _day_bounds(moment - timedelta(days=days_ago))
+    elif activity is not None:
+        low, high = ACTIVITY_WINDOWS[activity]
+        start = moment.replace(hour=low, minute=0, second=0, microsecond=0)
+        end = moment.replace(hour=high, minute=0, second=0, microsecond=0)
+    else:
+        for phrase, (low, high) in COARSE_WINDOWS.items():
+            if phrase in text:
+                start = moment.replace(hour=low, minute=0, second=0, microsecond=0)
+                end = moment.replace(hour=high, minute=0, second=0, microsecond=0)
+                break
+    if "just now" in text:
+        start, end = moment - timedelta(minutes=30), moment
+
+    visual_terms = tuple(
+        trait
+        for trait, words in VISUAL_TRAITS.items()
+        if any(re.search(rf"\b{re.escape(word)}\b", text) for word in words)
+    )
+    return QueryCues(
+        room=room,
+        days_ago=days_ago,
+        window_start=to_utc_iso(start) if start else None,
+        window_end=to_utc_iso(end) if end else None,
+        activity=activity,
+        visual_terms=visual_terms,
+    )
+
+
+def _recency(value: Any, moment: datetime, half_life_hours: float) -> float:
+    if not value:
+        return 0.0
+    try:
+        age_hours = max(0.0, (moment - parse_iso(str(value))).total_seconds() / 3600.0)
+    except ValueError:
+        return 0.0
+    return 0.5 ** (age_hours / half_life_hours)
+
+
+def _in_window(value: Any, cues: QueryCues | None) -> bool:
+    if not cues or not cues.window_start or not cues.window_end or not value:
+        return False
+    stamp = str(value)
+    return cues.window_start <= stamp < cues.window_end
+
+
+def rank_candidates(
+    states: Sequence[dict[str, Any]],
+    target: str,
+    *,
+    mode: str = "full",
+    now: datetime | None = None,
+    cues: QueryCues | None = None,
+    config: RankingConfig | None = None,
+    personal_ids: Collection[int] = (),
+) -> dict[str, Any]:
+    """Rank same-class candidates and decide whether to answer or ask.
+
+    ``recency_only`` is the old baseline.  ``salience`` adds interaction and
+    displacement.  ``full`` adds the personal registry and fuzzy cue boost.
+    Every component is returned so a panel can see why a candidate won.
+    """
+
+    if mode not in {"recency_only", "salience", "full"}:
+        raise ValueError("ranker mode must be recency_only, salience, or full")
+    cfg = config or RankingConfig()
+    moment = now or utc_now()
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+
+    text = target.strip().lower()
+    hits = [
+        state
+        for state in states
+        if str(state.get("canonical") or "").lower() == text
+        or (
+            not state.get("canonical") and text in str(state.get("label") or "").lower()
+        )
+    ]
+    if cues and cues.room:
+        hits = [
+            state
+            for state in hits
+            if cues.room in str(state.get("room_label") or "").lower()
+        ]
+
+    personal = set(personal_ids)
+    visual_terms = cues.visual_terms if (mode == "full" and cues) else ()
+    scored: list[dict[str, Any]] = []
+    for state in hits:
+        recency = _recency(
+            state.get("last_seen_wallclock"), moment, cfg.recency_half_life_hours
+        )
+        interaction = (
+            _recency(
+                state.get("last_moved_wallclock"), moment, cfg.recency_half_life_hours
+            )
+            if int(state.get("placement_count") or 0) > 0
+            else 0.0
+        )
+        moved_room = state.get("first_room_id") is not None and state.get(
+            "room_id"
+        ) != state.get("first_room_id")
+        moved_anchor = state.get("first_anchor_id") is not None and state.get(
+            "anchor_id"
+        ) != state.get("first_anchor_id")
+        displacement = 1.0 if moved_room or moved_anchor else 0.0
+        vip = 1.0 if state.get("instance_id") in personal else 0.0
+        cue = (
+            1.0
+            if mode == "full"
+            and _in_window(
+                state.get("last_moved_wallclock") or state.get("last_seen_wallclock"),
+                cues,
+            )
+            else 0.0
+        )
+        caption = str(
+            state.get("visual_caption") or state.get("visual_tag") or ""
+        ).lower()
+        visual = (
+            1.0
+            if visual_terms and any(term in caption for term in visual_terms)
+            else 0.0
+        )
+
+        if mode == "recency_only":
+            total = recency
+        elif mode == "salience":
+            total = (
+                cfg.w_act * interaction
+                + cfg.w_disp * displacement
+                + cfg.w_rec * recency
+            )
+        else:
+            total = (
+                cfg.w_vip * vip
+                + cfg.w_act * interaction
+                + cfg.w_disp * displacement
+                + cfg.w_rec * recency
+                + cfg.w_cue * cue
+                + cfg.w_visual * visual
+            )
+
+        scored.append(
+            {
+                "instance_id": state.get("instance_id"),
+                "object_id": state.get("instance_id"),
+                "label": state.get("label"),
+                "class_label": state.get("canonical") or state.get("label"),
+                "visual_tag": state.get("visual_caption") or state.get("visual_tag"),
+                "canonical": state.get("canonical"),
+                "room_id": state.get("room_id"),
+                "room_label": state.get("room_label"),
+                "anchor_id": state.get("anchor_id"),
+                "anchor_label": state.get("anchor_label"),
+                "relation": state.get("relation"),
+                "relation_certain": state.get("relation_certain"),
+                "confidence": state.get("confidence"),
+                "last_seen_at": state.get("last_seen_wallclock"),
+                "last_moved_at": state.get("last_moved_wallclock"),
+                "placement_count": int(state.get("placement_count") or 0),
+                "pickup_count": int(state.get("pickup_count") or 0),
+                "observation_count": int(state.get("observation_count") or 0),
+                "evidence_id": state.get("evidence_id"),
+                "evidence_ref": state.get("evidence_id"),
+                "last_seen_ts": state.get("last_seen_wallclock"),
+                "last_moved_ts": state.get("last_moved_wallclock"),
+                "score": round(float(total), 6),
+                "rank_score": round(float(total), 6),
+                "score_breakdown": {
+                    "vip": round(vip, 6),
+                    "interaction": round(interaction, 6),
+                    "displacement": round(displacement, 6),
+                    "recency": round(recency, 6),
+                    "cue": round(cue, 6),
+                    "visual": round(visual, 6),
+                    "total": round(float(total), 6),
+                },
+            }
+        )
+
+    scored.sort(
+        key=lambda item: (item["score"], str(item["last_seen_at"] or "")),
+        reverse=True,
+    )
+    # Three photos of the same table do not help a patient choose. Keep only
+    # the best-scoring instance per distinct place.
+    distinct: list[dict[str, Any]] = []
+    seen_places: set[tuple[Any, Any]] = set()
+    for item in scored:
+        place = (
+            item["anchor_id"],
+            item["room_id"] if item["anchor_id"] is None else None,
+        )
+        if place in seen_places:
+            continue
+        seen_places.add(place)
+        distinct.append(item)
+    candidates = distinct[: cfg.candidate_limit]
+
+    is_ambiguous = False
+    reason = None
+    if len(candidates) >= 2 and candidates[0]["score"] > 0:
+        first, second = candidates[0], candidates[1]
+        same_place = (
+            first["anchor_id"] is not None and first["anchor_id"] == second["anchor_id"]
+        ) or (
+            first["anchor_id"] is None
+            and second["anchor_id"] is None
+            and first["room_id"] == second["room_id"]
+        )
+        if (
+            not same_place
+            and abs(first["score"] - second["score"]) < cfg.ambiguity_margin
+        ):
+            is_ambiguous = True
+            reason = "multiple_active_instances_same_class"
+
+    if not candidates:
+        resolution = "not_found"
+    elif is_ambiguous:
+        resolution = "disambiguate"
+    else:
+        resolution = "direct"
+    return {
+        "target": target,
+        "resolution_mode": resolution,
+        "is_ambiguous": is_ambiguous,
+        "ambiguity_reason": reason,
+        "candidates": candidates,
+    }
 
 
 def event_summary(event: dict[str, Any]) -> str:

@@ -52,6 +52,17 @@ perception:
   hand_contact_max_distance: 0.35
 
 memory:
+  ranking:
+    # Candidate ranking for ambiguous class queries ("Where is the mug?").
+    candidate_limit: 3
+    ambiguity_margin: 0.08
+    recency_half_life_hours: 24.0
+    w_vip: 1.0
+    w_act: 0.45
+    w_disp: 0.25
+    w_rec: 0.20
+    w_cue: 0.10
+    w_visual: 0.10
   rooms:
     # Room-level spatial memory (Rooms -> Anchors -> Objects hierarchy).
     enabled: true

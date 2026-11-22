@@ -1,5 +1,7 @@
 # One held-out question per line. expected_found=false marks a negative probe
 # (unknown item or wrong room). Fields left null are not checked.
-{"query_id": "q001", "query": "Where are my shoes?", "expected_found": true, "expected_instance_label": "Shoes #1", "expected_anchor": "Storage Cabinet #1", "expected_room": "Room #1", "expected_relation": "inside", "negative": false}
-{"query_id": "q002", "query": "Where are the keys in the kitchen?", "expected_found": false, "negative": true, "notes": "No keys exist in this session."}
-{"query_id": "q003", "query": "Where are my glasses?", "expected_found": false, "negative": true, "notes": "Unknown item probe; must not borrow another dataset's memory."}
+# query_tier: T1_unique_personal | T2_ambiguous_class | T3_fuzzy_cue_episodic | T4_exact_episodic
+# cue_types: subset of visual, room, coarse_time, activity, exact_time.
+{"query_id": "q001", "query": "Where are my shoes?", "expected_found": true, "expected_instance_label": "Shoes #1", "expected_anchor": "Storage Cabinet #1", "expected_room": "Room #1", "expected_relation": "inside", "negative": false, "query_tier": "T1_unique_personal", "ambiguity_expected": false, "cue_types": [], "personal_registry_enrolled": false}
+{"query_id": "q002", "query": "Where are the keys in the kitchen?", "expected_found": false, "negative": true, "notes": "No keys exist in this session.", "query_tier": "T1_unique_personal", "ambiguity_expected": false, "cue_types": ["room"]}
+{"query_id": "q003", "query": "Where are my glasses?", "expected_found": false, "negative": true, "notes": "Unknown item probe; must not borrow another dataset's memory.", "query_tier": "T1_unique_personal", "ambiguity_expected": false, "cue_types": []}

@@ -19,11 +19,12 @@ import sqlite3
 import threading
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from aegis.core.paths import validate_dataset_id
-from aegis.core.timeutil import to_utc_iso, utc_now
+from aegis.core.timeutil import parse_iso, to_utc_iso, utc_now
 
 SCHEMA_VERSION = 1
 DEFAULT_STORE_ROOT = "outputs/_homes"
@@ -210,6 +211,49 @@ def home_dir(home_id: str, store_root: str | Path | None = None) -> Path:
 
 def now_iso() -> str:
     return to_utc_iso(utc_now())
+
+
+# Distinguishes "caller supplied None" from "caller omitted this field" in
+# _state_dict; as-of rows legitimately have NULL anchors and relations.
+_MISSING = object()
+
+
+def _epoch(value: Any) -> float | None:
+    """Epoch seconds for a stored ISO timestamp, or None when unusable."""
+
+    if not value:
+        return None
+    try:
+        return parse_iso(str(value)).timestamp()
+    except ValueError:
+        return None
+
+
+# Correlated features shared by latest_states() and states_as_of(). They keep
+# the ranking inputs in one query instead of one round-trip per instance.
+_INSTANCE_FEATURES = """
+    (SELECT MAX(e.end_at) FROM event e
+       WHERE e.instance_id = i.instance_id
+         AND e.event_type IN ('placement', 'anchor_change', 'moved_while_unobserved')
+    ) AS last_moved_at,
+    (SELECT COUNT(*) FROM event e
+       WHERE e.instance_id = i.instance_id AND e.event_type = 'placement'
+    ) AS placement_count,
+    (SELECT COUNT(*) FROM event e
+       WHERE e.instance_id = i.instance_id AND e.event_type = 'pickup'
+    ) AS pickup_count,
+    (SELECT MIN(sr.start_at) FROM state_run sr
+       WHERE sr.instance_id = i.instance_id
+    ) AS first_seen_at,
+    (SELECT sr.room_id FROM state_run sr
+       WHERE sr.instance_id = i.instance_id
+       ORDER BY sr.start_at, sr.run_id LIMIT 1
+    ) AS first_room_id,
+    (SELECT sr.anchor_id FROM state_run sr
+       WHERE sr.instance_id = i.instance_id
+       ORDER BY sr.start_at, sr.run_id LIMIT 1
+    ) AS first_anchor_id
+"""
 
 
 class HomeStore:
@@ -466,11 +510,12 @@ class HomeStore:
         ]
 
     def latest_states(self) -> list[dict[str, Any]]:
-        """Last-known state of every object, with names resolved."""
+        """Last-known state of every object, with names and ranking features."""
 
         rows = self.query(
-            """
-            SELECT i.*, a.label AS anchor_label, r.label AS room_label
+            f"""
+            SELECT i.*, a.label AS anchor_label, r.label AS room_label,
+                   {_INSTANCE_FEATURES}
             FROM instance i
             LEFT JOIN anchor a ON a.anchor_id = i.last_anchor_id
             LEFT JOIN room r ON r.room_id = i.last_room_id
@@ -478,26 +523,159 @@ class HomeStore:
             ORDER BY i.instance_id
             """
         )
+        return [self._state_dict(row, row["last_seen_at"]) for row in rows]
+
+    def states_as_of(
+        self, as_of: str, *, since: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Every object's latest state whose run began at or before ``as_of``.
+
+        ``since`` additionally keeps only runs with evidence at or after that
+        time, which is a real recency-limited memory: an instance last seen
+        before the cutoff disappears entirely instead of falling back to an
+        older run of the same instance.
+        """
+
+        cutoff = to_utc_iso(as_of)
+        since_clause = ""
+        params: list[Any] = [cutoff]
+        if since is not None:
+            since_clause = "AND sr.end_at >= ?"
+            params.append(to_utc_iso(since))
+        rows = self.query(
+            f"""
+            WITH ranked AS (
+              SELECT sr.*,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY sr.instance_id
+                       ORDER BY sr.start_at DESC, sr.run_id DESC
+                     ) AS rn
+              FROM state_run sr
+              WHERE sr.start_at <= ? {since_clause}
+            )
+            SELECT ranked.*, i.label AS instance_label, i.canonical,
+                   i.importance, a.label AS anchor_label,
+                   r.label AS room_label, {_INSTANCE_FEATURES}
+            FROM ranked
+            JOIN instance i ON i.instance_id = ranked.instance_id
+            LEFT JOIN anchor a ON a.anchor_id = ranked.anchor_id
+            LEFT JOIN room r ON r.room_id = ranked.room_id
+            WHERE ranked.rn = 1
+            ORDER BY ranked.instance_id
+            """,
+            params,
+        )
         return [
-            {
-                "instance_id": row["instance_id"],
-                "label": row["label"],
-                "canonical": row["canonical"],
-                "relation": row["last_relation"],
-                "relation_certain": bool(row["last_relation_certain"]),
-                "anchor_id": row["last_anchor_id"],
-                "anchor_label": row["anchor_label"],
-                "room_id": row["last_room_id"],
-                "room_label": row["room_label"],
-                "last_seen_wallclock": row["last_seen_at"],
-                "last_seen_timestamp": None,
-                "confidence": row["last_confidence"],
-                "height_above_floor": row["last_height"],
-                "is_active_view": False,
-                "evidence_id": row["last_evidence_id"],
-            }
+            self._state_dict(
+                row,
+                row["end_at"],
+                label=row["instance_label"],
+                relation=row["relation"],
+                certain=bool(row["relation_certain"]),
+                anchor_id=row["anchor_id"],
+                room_id=row["room_id"],
+                confidence=row["confidence"],
+                height=row["height_above_floor"],
+                evidence_id=row["evidence_id"],
+            )
             for row in rows
         ]
+
+    def state_at(
+        self, canonical: str, at: str, *, tolerance_s: float = 180.0
+    ) -> dict[str, Any] | None:
+        """The run of ``canonical`` closest to ``at`` within the tolerance.
+
+        Used by the exact-episodic (T4) oracle: it resolves a reference from a
+        timestamp alone, without using the query's expected place.
+        """
+
+        moment = parse_iso(at)
+        low = to_utc_iso(moment - timedelta(seconds=tolerance_s))
+        high = to_utc_iso(moment + timedelta(seconds=tolerance_s))
+        rows = self.query(
+            f"""
+            SELECT sr.*, i.label AS instance_label, i.canonical,
+                   i.importance, a.label AS anchor_label,
+                   r.label AS room_label, {_INSTANCE_FEATURES}
+            FROM state_run sr
+            JOIN instance i ON i.instance_id = sr.instance_id
+            LEFT JOIN anchor a ON a.anchor_id = sr.anchor_id
+            LEFT JOIN room r ON r.room_id = sr.room_id
+            WHERE i.canonical = ? AND sr.end_at >= ? AND sr.start_at <= ?
+            """,
+            (canonical, low, high),
+        )
+        if not rows:
+            return None
+        row = min(
+            rows,
+            key=lambda item: abs(
+                (parse_iso(item["start_at"]) - moment).total_seconds()
+            ),
+        )
+        state = self._state_dict(
+            row,
+            row["end_at"],
+            label=row["instance_label"],
+            relation=row["relation"],
+            certain=bool(row["relation_certain"]),
+            anchor_id=row["anchor_id"],
+            room_id=row["room_id"],
+            confidence=row["confidence"],
+            height=row["height_above_floor"],
+            evidence_id=row["evidence_id"],
+        )
+        state["delta_seconds"] = round(
+            (parse_iso(row["start_at"]) - moment).total_seconds(), 3
+        )
+        return state
+
+    def _state_dict(
+        self,
+        row: sqlite3.Row,
+        last_seen: str | None,
+        *,
+        label: str | None | object = _MISSING,
+        relation: str | None | object = _MISSING,
+        certain: bool | None | object = _MISSING,
+        anchor_id: int | None | object = _MISSING,
+        room_id: int | None | object = _MISSING,
+        confidence: float | None | object = _MISSING,
+        height: float | None | object = _MISSING,
+        evidence_id: int | None | object = _MISSING,
+    ) -> dict[str, Any]:
+        """One JSON-safe state row from a latest or as-of query."""
+
+        def field(name: str, override: object) -> Any:
+            return override if override is not _MISSING else row[name]
+
+        moved = field("last_moved_at", _MISSING)
+        return {
+            "instance_id": row["instance_id"],
+            "label": field("label", label),
+            "canonical": row["canonical"],
+            "relation": field("last_relation", relation),
+            "relation_certain": bool(field("last_relation_certain", certain)),
+            "anchor_id": field("last_anchor_id", anchor_id),
+            "anchor_label": row["anchor_label"],
+            "room_id": field("last_room_id", room_id),
+            "room_label": row["room_label"],
+            "last_seen_wallclock": last_seen,
+            "last_seen_timestamp": _epoch(last_seen),
+            "last_moved_wallclock": moved,
+            "last_moved_timestamp": _epoch(moved),
+            "placement_count": int(row["placement_count"] or 0),
+            "pickup_count": int(row["pickup_count"] or 0),
+            "observation_count": int(row["observation_count"] or 0),
+            "first_seen_wallclock": row["first_seen_at"],
+            "first_room_id": row["first_room_id"],
+            "first_anchor_id": row["first_anchor_id"],
+            "confidence": field("last_confidence", confidence),
+            "height_above_floor": field("last_height", height),
+            "is_active_view": False,
+            "evidence_id": field("last_evidence_id", evidence_id),
+        }
 
     def events(
         self, start: str | None = None, end: str | None = None

@@ -809,3 +809,66 @@ uvx ruff format --check src tests run_pipeline.py run_server.py
    persistence metrics separate.
 5. **Keep the frozen protocol.** Any change after seeing held-out results must
    be reported as a new experiment, not hidden in the final number.
+
+## 15. Tiered, candidate-aware memory queries (current protocol)
+
+Sections 1–7 define the broader suite. The shipped EgoLife result now uses the
+four-tier protocol below; it replaces the single-answer, ask-day-inclusive
+headline in `outputs/evaluation/egolife_scored/FINAL_SUMMARY.md`.
+
+### 15.1 Tiers
+
+| Tier | Question form | Ground truth | Status on EgoLife |
+|---|---|---|---|
+| T1 | "Where are my glasses?" (enrolled personal item) | enrolled instance id | **NOT RUN** — no enrollment ground truth |
+| T2 | "Where is the mug?" (class-level, ambiguous) | frozen `expect_place` | primary result |
+| T3 | "Where is the mug I used two days ago?" | `expect_place` + coarse-time window | limited to mechanically derived coarse time |
+| T4 | "Where was the mug at 2026-01-07T12:02:07Z?" | `expect_place` + exact timestamp | diagnostic oracle upper bound |
+
+T3 and T4 variants are derived once into
+`evaluation/annotations/egolife_tiers.json`, a sidecar keyed by the frozen
+query id. The bank file itself is never edited; the scorer refuses to run if
+the bank SHA-256 differs from the sidecar's recorded hash. The sidecar also
+carries independent `ambiguity_expected` labels from a manual pass over the
+EgoLife DenseCaption SRT files, before scoring.
+
+### 15.2 Scoring rules
+
+- `HomeStore.states_as_of(asked_at)` supplies the snapshot; `state_at` resolves
+  the T4 oracle. Scoring before ingesting the ask day is **not** used: a
+  12:59 query may legitimately use evidence from 12:00 of the same day.
+- T2/T3 report Top-1, Recall@3, MRR, Ambiguity F1 (against independent
+  labels), False-Confidence Rate (wrong `direct` answers), and evidence-crop
+  rate. T3 additionally reports Cue-Filter Precision: the share of states
+  retained by the fuzzy time cue that actually match the annotated place.
+  T4 reports Temporal-Index Accuracy: the share of oracle lookups whose
+  resolved episode is within the cue window (or 180 s of the cue timestamp).
+- T1 requires an enrolled instance id in the sidecar. Without it the tier is
+  NOT RUN, never a silent zero; with it, the enrolled instance must win Top-1.
+- The 24 h ablation uses `states_as_of(asked_at, since=asked_at - 24 h)`,
+  which removes whole instances with no recent evidence. The previous
+  `recent_state()` only filtered the chosen instance's own runs and could not
+  change the answer.
+- Answers expose `resolution_mode`, `is_ambiguous`, and up to three
+  place-deduplicated `candidates` with crops and a score breakdown. Showing
+  two or three real photos is the mitigation for genuine ambiguity.
+- The general harness (`aegis.evaluation.run --ranker ...`) writes the same
+  tier breakdown and three-mode ablation into `summary.json` / `summary.md`.
+
+### 15.3 Ranker modes and enrollment
+
+`recency_only` is the legacy baseline. `salience` adds interaction and
+displacement features derived from `state_run` and `event`. `full` adds the
+personal-item registry and fuzzy-cue boost. Caregivers enroll an instance with
+`aegis-memory enroll --instance <id> --alias "dad's cup" --class mug
+--usual-anchor "Kitchen Counter #1" --usual-room Kitchen --visual-crop <path>`.
+Aliases and canonical classes select the VIP before class-level ranking;
+usual anchor/room and the reference crop are carried as enrollment metadata.
+
+### 15.4 What is explicitly not measured here
+
+Visual-trait ("the red mug") and activity ("after lunch") cues have parsers
+and unit tests but no EgoLife ground truth. EgoLife's frozen sidecar has no
+independent enrolled object, so its T1 rows are NOT RUN even though the T1
+scoring path exists and is unit-tested. A controlled recording is needed for
+either. These are reported as NOT RUN / NOT IMPLEMENTED, never as zeroes.

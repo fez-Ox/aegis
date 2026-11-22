@@ -56,6 +56,21 @@ class QuerySpec:
     expected_instance_label: str | None = None
     negative: bool = False
     notes: str | None = None
+    # Additive tier metadata (legacy banks omit every field and score as before).
+    query_tier: str = "unclassified"
+    ambiguity_expected: bool = False
+    cue_types: tuple[str, ...] = ()
+    personal_registry_enrolled: bool = False
+    query_time_ref: str | None = None
+    acceptable_object_ids: tuple[str, ...] = ()
+    expected_time_window: tuple[str, str] | None = None
+
+    @property
+    def tier_group(self) -> str:
+        """T1–T4 group of the annotation, or ``unclassified``."""
+
+        code = self.query_tier[:2].upper()
+        return code if code in {"T1", "T2", "T3", "T4"} else "unclassified"
 
 
 @dataclass(frozen=True, slots=True)
