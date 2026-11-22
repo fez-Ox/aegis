@@ -123,3 +123,18 @@ def test_new_sections_validate() -> None:
         RuntimeConfig.from_mapping({"sam2": {"mode": "sometimes"}})
     config = RuntimeConfig.from_mapping({"live": {"segment_frames": 60}})
     assert config.live.segment_frames == 60
+
+
+def test_sam3_detector_config_round_trips() -> None:
+    config = load_config(Path("config/demo.yaml"))
+    assert config.perception.detector_backend == "sam3"
+    assert config.perception.sam3_model == "facebook/sam3"
+    assert config.perception.sam3_class_thresholds["shoes"] == 0.5
+    rebuilt = RuntimeConfig.from_mapping(config_to_dict(config))
+    assert rebuilt.perception.sam3_class_thresholds == (
+        config.perception.sam3_class_thresholds
+    )
+    with pytest.raises(ValueError):
+        RuntimeConfig.from_mapping(
+            {"perception": {"detector_backend": "yolo", "sam3_model": "x"}}
+        )

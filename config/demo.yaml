@@ -35,13 +35,46 @@ sam2:
   multimask_output: false
 
 perception:
-  # YOLOE-seg provides open-vocabulary masks; SAM 2 refines them from the box.
-  detector_backend: yoloe
-  detector_model: yoloe-11l-seg.pt
-  # target_classes is generated from config/vocabulary.yaml when omitted.
-  # Task-scoped configs (demo01/03/04/06.yaml) list their own prompts.
+  # SAM3 promptable concept segmentation: text prompts -> instances + masks.
+  # Benchmarked against YOLOE and YOLO-World on hand-labeled frames from five
+  # videos (evaluation/annotations/detection_bench.json); SAM3 recovers the
+  # shoes and hands that YOLOE misses entirely at the same confidence.
+  detector_backend: sam3
+  sam3_model: facebook/sam3
+  # Clip-specific prompts beat the 93-prompt generic vocabulary: fewer
+  # competing concepts, higher precision. Task configs may narrow this further.
+  target_classes:
+    - storage cabinet
+    - shelf
+    - hand
+    - shoes
+    - cooking pot
+    - bowl
+    - plate
+    - basket
+    - garbage bag
+    - trash bin
+    - clothes
+    - mug
+    - bottle
+    - stove
+    - sink
+    - kitchen counter
+    - toilet
+    - food container
+  sam3_default_threshold: 0.8
+  sam3_class_thresholds:
+    # Category-level priors from the five-video benchmark, not per-dataset.
+    shoes: 0.5
+    hand: 0.4
+    cooking pot: 0.6
+    trash bin: 0.4
+    food container: 0.9
   confidence_threshold: 0.45
   iou_threshold: 0.45
+  # Keep adjacent same-class instances (several shoes on one shelf) instead of
+  # merging them; measured across all five benchmark videos.
+  duplicate_iou: 0.7
   min_points_in_box: 25
   # Keep identities alive across short detector misses between keyframes.
   track_max_gap: 3

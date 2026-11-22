@@ -193,6 +193,12 @@ class PerceptionConfig:
 
     detector_backend: str = "yoloe"
     detector_model: str = "yoloe-11l-seg.pt"
+    # SAM3 promptable concept segmentation (batched text prompts per frame).
+    sam3_model: str = "facebook/sam3"
+    sam3_default_threshold: float = 0.8
+    sam3_class_thresholds: dict[str, float] = field(
+        default_factory=lambda: {"shoes": 0.5, "hand": 0.4}
+    )
     target_classes: tuple[str, ...] = (
         "shoes",
         "shoe",
@@ -625,6 +631,24 @@ class RuntimeConfig:
             detector_model=str(
                 perception_raw.get("detector_model", perception_defaults.detector_model)
             ),
+            sam3_model=str(
+                perception_raw.get("sam3_model", perception_defaults.sam3_model)
+            ),
+            sam3_default_threshold=float(
+                perception_raw.get(
+                    "sam3_default_threshold", perception_defaults.sam3_default_threshold
+                )
+            ),
+            sam3_class_thresholds={
+                str(key): float(value)
+                for key, value in (
+                    perception_raw.get(
+                        "sam3_class_thresholds",
+                        perception_defaults.sam3_class_thresholds,
+                    )
+                    or {}
+                ).items()
+            },
             target_classes=target_classes,
             confidence_threshold=float(
                 perception_raw.get(
@@ -700,10 +724,15 @@ class RuntimeConfig:
         ):
             raise ValueError("perception detection limits are out of valid range")
 
-        if perception.detector_backend not in {"yoloe", "yolo_world"}:
+        if perception.detector_backend not in {"yoloe", "yolo_world", "sam3"}:
             raise ValueError(
-                "perception.detector_backend must be 'yoloe' or 'yolo_world'"
+                "perception.detector_backend must be 'yoloe', 'yolo_world' or 'sam3'"
             )
+        if not 0.0 <= perception.sam3_default_threshold <= 1.0 or any(
+            not 0.0 <= value <= 1.0
+            for value in perception.sam3_class_thresholds.values()
+        ):
+            raise ValueError("perception.sam3 thresholds must be in [0, 1]")
 
         if (
             perception.confidence_threshold <= 0

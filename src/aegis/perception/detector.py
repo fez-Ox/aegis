@@ -400,6 +400,144 @@ class DinoEmbedder:
         return tuple(float(v) for v in cls.float().cpu().tolist())
 
 
+class _Sam3Boxes:
+    """Minimal tensor container matching Ultralytics' ``result.boxes``."""
+
+    def __init__(self, classes: list[int], confs: list[float], xyxy: list[list[float]]):
+        import torch
+
+        self.cls = torch.tensor(classes, dtype=torch.long)
+        self.conf = torch.tensor(confs, dtype=torch.float32)
+        self.xyxy = torch.tensor(xyxy, dtype=torch.float32).reshape(-1, 4)
+
+    def __len__(self) -> int:
+        return int(self.cls.numel())
+
+
+class _Sam3Masks:
+    def __init__(self, masks: list[Any]):
+        import numpy as np
+        import torch
+
+        if masks:
+            self.data = torch.from_numpy(np.stack(masks))
+        else:
+            self.data = torch.zeros((0, 1, 1), dtype=torch.bool)
+
+
+class _Sam3Result:
+    def __init__(
+        self,
+        classes: list[int],
+        confs: list[float],
+        xyxy: list[list[float]],
+        masks: list[Any],
+    ):
+        self.boxes = _Sam3Boxes(classes, confs, xyxy)
+        self.masks = _Sam3Masks(masks)
+        self.names: dict[int, str] = {}
+
+
+class Sam3Adapter:
+    """Batched SAM3 text prompts behind the ``model.predict`` interface.
+
+    The rest of :func:`detect_and_track_objects` (mask rescue, re-ID, tracking,
+    hand contact) therefore runs unchanged for SAM3 as for YOLOE.
+    """
+
+    def __init__(self, config: PerceptionConfig):
+        self.config = config
+        self.prompts: list[str] = []
+        self._model: Any = None
+        self._processor: Any = None
+        self._device: str = "cpu"
+
+    def set_classes(self, prompts: list[str]) -> None:
+        self.prompts = list(prompts)
+
+    def _load(self) -> None:
+        if self._model is not None:
+            return
+        import torch
+        from transformers import Sam3Model, Sam3Processor
+
+        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._model = Sam3Model.from_pretrained(
+            self.config.sam3_model, device_map=self._device
+        ).to(self._device, dtype=torch.bfloat16)
+        self._processor = Sam3Processor.from_pretrained(self.config.sam3_model)
+
+    def predict(
+        self,
+        images: Sequence[Any],
+        *,
+        conf: float = 0.0,
+        iou: float = 0.45,
+        verbose: bool = False,
+        retina_masks: bool = True,
+    ) -> list[_Sam3Result]:
+        self._load()
+        import cv2
+        import torch
+        from PIL import Image
+
+        if not self.prompts:
+            return [_Sam3Result([], [], [], []) for _ in images]
+        results: list[_Sam3Result] = []
+        for image in images:
+            pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            inputs = self._processor(
+                images=[pil] * len(self.prompts),
+                text=self.prompts,
+                return_tensors="pt",
+            ).to(self._device)
+            with torch.no_grad():
+                outputs = self._model(**inputs)
+            processed_all = self._processor.post_process_instance_segmentation(
+                outputs,
+                threshold=0.2,
+                mask_threshold=0.5,
+                target_sizes=inputs["original_sizes"].tolist(),
+            )
+            raw: list[tuple[str, float, tuple[float, float, float, float]]] = []
+            masks: list[Any] = []
+            for prompt, processed in zip(self.prompts, processed_all, strict=True):
+                threshold = self.config.sam3_class_thresholds.get(
+                    prompt, self.config.sam3_default_threshold
+                )
+                instances = processed.get("masks")
+                for index, score in enumerate(processed["scores"]):
+                    if float(score) < threshold:
+                        continue
+                    box = [float(value) for value in processed["boxes"][index].tolist()]
+                    raw.append((prompt, float(score), (box[0], box[1], box[2], box[3])))
+                    mask = (
+                        None
+                        if instances is None
+                        else instances[index].cpu().numpy().astype(bool)
+                    )
+                    if mask is None or mask.size == 0:
+                        import numpy as np
+
+                        mask = np.zeros((1, 1), dtype=bool)
+                    masks.append(mask)
+            kept = suppress_duplicates(
+                raw,
+                duplicate_iou=self.config.duplicate_iou,
+                max_detections=self.config.max_detections_per_frame,
+            )
+            mask_by_box = {id(box): mask for box, mask in zip(raw, masks, strict=True)}
+            results.append(
+                _Sam3Result(
+                    [self.prompts.index(item[0]) for item in kept],
+                    [item[1] for item in kept],
+                    [list(item[2]) for item in kept],
+                    [mask_by_box[id(item)] for item in kept],
+                )
+            )
+        return results
+
+
 def load_models(
     config: PerceptionConfig,
     *,
@@ -411,24 +549,28 @@ def load_models(
     import os
     import shutil
 
-    from ultralytics import YOLO, YOLOWorld
+    sam3 = config.detector_backend == "sam3"
+    if sam3:
+        model = Sam3Adapter(config)
+    else:
+        from ultralytics import YOLO, YOLOWorld
 
-    # YOLOE-seg is promptable and emits masks directly; YOLO-World remains
-    # available for compatibility.
-    model_class = YOLO if config.detector_backend == "yoloe" else YOLOWorld
-    if weights_dir is not None:
-        weights_dir.mkdir(parents=True, exist_ok=True)
-        os.environ["YOLO_CONFIG_DIR"] = str(weights_dir)
-        model_path = weights_dir / config.detector_model
-        if model_path.exists():
-            model = model_class(str(model_path))
+        # YOLOE-seg is promptable and emits masks directly; YOLO-World remains
+        # available for compatibility.
+        model_class = YOLO if config.detector_backend == "yoloe" else YOLOWorld
+        if weights_dir is not None:
+            weights_dir.mkdir(parents=True, exist_ok=True)
+            os.environ["YOLO_CONFIG_DIR"] = str(weights_dir)
+            model_path = weights_dir / config.detector_model
+            if model_path.exists():
+                model = model_class(str(model_path))
+            else:
+                model = model_class(config.detector_model)
+                local_download = Path(config.detector_model)
+                if local_download.exists() and not model_path.exists():
+                    shutil.copy2(local_download, model_path)
         else:
             model = model_class(config.detector_model)
-            local_download = Path(config.detector_model)
-            if local_download.exists() and not model_path.exists():
-                shutil.copy2(local_download, model_path)
-    else:
-        model = model_class(config.detector_model)
 
     sam2_predictor = None
     if sam2_config is not None:

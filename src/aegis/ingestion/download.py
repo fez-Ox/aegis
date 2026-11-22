@@ -319,10 +319,10 @@ def upload_to_modal_volume(
     if res.returncode == 0:
         print(f"  ✓ Uploaded to Modal Volume: {remote_path}")
         return True
-    else:
-        err = res.stderr.strip() or res.stdout.strip()
-        print(f"  ⚠ Modal upload warning: {err}")
-        return False
+    err = res.stderr.strip() or res.stdout.strip()
+    # Fail loudly: a silently skipped upload only surfaces later as a confusing
+    # FileNotFoundError inside the remote preprocess step.
+    raise RuntimeError(f"Modal volume upload failed for {remote_path}: {err}")
 
 
 def set_recorded_at(dataset_dir: Path | str, recorded_at: str) -> Path:

@@ -90,9 +90,11 @@ PERCEPTION_IMAGE = (
         "opencv-python-headless>=4.10,<5",
         "ultralytics>=8.3,<9",
         "pyyaml>=6.0,<7",
-        "huggingface_hub>=0.23,<1",
-        # DINOv2 re-ID embeddings (perception.reid_backend: dino).
-        "transformers>=4.48,<5",
+        "huggingface_hub>=1.3,<2",
+        "pillow>=10,<12",
+        # SAM3 promptable segmentation and DINOv2 re-ID embeddings.
+        "transformers>=5.0,<6",
+        "accelerate>=1.0,<2",
     )
     .run_commands(
         "pip install git+https://github.com/facebookresearch/sam2.git || true"

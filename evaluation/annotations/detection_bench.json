@@ -1,0 +1,207 @@
+{
+  "_instructions": [
+    "Hand-labeled open-vocabulary detection benchmark authored by visual inspection of raw video frames (not pipeline output).",
+    "Images are 960x540 JPEGs sampled from five different videos/environments. Boxes are [x1,y1,x2,y2] in those pixels.",
+    "Labels use config/vocabulary.yaml canonical ids. 'hand' is included because interaction cues drive salience.",
+    "Scoring uses class-aware IoU>=0.30 matching; report both per-class recall and false positives per image."
+  ],
+  "iou_threshold": 0.3,
+  "images": [
+    {
+      "id": "demo01_00185",
+      "video": "demo01",
+      "scene": "shoe cabinet",
+      "path": "/tmp/opencode/bench/gt/demo01_00185_960.jpg",
+      "objects": [
+        {"label": "storage cabinet", "bbox": [270, 0, 680, 405]},
+        {"label": "shoes", "bbox": [352, 64, 404, 138]},
+        {"label": "shoes", "bbox": [400, 64, 455, 138]},
+        {"label": "shoes", "bbox": [462, 72, 515, 140]},
+        {"label": "shoes", "bbox": [515, 72, 568, 140]},
+        {"label": "shoes", "bbox": [392, 245, 435, 283]},
+        {"label": "shoes", "bbox": [435, 245, 478, 283]},
+        {"label": "shoes", "bbox": [372, 315, 418, 385]},
+        {"label": "shoes", "bbox": [418, 315, 462, 385]},
+        {"label": "shoes", "bbox": [462, 315, 506, 385]},
+        {"label": "shoes", "bbox": [506, 315, 550, 385]},
+        {"label": "shoes", "bbox": [550, 315, 590, 385]},
+        {"label": "shoes", "bbox": [510, 280, 565, 312]},
+        {"label": "shoes", "bbox": [558, 285, 608, 325]},
+        {"label": "shoes", "bbox": [560, 335, 612, 385]},
+        {"label": "food container", "bbox": [382, 178, 425, 238]},
+        {"label": "food container", "bbox": [440, 178, 480, 238]},
+        {"label": "hand", "bbox": [662, 170, 742, 248]}
+      ]
+    },
+    {
+      "id": "demo01_00369",
+      "video": "demo01",
+      "scene": "shoes on floor",
+      "path": "/tmp/opencode/bench/gt/demo01_00369_960.jpg",
+      "objects": [
+        {"label": "shoes", "bbox": [175, 300, 233, 468]},
+        {"label": "shoes", "bbox": [228, 289, 290, 461]},
+        {"label": "shoes", "bbox": [285, 287, 334, 460]},
+        {"label": "shoes", "bbox": [332, 265, 391, 431]},
+        {"label": "shoes", "bbox": [390, 292, 454, 428]},
+        {"label": "shoes", "bbox": [431, 269, 500, 399]},
+        {"label": "shoes", "bbox": [486, 246, 575, 408]},
+        {"label": "shoes", "bbox": [575, 245, 635, 415]},
+        {"label": "hand", "bbox": [525, 355, 590, 455]},
+        {"label": "hand", "bbox": [595, 365, 665, 485]}
+      ]
+    },
+    {
+      "id": "demo01_00739",
+      "video": "demo01",
+      "scene": "shoe cabinet",
+      "path": "/tmp/opencode/bench/gt/demo01_00739_960.jpg",
+      "objects": [
+        {"label": "storage cabinet", "bbox": [130, 0, 955, 480]},
+        {"label": "shoes", "bbox": [160, 85, 215, 175]},
+        {"label": "shoes", "bbox": [210, 85, 270, 175]},
+        {"label": "shoes", "bbox": [265, 85, 315, 175]},
+        {"label": "shoes", "bbox": [315, 85, 390, 175]},
+        {"label": "shoes", "bbox": [385, 85, 470, 175]},
+        {"label": "shoes", "bbox": [450, 125, 515, 225]},
+        {"label": "shoes", "bbox": [510, 125, 585, 225]},
+        {"label": "shoes", "bbox": [660, 140, 735, 230]},
+        {"label": "shoes", "bbox": [775, 120, 860, 250]},
+        {"label": "shoes", "bbox": [855, 120, 950, 250]},
+        {"label": "shoes", "bbox": [370, 240, 415, 290]},
+        {"label": "shoes", "bbox": [410, 240, 460, 290]},
+        {"label": "shoes", "bbox": [250, 350, 305, 420]},
+        {"label": "shoes", "bbox": [305, 350, 360, 420]},
+        {"label": "shoes", "bbox": [360, 350, 415, 420]},
+        {"label": "shoes", "bbox": [415, 350, 470, 420]},
+        {"label": "shoes", "bbox": [650, 310, 720, 420]},
+        {"label": "shoes", "bbox": [710, 310, 770, 420]},
+        {"label": "shoes", "bbox": [620, 420, 730, 470]},
+        {"label": "shoes", "bbox": [450, 325, 490, 365]},
+        {"label": "food container", "bbox": [230, 225, 285, 285]},
+        {"label": "food container", "bbox": [285, 225, 350, 285]},
+        {"label": "hand", "bbox": [590, 145, 700, 250]},
+        {"label": "hand", "bbox": [705, 145, 800, 260]}
+      ]
+    },
+    {
+      "id": "demo03_00855",
+      "video": "demo03",
+      "scene": "kitchen counter",
+      "path": "/tmp/opencode/bench/gt/demo03_00855_960.jpg",
+      "objects": [
+        {"label": "stove", "bbox": [0, 40, 160, 330]},
+        {"label": "cooking pot", "bbox": [145, 25, 280, 135]},
+        {"label": "bowl", "bbox": [452, 82, 560, 185]},
+        {"label": "basket", "bbox": [500, 160, 655, 305]},
+        {"label": "mug", "bbox": [232, 112, 300, 180]},
+        {"label": "hand", "bbox": [655, 135, 745, 225]},
+        {"label": "hand", "bbox": [445, 255, 525, 325]},
+        {"label": "storage cabinet", "bbox": [200, 180, 560, 540]},
+        {"label": "clothes", "bbox": [400, 400, 760, 540]},
+        {"label": "clothes", "bbox": [800, 280, 940, 380]},
+        {"label": "plate", "bbox": [80, 20, 160, 100]},
+        {"label": "plate", "bbox": [305, 30, 390, 115]},
+        {"label": "plate", "bbox": [598, 85, 675, 160]},
+        {"label": "bottle", "bbox": [340, 0, 430, 90]},
+        {"label": "bottle", "bbox": [445, 0, 535, 90]}
+      ]
+    },
+    {
+      "id": "demo03_01282",
+      "video": "demo03",
+      "scene": "kitchen counter",
+      "path": "/tmp/opencode/bench/gt/demo03_01282_960.jpg",
+      "objects": [
+        {"label": "bowl", "bbox": [458, 178, 592, 330]},
+        {"label": "basket", "bbox": [430, 215, 635, 390]},
+        {"label": "kitchen counter", "bbox": [0, 0, 560, 230]},
+        {"label": "sink", "bbox": [555, 0, 710, 95]},
+        {"label": "hand", "bbox": [395, 305, 480, 395]},
+        {"label": "hand", "bbox": [600, 215, 675, 320]},
+        {"label": "bowl", "bbox": [145, 75, 225, 135]},
+        {"label": "bowl", "bbox": [230, 85, 295, 140]},
+        {"label": "clothes", "bbox": [400, 415, 710, 540]}
+      ]
+    },
+    {
+      "id": "demo04_00399",
+      "video": "demo04",
+      "scene": "bathroom / waste",
+      "path": "/tmp/opencode/bench/gt/demo04_00399_960.jpg",
+      "objects": [
+        {"label": "garbage bag", "bbox": [305, 350, 575, 540]},
+        {"label": "trash bin", "bbox": [505, 275, 675, 465]},
+        {"label": "bottle", "bbox": [620, 200, 690, 285]},
+        {"label": "hand", "bbox": [255, 335, 345, 425]},
+        {"label": "hand", "bbox": [545, 470, 650, 540]}
+      ]
+    },
+    {
+      "id": "demo04_01198",
+      "video": "demo04",
+      "scene": "bathroom / waste",
+      "path": "/tmp/opencode/bench/gt/demo04_01198_960.jpg",
+      "objects": [
+        {"label": "garbage bag", "bbox": [350, 175, 650, 540]},
+        {"label": "toilet", "bbox": [65, 380, 260, 540]},
+        {"label": "hand", "bbox": [405, 320, 510, 430]},
+        {"label": "hand", "bbox": [550, 330, 670, 435]}
+      ]
+    },
+    {
+      "id": "demo05_01816",
+      "video": "demo05",
+      "scene": "laundry",
+      "path": "/tmp/opencode/bench/gt/demo05_01816_960.jpg",
+      "objects": [
+        {"label": "clothes", "bbox": [330, 50, 720, 290]},
+        {"label": "clothes", "bbox": [265, 250, 570, 470]},
+        {"label": "clothes", "bbox": [400, 390, 690, 540]},
+        {"label": "clothes", "bbox": [260, 215, 325, 345]},
+        {"label": "clothes", "bbox": [420, 270, 500, 380]},
+        {"label": "clothes", "bbox": [470, 340, 565, 470]},
+        {"label": "basket", "bbox": [325, 0, 490, 90]},
+        {"label": "basket", "bbox": [510, 0, 690, 110]},
+        {"label": "hand", "bbox": [300, 95, 380, 230]},
+        {"label": "hand", "bbox": [710, 70, 815, 200]}
+      ]
+    },
+    {
+      "id": "demo_pots_00648",
+      "video": "demo_pots",
+      "scene": "dish rack",
+      "path": "/tmp/opencode/bench/gt/demo_pots_00648_960.jpg",
+      "objects": [
+        {"label": "cooking pot", "bbox": [625, 0, 960, 210]},
+        {"label": "cooking pot", "bbox": [160, 380, 420, 540]},
+        {"label": "cooking pot", "bbox": [440, 445, 670, 540]},
+        {"label": "plate", "bbox": [90, 0, 600, 200]},
+        {"label": "bowl", "bbox": [665, 285, 830, 385]},
+        {"label": "storage cabinet", "bbox": [0, 0, 960, 400]},
+        {"label": "hand", "bbox": [485, 175, 650, 340]},
+        {"label": "hand", "bbox": [795, 30, 930, 190]}
+      ]
+    },
+    {
+      "id": "demo_pots_01621",
+      "video": "demo_pots",
+      "scene": "dish rack",
+      "path": "/tmp/opencode/bench/gt/demo_pots_01621_960.jpg",
+      "objects": [
+        {"label": "cooking pot", "bbox": [760, 85, 960, 325]},
+        {"label": "cooking pot", "bbox": [580, 105, 760, 240]},
+        {"label": "plate", "bbox": [330, 0, 650, 215]},
+        {"label": "plate", "bbox": [335, 0, 470, 145]},
+        {"label": "plate", "bbox": [470, 0, 575, 155]},
+        {"label": "plate", "bbox": [570, 0, 660, 170]},
+        {"label": "bowl", "bbox": [490, 480, 630, 540]},
+        {"label": "plate", "bbox": [480, 340, 560, 400]},
+        {"label": "plate", "bbox": [0, 500, 160, 540]},
+        {"label": "storage cabinet", "bbox": [250, 0, 960, 420]},
+        {"label": "hand", "bbox": [480, 160, 585, 290]},
+        {"label": "hand", "bbox": [765, 225, 865, 330]}
+      ]
+    }
+  ]
+}
