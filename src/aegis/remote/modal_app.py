@@ -106,9 +106,11 @@ PERCEPTION_IMAGE = (
         "opencv-python-headless>=4.10,<5",
         "ultralytics>=8.3,<9",
         "pyyaml>=6.0,<7",
-        "huggingface_hub>=0.23,<1",
-        # DINOv2 re-ID embeddings (perception.reid_backend: dino).
-        "transformers>=4.48,<5",
+        "huggingface_hub>=1.3,<2",
+        "pillow>=10,<12",
+        # SAM3 promptable segmentation and DINOv2 re-ID embeddings.
+        "transformers>=5.0,<6",
+        "accelerate>=1.0,<2",
     )
     .run_commands(
         "pip install git+https://github.com/facebookresearch/sam2.git || true",
@@ -145,9 +147,119 @@ def preprocess_video_remote(dataset_id: str, config: dict[str, Any]) -> dict[str
     return result
 
 
+@app.function(
+    image=CPU_IMAGE,
+    volumes={DATA_MOUNT: data_volume},
+    cpu=2.0,
+    memory=4096,
+    timeout=7200,
+)
+def fetch_egolife_day(
+    segments: list[dict[str, Any]],
+    width: int = 704,
+    height: int = 704,
+    fps: int = 5,
+) -> dict[str, Any]:
+    """Download one day of EgoLife clips and write pipeline-ready videos.
+
+    Everything happens in the Modal volume, so the local machine never has to
+    download the ~10 GB source dataset. Clips are deduplicated and fetched in
+    parallel; each 5-minute segment becomes ``<dataset>/video.mp4`` plus a
+    ``source_metadata.json`` carrying its real wall-clock start.
+    """
+
+    import json
+    import os
+    import shutil
+    import subprocess
+    import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
+    from pathlib import Path
+
+    data_volume.reload()
+    base = "https://huggingface.co/datasets/lmms-lab/EgoLife/resolve/main/"
+    cache = Path(DATA_MOUNT) / "_egolife_clips"
+    cache.mkdir(parents=True, exist_ok=True)
+
+    paths = sorted({path for segment in segments for path in segment["clips"]})
+
+    def download(path: str) -> Path:
+        destination = cache / path
+        if destination.exists() and destination.stat().st_size > 0:
+            return destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_suffix(".part")
+        request = urllib.request.Request(base + path)
+        with (
+            urllib.request.urlopen(request, timeout=300) as response,
+            temporary.open("wb") as handle,
+        ):
+            shutil.copyfileobj(response, handle, 1 << 20)
+        os.replace(temporary, destination)
+        return destination
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        files = dict(zip(paths, pool.map(download, paths), strict=True))
+
+    for segment in segments:
+        dataset_id = str(segment["dataset_id"])
+        output_dir = Path(DATA_MOUNT) / dataset_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        sources = [files[path] for path in segment["clips"]]
+        listing = output_dir / "clips.txt"
+        listing.write_text(
+            "".join(f"file '{source}'\n" for source in sources), encoding="utf-8"
+        )
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(listing),
+                "-vf",
+                f"scale={width}:{height}:flags=lanczos",
+                "-r",
+                str(fps),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "20",
+                "-an",
+                str(output_dir / "video.mp4"),
+            ],
+            check=True,
+        )
+        (output_dir / "source_metadata.json").write_text(
+            json.dumps(
+                {
+                    "dataset_id": dataset_id,
+                    "source": "EgoLife A1_JAKE 12:00 (remote fetch)",
+                    "recorded_at": segment["recorded_at"],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    data_volume.commit()
+    return {"clips": len(paths), "segments": len(segments)}
+
+
 # GPU stages are classes: a warm container keeps the model loaded between
 # calls (one call per live segment) instead of reloading weights every time.
-WARM_SECONDS = 300
+# Each batch app handles exactly one segment, so a warm container only bills
+# idle GPU time after the task. Modal requires 2..3600 seconds.
+WARM_SECONDS = 2
 
 
 @app.cls(

@@ -47,7 +47,7 @@ def _store_root(args) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aegis-memory", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("ingest", "show", "size", "compact"):
+    for name in ("ingest", "show", "size", "compact", "enroll"):
         command = sub.add_parser(name)
         command.add_argument("--home-id", default=None)
         command.add_argument("--store-root", default=None)
@@ -56,6 +56,15 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("graph", type=Path, help="r4d_scene_graph.json (v2)")
         if name == "compact":
             command.add_argument("--now", default=None, help="ISO time (default: now)")
+        if name == "enroll":
+            command.add_argument("--instance", type=int, required=True)
+            command.add_argument("--alias", help="What the patient calls this item")
+            command.add_argument(
+                "--class", dest="canonical_class", help="Vocabulary class"
+            )
+            command.add_argument("--usual-anchor")
+            command.add_argument("--usual-room")
+            command.add_argument("--visual-crop", help="Reference crop path or URL")
     args = parser.parse_args(argv)
 
     store = open_store(_home(args), _store_root(args))
@@ -86,6 +95,19 @@ def main(argv: list[str] | None = None) -> int:
                     f"{state['anchor_label'] or '-'} in {state['room_label'] or '-'} "
                     f"at {state['last_seen_wallclock']}"
                 )
+        elif args.command == "enroll":
+            from aegis.memory.personal import enroll
+
+            items = enroll(
+                store,
+                args.instance,
+                alias=args.alias,
+                canonical_class=args.canonical_class,
+                usual_anchor=args.usual_anchor,
+                usual_room=args.usual_room,
+                visual_crop=args.visual_crop,
+            )
+            print(json.dumps({"personal_items": [item.as_dict() for item in items]}))
         elif args.command == "compact":
             from aegis.core.timeutil import parse_iso, utc_now
             from aegis.memory.compaction import compact, rollup

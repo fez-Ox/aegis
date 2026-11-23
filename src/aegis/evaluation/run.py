@@ -42,6 +42,7 @@ from aegis.evaluation.query import (
     evaluate_leakage,
     evaluate_persistence,
     evaluate_queries,
+    evaluate_ranker_ablation,
 )
 from aegis.evaluation.report import build_scorecard, runtime_metadata, write_report
 
@@ -247,6 +248,7 @@ def _evaluate_queries_for_config(
     config: EvaluationConfig,
     graph: dict[str, Any] | None,
     queries: Sequence[Any],
+    ranker_mode: str | None = None,
 ) -> dict[str, Any]:
     if config.query_mode == "api":
         from fastapi.testclient import TestClient
@@ -269,6 +271,7 @@ def _evaluate_queries_for_config(
             query_mode="api",
             aliases=config.label_aliases,
             client=client,
+            ranker_mode=ranker_mode,
         )
     if graph is None:
         return _section_skip("The scene graph artifact is missing.")
@@ -278,6 +281,7 @@ def _evaluate_queries_for_config(
         dataset_id=config.dataset_id,
         query_mode="graph",
         aliases=config.label_aliases,
+        ranker_mode=ranker_mode,
     )
 
 
@@ -286,6 +290,7 @@ def run_evaluation(
     *,
     output_dir: str | Path | None = None,
     strict: bool = False,
+    ranker_mode: str = "full",
 ) -> dict[str, Any]:
     """Run every section whose inputs are present and write a report."""
 
@@ -300,6 +305,7 @@ def run_evaluation(
         "dataset_id": config.dataset_id,
         "generated_at": generated_at,
         "status": "unknown",
+        "ranker_mode": ranker_mode,
         "targets": config.targets,
         "thresholds": config.thresholds,
         "inputs": inputs,
@@ -317,7 +323,7 @@ def run_evaluation(
         },
         "reproduce_command": (
             "uv run python -m aegis.evaluation.run "
-            f"--config {config.path}"
+            f"--config {config.path} --ranker {ranker_mode}"
             + (f" --output-dir {report_dir}" if output_dir else "")
         ),
     }
@@ -461,7 +467,9 @@ def run_evaluation(
     if queries_path.is_file():
         try:
             queries = load_queries(queries_path)
-            results["queries"] = _evaluate_queries_for_config(config, graph, queries)
+            results["queries"] = _evaluate_queries_for_config(
+                config, graph, queries, ranker_mode=ranker_mode
+            )
             if not results["queries"].get("available", False):
                 note_skip(
                     "queries", results["queries"].get("reason", "Query scoring failed.")
@@ -470,6 +478,19 @@ def run_evaluation(
             note_skip("queries", str(exc))
     else:
         note_skip("queries", "Needs annotations/queries.jsonl.")
+
+    if graph is not None and queries is not None:
+        results["ranking_ablation"] = evaluate_ranker_ablation(
+            graph,
+            queries,
+            dataset_id=config.dataset_id,
+            aliases=config.label_aliases,
+        )
+    else:
+        note_skip(
+            "ranking_ablation",
+            "Needs a scene graph and a question bank for the three ranker modes.",
+        )
 
     # Latency: use the API when the dataset is available through the normal
     # outputs/ path.  Graph-mode query timings remain in the query section.
@@ -546,6 +567,7 @@ def run_evaluation(
             "rooms",
             "persistence",
             "queries",
+            "ranking_ablation",
             "latency",
             "leakage",
             "ablations",
@@ -582,12 +604,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Exit non-zero if any section is skipped.",
     )
+    parser.add_argument(
+        "--ranker",
+        choices=("recency_only", "salience", "full"),
+        default="full",
+        help="Candidate ranker used for the headline query scores.",
+    )
     arguments = parser.parse_args(argv)
 
     results = run_evaluation(
         arguments.config,
         output_dir=arguments.output_dir,
         strict=arguments.strict,
+        ranker_mode=arguments.ranker,
     )
     print(f"Status: {results['status']}")
     if results.get("report_paths"):

@@ -132,6 +132,52 @@ def _memory_label_key(label: str) -> str:
     return aliases.get(key, key)
 
 
+def _v2_timeline(
+    graph: Mapping[str, Any], keyframe_ids: set[int]
+) -> dict[str, list[dict[str, Any]]]:
+    """Build per-keyframe memory entries from a schema-v2 state_run list.
+
+    v1 graphs carried a ``timeline`` dict, which the viewer consumes directly.
+    v2 graphs store ``state_runs`` + ``latest_states`` instead; without this
+    adapter no object boxes or 2D overlays are drawn for a v2 recording.
+    """
+
+    states = {
+        int(state["instance_id"]): state
+        for state in graph.get("latest_states", [])
+        if isinstance(state, Mapping) and state.get("instance_id") is not None
+    }
+    timeline: dict[str, list[dict[str, Any]]] = {}
+    for run in graph.get("state_runs", []):
+        if not isinstance(run, Mapping) or run.get("instance_id") is None:
+            continue
+        try:
+            start = int(run.get("start_frame", 0))
+            end = int(run.get("end_frame", start))
+        except (TypeError, ValueError):
+            continue
+        state = states.get(int(run["instance_id"]), {})
+        for frame_id in keyframe_ids:
+            if not start <= frame_id <= end:
+                continue
+            entry = {
+                "instance_id": run["instance_id"],
+                "label": run.get("instance_label") or state.get("label") or "Object",
+                "center": run.get("center") or state.get("center"),
+                "size": state.get("size"),
+                "anchor_label": run.get("anchor_label") or state.get("anchor_label"),
+                "room_label": run.get("room_label") or state.get("room_label"),
+                "relation": run.get("relation"),
+                "relation_certain": run.get("relation_certain", True),
+                "confidence": run.get("confidence"),
+                "is_active_view": True,
+                "is_in_hand": bool(state.get("is_in_hand", False)),
+                "evidence": run.get("evidence"),
+            }
+            timeline.setdefault(str(frame_id), []).append(entry)
+    return timeline
+
+
 def _associate_boxes_with_memory(
     boxes: Sequence[Mapping[str, Any]],
     memory_entries: Sequence[Mapping[str, Any]],
@@ -298,6 +344,8 @@ def run_rerun(dataset_id: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
         r4d_anchors = r4d_data.get("anchors", [])
         r4d_rooms = r4d_data.get("rooms", [])
         r4d_timeline = r4d_data.get("timeline", {})
+        if not r4d_timeline and r4d_data.get("state_runs"):
+            r4d_timeline = _v2_timeline(r4d_data, set(pose_by_frame))
         r4d_events = r4d_data.get("events", [])
     timeline_path = paths.objects_json.parent / "r4d_timeline.json"
     if timeline_path.exists():

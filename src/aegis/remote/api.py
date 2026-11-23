@@ -25,7 +25,14 @@ from aegis.core.paths import validate_dataset_id
 from aegis.core.vocabulary import default_vocabulary
 from aegis.memory.compaction import compaction_ok
 from aegis.memory.homes import DuplicateRoomLabelError, get_store
-from aegis.memory.reasoning import QueryReasoningEngine, event_summary, room_phrase
+from aegis.memory.personal import personal_ids_for_query, resolve_alias
+from aegis.memory.reasoning import (
+    QueryReasoningEngine,
+    event_summary,
+    parse_query_cues,
+    rank_candidates,
+    room_phrase,
+)
 from aegis.memory.repository import (
     JsonGraphRepository,
     StoreRepository,
@@ -154,6 +161,11 @@ class MemoryQueryResponse(BaseModel):
     crop_url: str | None = None
     confidence: float | None = None
     other_instances: list[dict[str, Any]] = Field(default_factory=list)
+    # Ambiguity-aware answers. Optional so older clients keep working.
+    resolution_mode: str | None = None
+    is_ambiguous: bool = False
+    ambiguity_reason: str | None = None
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AskRequest(BaseModel):
@@ -639,6 +651,18 @@ def query_memory(
     target, matches = _matching_states(latest, item)
     room_filter = QueryReasoningEngine.extract_room_filter(item)
 
+    # A patient may name the item only by its enrolled alias ("dad's cup"),
+    # which is not a vocabulary class: resolve it to the enrolled instance's
+    # canonical class before deciding the item is unknown.
+    if not matches and isinstance(repo, StoreRepository):
+        alias_id = resolve_alias(repo.store, item)
+        if alias_id is not None:
+            row = repo.store.one(
+                "SELECT canonical FROM instance WHERE instance_id = ?", (alias_id,)
+            )
+            if row:
+                target, matches = _matching_states(latest, row["canonical"])
+
     if not matches:
         available = sorted(
             {s.get("label", "") for s in latest.values() if s.get("label")}
@@ -677,13 +701,39 @@ def query_memory(
             )
         matches = room_matches
 
-    matches.sort(key=lambda s: float(s.get("last_seen_timestamp") or 0.0), reverse=True)
-    primary = matches[0]
+    personal_ids = (
+        personal_ids_for_query(repo.store, item, target)
+        if isinstance(repo, StoreRepository)
+        else ()
+    )
+    ranking = rank_candidates(
+        matches,
+        target,
+        mode="full",
+        cues=parse_query_cues(item),
+        personal_ids=personal_ids,
+    )
+    candidates = ranking["candidates"]
+    primary_id = candidates[0]["instance_id"] if candidates else None
+    primary = next(
+        (m for m in matches if m.get("instance_id") == primary_id), matches[0]
+    )
     reasoning = QueryReasoningEngine.reason_spatio_temporal_state(
         target, primary, repo.events()
     )
     distance = primary.get("relative_distance")
     confidence = primary.get("confidence")
+    if ranking["is_ambiguous"]:
+        places = ", ".join(
+            f"{c.get('label') or target} at "
+            f"{c.get('anchor_label') or c.get('room_label') or 'unknown'}"
+            for c in candidates
+        )
+        location_summary = (
+            f"I found several possible {target}s: {places}. Which one do you mean?"
+        )
+    else:
+        location_summary = reasoning["explanation"]
     return MemoryQueryResponse(
         query=item,
         found=True,
@@ -698,7 +748,7 @@ def query_memory(
         relation_certain=reasoning["relation_certain"],
         height_above_floor=primary.get("height_above_floor"),
         relative_distance_m=round(float(distance), 2) if distance is not None else None,
-        location_summary=reasoning["explanation"],
+        location_summary=location_summary,
         explanation=reasoning["explanation"],
         last_seen_timestamp_s=primary.get("last_seen_timestamp"),
         last_seen_at=primary.get("last_seen_wallclock"),
@@ -712,8 +762,13 @@ def query_memory(
                 "anchor": m.get("anchor_label"),
                 "relation": m.get("relation"),
             }
-            for m in matches[1:]
+            for m in matches
+            if m.get("instance_id") != primary_id
         ],
+        resolution_mode=ranking["resolution_mode"],
+        is_ambiguous=ranking["is_ambiguous"],
+        ambiguity_reason=ranking["ambiguity_reason"],
+        candidates=[{**c, "crop_url": _crop_url(repo, ds, c)} for c in candidates],
     )
 
 

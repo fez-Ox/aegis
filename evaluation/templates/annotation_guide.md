@@ -76,6 +76,32 @@ physical classes. Keep left/right shoes separate through `instance_id`.
   a false-found failure, even if the answer names a real object.
 - Do not paraphrase a question after seeing the pipeline answer.
 
+### Query tiers (all optional, additive)
+
+Tag each line with `query_tier` so every metric measures what the question can
+actually support. Never delete an old test case to make a tier look better.
+
+| Tier | Question form | Ground truth | Headline metrics |
+|---|---|---|---|
+| `T1_unique_personal` | enrolled or unique personal item ("Where are my glasses?") | one instance/location | Top-1, room, anchor |
+| `T2_ambiguous_class` | class-level, 2+ plausible instances ("Where is the mug?") | target + `acceptable_object_ids`, `ambiguity_expected: true` | Recall@3, MRR, Ambiguity F1, False-Confidence Rate |
+| `T3_fuzzy_cue_episodic` | human cue, no exact clock ("the blue mug in the kitchen") | one target narrowed by `cue_types` | Top-1, Recall@3, cue-filter precision |
+| `T4_exact_episodic` | oracle timestamp ("... on DAY3 at 12:02") | exact object + `expected_time_window` | Top-1 exact, temporal-index accuracy |
+
+Optional fields, ignored when absent:
+
+- `ambiguity_expected` (bool) — independent label, never copied from the pipeline;
+- `cue_types` — subset of `visual`, `room`, `coarse_time`, `activity`, `exact_time`;
+- `personal_registry_enrolled` (bool) — item is in the caregiver's personal registry;
+- `query_time_ref` / `expected_time_window` — the coarse or exact time the
+  question refers to. Exact timestamps belong **only** in T4; putting them in
+  T1–T3 prompts makes the test clinically unrealistic.
+- `acceptable_object_ids` — instance ids that all satisfy a T2/T3 answer.
+
+When `query_tier` is missing the loader infers T4 if the text contains an exact
+day/clock stamp, T2 if `ambiguity_expected` is true, otherwise T1. An unknown
+tier warns and is reported as `unclassified` rather than crashing the run.
+
 ## 6. Persistence cases (`persistence.jsonl`)
 
 - Each case names a query, the expected instance, and the frame at which memory

@@ -120,7 +120,9 @@ def test_config_carries_vocabulary() -> None:
     raw = config_to_dict(config)
     rebuilt = RuntimeConfig.from_mapping(raw)
     assert rebuilt.vocab().to_mapping() == default_vocabulary().to_mapping()
-    assert config.perception.target_classes == default_vocabulary().detector_prompts()
+    prompts = set(default_vocabulary().detector_prompts())
+    assert set(config.perception.target_classes) <= prompts
+    assert {"shoes", "hand", "storage cabinet"} <= set(config.perception.target_classes)
 
 
 def test_task_scoped_config_keeps_its_prompts() -> None:

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
 
+from aegis.evaluation.io import load_queries
 from aegis.evaluation.query import (
     answer_query,
     apply_ablation,
@@ -13,6 +15,7 @@ from aegis.evaluation.query import (
     evaluate_leakage,
     evaluate_persistence,
     evaluate_queries,
+    evaluate_ranker_ablation,
 )
 from aegis.evaluation.schema import PersistenceCase, QuerySpec
 
@@ -259,6 +262,66 @@ def test_evaluate_queries_scores_grounded_fields() -> None:
     assert result["counts"]["false_found"] == 0
     assert result["failures"][0]["query_id"] == "q5"
     assert result["failures"][0]["failure_reason"].startswith("anchor expected")
+
+
+def test_query_tier_metadata_is_additive(tmp_path) -> None:
+    path = tmp_path / "queries.jsonl"
+    records = [
+        {
+            "query_id": "a",
+            "query": "Where are my glasses?",
+            "query_tier": "T1_unique_personal",
+            "ambiguity_expected": False,
+        },
+        {
+            "query_id": "b",
+            "query": "Where is the mug?",
+            "ambiguity_expected": True,
+            "cue_types": ["visual"],
+            "acceptable_object_ids": ["obj_mug_02"],
+        },
+        {"query_id": "c", "query": "Where was the mug at DAY3 12:02?"},
+    ]
+    path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
+    queries = load_queries(path)
+    assert [query.tier_group for query in queries] == ["T1", "T2", "T4"]
+    assert queries[1].ambiguity_expected is True
+    assert queries[1].cue_types == ("visual",)
+    assert queries[1].acceptable_object_ids == ("obj_mug_02",)
+    assert queries[2].query_tier == "T4_exact_episodic"
+
+
+def test_tiered_scores_and_three_mode_ranker_ablation() -> None:
+    graph = _graph()
+    queries = [
+        QuerySpec(
+            query_id="t1",
+            query="Where are my shoes?",
+            expected_instance_label="Shoes #1",
+            query_tier="T1_unique_personal",
+        ),
+        QuerySpec(
+            query_id="t4",
+            query="Where are my shoes?",
+            expected_anchor="Storage Cabinet #1",
+            query_tier="T4_exact_episodic",
+        ),
+    ]
+    scored = evaluate_queries(
+        graph, queries, dataset_id="synthetic", ranker_mode="full"
+    )
+    assert scored["by_tier"]["T1"]["n"] == 1
+    assert scored["by_tier"]["T4"]["n"] == 1
+    assert scored["by_tier"]["T2"]["n"] == 0
+    assert scored["by_tier"]["T2"]["answer_accuracy"] is None
+    assert scored["queries"][0]["resolution_mode"] == "direct"
+    assert scored["queries"][0]["candidates"]
+
+    ablation = evaluate_ranker_ablation(graph, queries, dataset_id="synthetic")
+    assert set(ablation) == {"recency_only", "salience", "full"}
+    assert all("by_tier" in values for values in ablation.values())
 
 
 def test_persistence_scoring_and_failures() -> None:

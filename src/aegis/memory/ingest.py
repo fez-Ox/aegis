@@ -215,9 +215,16 @@ def _ingest_rooms(
     session_rooms: list[RoomInfo] = []
     for room in graph.get("rooms", []):
         rid = int(room["room_id"])
-        signature = set(room.get("evidence_labels") or [])
+        # Visual signatures use display labels ("Bed") while anchor canonicals
+        # are lowercase ("bed"); without normalising both, the same evidence is
+        # counted twice and Jaccard scores drift between sessions.
+        signature = {
+            str(label).strip().lower() for label in room.get("evidence_labels") or []
+        }
         signature |= {
             str(a.get("canonical") or a.get("label", "").split("#")[0].strip().lower())
+            .strip()
+            .lower()
             for a in anchors
             if a.get("room_id") == rid
         }

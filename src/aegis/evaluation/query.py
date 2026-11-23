@@ -10,18 +10,69 @@ from __future__ import annotations
 import copy
 import time
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import numpy as np
 
+from aegis.core.timeutil import parse_iso, to_utc_iso
+from aegis.core.vocabulary import default_vocabulary
 from aegis.evaluation.metrics import normalise_label, normalise_room, wilson_interval
 from aegis.evaluation.schema import PersistenceCase, QuerySpec
+from aegis.memory.reasoning import parse_query_cues, rank_candidates
+
+# A scene graph's timestamps are seconds from the start of the recording, not
+# wall clock. An arbitrary fixed origin keeps recency comparisons deterministic.
+_RANKING_ORIGIN = datetime(2020, 1, 1, tzinfo=UTC)
+
+
+def _ranking_iso(seconds: Any) -> str | None:
+    if not seconds:
+        return None
+    return to_utc_iso(_RANKING_ORIGIN + timedelta(seconds=float(seconds)))
+
+
+def _ranking_state(
+    state: dict[str, Any], events: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    """Adapt a scene-graph state to the salience ranker's state shape."""
+
+    label = str(state.get("label") or "")
+    base = label.split("[")[0].split("#")[0].strip().lower()
+    related = [
+        event
+        for event in events
+        if event.get("instance_id") == state.get("instance_id")
+        or base
+        and base in str(event.get("object") or "").lower()
+        and event.get("event_type") in {"placement", "anchor_change", "state_change"}
+    ]
+    moved = max((float(event.get("end_time") or 0.0) for event in related), default=0.0)
+    earliest = min(
+        related, key=lambda event: float(event.get("start_time") or 0.0), default=None
+    )
+    canonical = state.get("canonical") or default_vocabulary().canonical(base)
+    return {
+        **state,
+        "canonical": canonical,
+        "last_seen_wallclock": state.get("last_seen_wallclock")
+        or _ranking_iso(state.get("last_seen_timestamp") or state.get("timestamp")),
+        "last_moved_wallclock": _ranking_iso(moved) if moved else None,
+        "placement_count": len(related) or int(state.get("placement_count") or 0),
+        "pickup_count": int(state.get("pickup_count") or 0),
+        "first_room_id": (earliest or {}).get("source_room")
+        or state.get("first_room_id"),
+        "first_anchor_id": (earliest or {}).get("source_anchor")
+        or state.get("first_anchor_id"),
+    }
 
 
 def answer_query(
     graph: dict[str, Any],
     query: str,
     dataset_id: str = "evaluation",
+    *,
+    ranker_mode: str | None = None,
 ) -> dict[str, Any]:
     """Answer one query against an in-memory scene graph.
 
@@ -115,12 +166,36 @@ def answer_query(
         timestamp = float(state.get("last_seen_timestamp", 0.0))
         return (exact_match, is_active, timestamp)
 
-    matches.sort(key=sort_key, reverse=True)
     primary = matches[0]
+    ranking: dict[str, Any] | None = None
+    if ranker_mode is not None:
+        ranking_states = [_ranking_state(match, events) for match in matches]
+        moments = [
+            parse_iso(str(state["last_seen_wallclock"]))
+            for state in ranking_states
+            if state.get("last_seen_wallclock")
+        ]
+        ranking = rank_candidates(
+            ranking_states,
+            canonical_item,
+            mode=ranker_mode,
+            now=max(moments) + timedelta(seconds=1) if moments else None,
+            cues=parse_query_cues(query),
+        )
+        if ranking["candidates"]:
+            chosen = ranking["candidates"][0]["instance_id"]
+            primary = next(
+                (match for match in matches if match.get("instance_id") == chosen),
+                primary,
+            )
+
+    if ranking is None:
+        matches.sort(key=sort_key, reverse=True)
+        primary = matches[0]
     reasoning = QueryReasoningEngine.reason_spatio_temporal_state(
         canonical_item, primary, events
     )
-    return {
+    answer = {
         "query": query,
         "found": True,
         "item": query,
@@ -136,6 +211,14 @@ def answer_query(
         "is_persistent_memory": reasoning["is_persistent_memory"],
         "last_seen_timestamp_s": primary.get("last_seen_timestamp"),
     }
+    if ranking is not None:
+        answer.update(
+            resolution_mode=ranking["resolution_mode"],
+            is_ambiguous=ranking["is_ambiguous"],
+            ambiguity_reason=ranking["ambiguity_reason"],
+            candidates=ranking["candidates"],
+        )
+    return answer
 
 
 # ---------------------------------------------------------------------------
@@ -220,8 +303,13 @@ def evaluate_queries(
     aliases: dict[str, str] | None = None,
     relation_aliases: dict[str, str] | None = None,
     client: Any = None,
+    ranker_mode: str | None = None,
 ) -> dict[str, Any]:
-    """Score the question bank, including latency and false-found rates."""
+    """Score the question bank, including latency and false-found rates.
+
+    ``ranker_mode`` opts into the candidate-aware ranker; without it the legacy
+    recency answer path is used, so existing reports are unchanged.
+    """
 
     if query_mode not in {"graph", "api"}:
         raise ValueError("query_mode must be 'graph' or 'api'")
@@ -250,7 +338,9 @@ def evaluate_queries(
             else:
                 answer = response.json()
         else:
-            answer = answer_query(graph, query.query, dataset_id)
+            answer = answer_query(
+                graph, query.query, dataset_id, ranker_mode=ranker_mode
+            )
             elapsed_ms = (time.perf_counter() - start) * 1000.0
         latencies.append(elapsed_ms)
 
@@ -271,6 +361,12 @@ def evaluate_queries(
             {
                 "query_id": query.query_id,
                 "query": query.query,
+                "query_tier": query.query_tier,
+                "tier": query.tier_group,
+                "ambiguity_expected": query.ambiguity_expected,
+                "resolution_mode": answer.get("resolution_mode"),
+                "is_ambiguous": answer.get("is_ambiguous"),
+                "candidates": answer.get("candidates", []),
                 "expected_found": query.expected_found,
                 "actual_found": found,
                 "found_correct": found_correct,
@@ -306,9 +402,21 @@ def evaluate_queries(
         for result in results
         if result["expected_found"] and not result["actual_found"]
     )
+    by_tier: dict[str, dict[str, Any]] = {}
+    for tier in ("T1", "T2", "T3", "T4", "unclassified"):
+        rows = [result for result in results if result["tier"] == tier]
+        correct = sum(1 for result in rows if result["grounded_correct"])
+        by_tier[tier] = {
+            "n": len(rows),
+            "correct": correct,
+            "answer_accuracy": round(correct / len(rows), 4) if rows else None,
+        }
+
     return {
         "available": True,
         "query_mode": query_mode,
+        "ranker_mode": ranker_mode,
+        "by_tier": by_tier,
         "counts": {
             "total": total,
             "grounded_correct": answered_correctly,
@@ -325,6 +433,37 @@ def evaluate_queries(
         "queries": results,
         "failures": [result for result in results if not result["grounded_correct"]],
     }
+
+
+def evaluate_ranker_ablation(
+    graph: dict[str, Any],
+    queries: Sequence[QuerySpec],
+    *,
+    dataset_id: str = "evaluation",
+    aliases: dict[str, str] | None = None,
+    relation_aliases: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Score the same bank with recency-only, salience, and full rankers.
+
+    A side-by-side table per tier shows what each design layer buys; the scores
+    come from the production ranking path, not a separate evaluation engine.
+    """
+
+    ablation: dict[str, Any] = {}
+    for mode in ("recency_only", "salience", "full"):
+        scored = evaluate_queries(
+            graph,
+            queries,
+            dataset_id=dataset_id,
+            aliases=aliases,
+            relation_aliases=relation_aliases,
+            ranker_mode=mode,
+        )
+        ablation[mode] = {
+            "answer_accuracy": scored["answer_accuracy"],
+            "by_tier": scored["by_tier"],
+        }
+    return ablation
 
 
 # ---------------------------------------------------------------------------

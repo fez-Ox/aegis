@@ -1246,3 +1246,147 @@ def evaluate_rooms(
             for frame_id, gt, pred in frame_pairs
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# Candidate ranking / ambiguity evaluation
+# ---------------------------------------------------------------------------
+
+
+def recall_at_k(ranked: Sequence[Any], relevant: Sequence[Any], k: int = 3) -> float:
+    """1.0 when any of the top ``k`` predictions is in ``relevant``.
+
+    ``relevant`` is the set of acceptable places for a query (e.g. the frozen
+    ``expect_place`` nouns).  An empty set can never be recalled, so a query
+    with no ground truth scores 0.0 and the caller decides whether to include
+    it in the aggregate.
+    """
+
+    if not relevant:
+        return 0.0
+    accepted = set(relevant)
+    return float(any(item in accepted for item in list(ranked)[:k]))
+
+
+def reciprocal_rank(ranked: Sequence[Any], relevant: Sequence[Any]) -> float:
+    """1 / position of the first correct candidate, or 0.0 if none is correct."""
+
+    if not relevant:
+        return 0.0
+    accepted = set(relevant)
+    for position, item in enumerate(ranked, start=1):
+        if item in accepted:
+            return 1.0 / position
+    return 0.0
+
+
+def mrr(records: Sequence[dict[str, Any]], key: str = "mrr") -> float | None:
+    """Mean reciprocal rank across per-query ``mrr`` values (None when empty)."""
+
+    values = [float(record[key]) for record in records if record.get(key) is not None]
+    return round(sum(values) / len(values), 4) if values else None
+
+
+def ambiguity_f1(expected: Sequence[bool], predicted: Sequence[bool]) -> dict[str, Any]:
+    """Precision/recall/F1 for ``is_ambiguous`` against independent labels.
+
+    Both sequences must align by query id.  A short all-negative set still
+    yields a defined precision of 0.0 when nothing was predicted ambiguous.
+    """
+
+    if len(expected) != len(predicted):
+        raise ValueError("expected and predicted ambiguity labels must align")
+    true_positive = sum(1 for e, p in zip(expected, predicted) if e and p)
+    false_positive = sum(1 for e, p in zip(expected, predicted) if not e and p)
+    false_negative = sum(1 for e, p in zip(expected, predicted) if e and not p)
+    precision = (
+        true_positive / (true_positive + false_positive)
+        if true_positive + false_positive
+        else 0.0
+    )
+    recall = (
+        true_positive / (true_positive + false_negative)
+        if true_positive + false_negative
+        else 0.0
+    )
+    f1 = (
+        2.0 * precision * recall / (precision + recall)
+        if precision + recall > 0
+        else 0.0
+    )
+    return {
+        "n": len(expected),
+        "true_positive": true_positive,
+        "false_positive": false_positive,
+        "false_negative": false_negative,
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "f1": round(f1, 4),
+    }
+
+
+def false_confidence_rate(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Of queries answered ``direct``, the fraction whose top-1 place was wrong.
+
+    Abstentions and ``disambiguate`` answers are excluded: the harm this metric
+    measures is a confident single answer that is in fact incorrect.
+    """
+
+    confident = [
+        record for record in records if record.get("resolution_mode") == "direct"
+    ]
+    if not confident:
+        return {
+            "direct_answers": 0,
+            "wrong_direct_answers": 0,
+            "rate": None,
+            "note": "No direct answers; false confidence is undefined.",
+        }
+    wrong = sum(1 for record in confident if not record.get("top1_correct", False))
+    return {
+        "direct_answers": len(confident),
+        "wrong_direct_answers": wrong,
+        "rate": round(wrong / len(confident), 4),
+    }
+
+
+def cue_filter_precision(records: Sequence[dict[str, Any]]) -> float | None:
+    """Mean share of cue-retained states that actually match the answer place."""
+
+    values = [
+        float(record["cue_filter_precision"])
+        for record in records
+        if record.get("cue_filter_precision") is not None
+    ]
+    return round(sum(values) / len(values), 4) if values else None
+
+
+def temporal_index_accuracy(records: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
+    """Share of T4 queries whose resolved timestamp matches the oracle cue."""
+
+    values = [
+        bool(record["temporal_ok"])
+        for record in records
+        if record.get("temporal_ok") is not None
+    ]
+    if not values:
+        return None
+    correct = sum(values)
+    return {
+        "correct": correct,
+        "n": len(values),
+        "accuracy": round(correct / len(values), 4),
+    }
+
+
+def evidence_crop_rate(candidates: Sequence[dict[str, Any]]) -> float | None:
+    """Fraction of ranked candidates that carry a viewable evidence crop."""
+
+    if not candidates:
+        return None
+    with_crop = sum(
+        1
+        for candidate in candidates
+        if candidate.get("crop_url") or candidate.get("evidence_id") is not None
+    )
+    return round(with_crop / len(candidates), 4)

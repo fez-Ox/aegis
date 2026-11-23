@@ -12,6 +12,8 @@ import csv
 import hashlib
 import json
 import math
+import re
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -383,8 +385,45 @@ def events_from_scene_graph(
 # ---------------------------------------------------------------------------
 
 
+_CUE_TYPES = {"visual", "room", "coarse_time", "activity", "exact_time"}
+_EXACT_TIME = re.compile(r"\bDAY\s*\d+\b|\b\d{1,2}:\d{2}(?::\d{2})?\b", re.IGNORECASE)
+
+
+def _string_tuple(
+    value: Any, field: str, line_number: int, path: str
+) -> tuple[str, ...]:
+    """Accept a JSON list of strings for an additive annotation field."""
+
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise AnnotationError(f"{path}:{line_number}: {field} must be a list")
+    return tuple(str(item) for item in value)
+
+
+def _infer_query_tier(record: dict[str, Any]) -> str:
+    """Backfill a tier for legacy banks without editing their ground truth."""
+
+    explicit = _optional_str(record.get("query_tier"))
+    if explicit:
+        code = explicit[:2].upper()
+        if code in {"T1", "T2", "T3", "T4"}:
+            return explicit
+        warnings.warn(f"unknown query_tier {explicit!r}; scoring as unclassified")
+        return "unclassified"
+    if record.get("ambiguity_expected"):
+        return "T2_ambiguous_class"
+    if _EXACT_TIME.search(str(record.get("query", ""))):
+        return "T4_exact_episodic"
+    return "T1_unique_personal"
+
+
 def load_queries(path: str | Path) -> list[QuerySpec]:
-    """Load the held-out question bank from JSONL."""
+    """Load the held-out question bank from JSONL.
+
+    Tier metadata is optional: legacy lines load with inferred tiers and every
+    existing expectation unchanged.
+    """
 
     queries: list[QuerySpec] = []
     seen: set[str] = set()
@@ -400,6 +439,22 @@ def load_queries(path: str | Path) -> list[QuerySpec]:
         seen.add(query_id)
         negative = bool(record.get("negative", False))
         expected_found = bool(record.get("expected_found", not negative))
+        cue_types = _string_tuple(
+            record.get("cue_types"), "cue_types", line_number, path
+        )
+        unknown_cues = set(cue_types) - _CUE_TYPES
+        if unknown_cues:
+            warnings.warn(f"unknown cue_types {sorted(unknown_cues)} ignored")
+        window = _string_tuple(
+            record.get("expected_time_window"),
+            "expected_time_window",
+            line_number,
+            path,
+        )
+        if len(window) > 2:
+            raise AnnotationError(
+                f"{path}:{line_number}: expected_time_window has at most two bounds"
+            )
         queries.append(
             QuerySpec(
                 query_id=query_id,
@@ -413,6 +468,22 @@ def load_queries(path: str | Path) -> list[QuerySpec]:
                 ),
                 negative=negative,
                 notes=_optional_str(record.get("notes")),
+                query_tier=_infer_query_tier(record),
+                ambiguity_expected=bool(record.get("ambiguity_expected", False)),
+                cue_types=tuple(cue for cue in cue_types if cue in _CUE_TYPES),
+                personal_registry_enrolled=bool(
+                    record.get("personal_registry_enrolled", False)
+                ),
+                query_time_ref=_optional_str(record.get("query_time_ref")),
+                acceptable_object_ids=_string_tuple(
+                    record.get("acceptable_object_ids"),
+                    "acceptable_object_ids",
+                    line_number,
+                    path,
+                ),
+                expected_time_window=(window[0], window[1])
+                if len(window) == 2
+                else None,
             )
         )
     if not queries:

@@ -535,6 +535,28 @@ def build_markdown(results: dict[str, Any]) -> str:
             f"false-not-found rate {_pct(queries.get('false_not_found_rate'))}."
         )
         lines.append("")
+        by_tier = queries.get("by_tier", {})
+        if by_tier:
+            lines.append(
+                f"Ranker: `{queries.get('ranker_mode') or 'legacy recency'}`. "
+                "Tiered scores (NOT RUN where no questions were annotated):"
+            )
+            lines.append("")
+            lines.append(
+                _table(
+                    ["Tier", "n", "Grounded correct", "Answer accuracy"],
+                    [
+                        [
+                            tier,
+                            values.get("n", 0),
+                            values.get("correct", 0),
+                            _pct(values.get("answer_accuracy")),
+                        ]
+                        for tier, values in by_tier.items()
+                    ],
+                )
+            )
+            lines.append("")
         failures = queries.get("failures", [])[:10]
         if failures:
             lines.append(
@@ -598,7 +620,7 @@ def build_markdown(results: dict[str, Any]) -> str:
 
     ablations = _section(results, "ablations")
     lines.extend(["## 10. Ablations", ""])
-    if ablations:
+    if _available(ablations):
         rows = []
         for name, values in ablations.items():
             rows.append(
@@ -636,6 +658,44 @@ def build_markdown(results: dict[str, Any]) -> str:
         lines.append("")
     else:
         lines.append("Ablations were not run.")
+        lines.append("")
+
+    ranking = _section(results, "ranking_ablation")
+    if ranking and all(isinstance(values, dict) for values in ranking.values()):
+        lines.append("### Ranker modes (same bank, T1–T4)")
+        lines.append("")
+        lines.append(
+            _table(
+                [
+                    "Ranker",
+                    "Overall",
+                    "T1",
+                    "T2",
+                    "T3",
+                    "T4",
+                ],
+                [
+                    [
+                        mode,
+                        _pct(values.get("answer_accuracy")),
+                        *[
+                            _pct(
+                                values.get("by_tier", {})
+                                .get(tier, {})
+                                .get("answer_accuracy")
+                            )
+                            for tier in ("T1", "T2", "T3", "T4")
+                        ],
+                    ]
+                    for mode, values in ranking.items()
+                ],
+            )
+        )
+        lines.append("")
+        lines.append(
+            "`recency_only` is the legacy baseline; `salience` adds interaction "
+            "and displacement; `full` adds the personal registry and fuzzy cues."
+        )
         lines.append("")
 
     lines.extend(["## 11. Failure gallery", ""])

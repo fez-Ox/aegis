@@ -147,6 +147,17 @@ def test_upload_dataset_rejects_missing_directory(tmp_path) -> None:
         download.upload_dataset_to_modal_volume(tmp_path / "missing", "absent")
 
 
+def test_upload_volume_raises_on_failed_put(tmp_path, monkeypatch) -> None:
+    class Failed:
+        returncode = 1
+        stdout = ""
+        stderr = "Uploading timed out"
+
+    monkeypatch.setattr(download.subprocess, "run", lambda *a, **k: Failed())
+    with pytest.raises(RuntimeError, match="timed out"):
+        download.upload_to_modal_volume(tmp_path / "video.mp4", "ds/video.mp4")
+
+
 def test_upload_dataset_rejects_unsafe_dataset_id(tmp_path) -> None:
     dataset = tmp_path / "data" / "ok"
     dataset.mkdir(parents=True)

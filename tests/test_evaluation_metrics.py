@@ -227,3 +227,58 @@ def test_evaluate_rooms_accuracy_and_change() -> None:
     assert result["regions"]["available"] is True
     assert result["regions"]["region_recall"] == pytest.approx(1.0)
     assert result["room_change"]["f1"] == pytest.approx(1.0)
+
+
+def test_recall_at_k_and_mrr() -> None:
+    from aegis.evaluation.metrics import recall_at_k, reciprocal_rank
+
+    ranked = ["chair", "table", "sofa"]
+    relevant = ["table", "desk"]
+    assert recall_at_k(ranked, relevant, k=1) == 0.0
+    assert recall_at_k(ranked, relevant, k=2) == 1.0
+    assert reciprocal_rank(ranked, relevant) == 0.5
+    assert reciprocal_rank(ranked, ["desk"]) == 0.0
+
+
+def test_ambiguity_f1_and_false_confidence() -> None:
+    from aegis.evaluation.metrics import ambiguity_f1, false_confidence_rate
+
+    scores = ambiguity_f1([True, False, True], [True, False, False])
+    assert scores["true_positive"] == 1
+    assert scores["false_negative"] == 1
+    assert scores["f1"] == 0.6667
+
+    rate = false_confidence_rate(
+        [
+            {"resolution_mode": "direct", "top1_correct": False},
+            {"resolution_mode": "direct", "top1_correct": True},
+            {"resolution_mode": "disambiguate", "top1_correct": False},
+        ]
+    )
+    assert rate["direct_answers"] == 2
+    assert rate["rate"] == 0.5
+
+
+def test_cue_filter_precision_and_temporal_index() -> None:
+    from aegis.evaluation.metrics import cue_filter_precision, temporal_index_accuracy
+
+    assert cue_filter_precision([]) is None
+    assert (
+        cue_filter_precision(
+            [{"cue_filter_precision": 1.0}, {"cue_filter_precision": 0.0}]
+        )
+        == 0.5
+    )
+    assert temporal_index_accuracy([]) is None
+    assert temporal_index_accuracy([{"temporal_ok": True}, {"temporal_ok": False}]) == {
+        "correct": 1,
+        "n": 2,
+        "accuracy": 0.5,
+    }
+
+
+def test_evidence_crop_rate() -> None:
+    from aegis.evaluation.metrics import evidence_crop_rate
+
+    assert evidence_crop_rate([]) is None
+    assert evidence_crop_rate([{"evidence_id": 1}, {"crop_url": None}]) == 0.5

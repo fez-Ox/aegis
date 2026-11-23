@@ -61,6 +61,7 @@ Stage = Literal[
     "rerun",
     "memory",
     "detect_and_rerun",
+    "full",
     "all",
 ]
 
@@ -276,6 +277,7 @@ def main(
         "rerun",
         "memory",
         "detect_and_rerun",
+        "full",
         "all",
     }
     if stage not in valid_stages:
@@ -309,10 +311,10 @@ def main(
     results = _run_stages(
         dataset_id,
         serialized_config,
-        preprocess=stage in {"live", "preprocess", "all"},
-        reconstruct=stage in {"live", "vggt", "reconstruct", "all"},
+        preprocess=stage in {"live", "preprocess", "full", "all"},
+        reconstruct=stage in {"live", "vggt", "reconstruct", "full", "all"},
         detect=stage
-        in {"live", "detect", "objects", "memory", "detect_and_rerun", "all"},
+        in {"live", "detect", "objects", "memory", "detect_and_rerun", "full", "all"},
         visualise=stage in {"live", "rerun", "memory", "detect_and_rerun", "all"},
     )
 
@@ -646,7 +648,7 @@ if __name__ == "__main__":
         "--stage",
         type=str,
         default="all",
-        help="Pipeline stage (all, live, preprocess, vggt, detect, rerun)",
+        help="Pipeline stage (all, full, live, preprocess, vggt, detect, rerun)",
     )
     parser.add_argument(
         "--config-path",
@@ -690,6 +692,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Download artifacts locally for Rerun/home-store demos (default: keep on Modal)",
     )
+    parser.add_argument(
+        "--no-upload",
+        action="store_true",
+        help="Video is already in the Modal volume; skip the local upload",
+    )
     args = parser.parse_args()
 
     # Dispatch to modal run
@@ -726,6 +733,8 @@ if __name__ == "__main__":
         cli_cmd.append("--no-ingest")
     if args.download:
         cli_cmd.append("--download")
+    if args.no_upload:
+        cli_cmd.append("--no-upload")
     if args.segment_frames is not None:
         cli_cmd.extend(["--segment-frames", str(args.segment_frames)])
     if args.follow:
