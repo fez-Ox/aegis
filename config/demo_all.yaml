@@ -1,0 +1,154 @@
+# Generic Aegis configuration (prompts come from config/vocabulary.yaml).
+# VGGT-Ω estimates camera intrinsics; a measured calib.txt is optional.
+
+storage:
+  data_volume: aegis-poc-data
+  model_cache_volume: aegis-model-cache
+  data_mount: /data
+  model_mount: /models
+
+video:
+  filename: video.mp4
+  sample_fps: 15
+  width: 960
+  height: 540
+
+camera:
+  calibration_filename: calib.txt
+  # "provided" uses calib.txt or the intrinsics below when present.
+  calibration_mode: provided
+  # Intrinsics are [fx, fy, cx, cy] for the source video. Leave null when
+  # demo01/calib.txt is uploaded to the data Volume.
+  intrinsics: null
+  intrinsics_resolution: null
+  allow_approximate: false
+
+vggt:
+  model_id: facebook/VGGT-Omega
+  image_size: 512
+  keyframe_stride: 6
+  dtype: bfloat16
+
+sam2:
+  model_id: facebook/sam2-hiera-large
+  prompt_confidence_threshold: 0.35
+  multimask_output: false
+
+perception:
+  # SAM3 promptable concept segmentation: text prompts -> instances + masks.
+  # Benchmarked against YOLOE and YOLO-World on hand-labeled frames from five
+  # videos (evaluation/annotations/detection_bench.json); SAM3 recovers the
+  # shoes and hands that YOLOE misses entirely at the same confidence.
+  detector_backend: sam3
+  sam3_model: facebook/sam3
+  # Clip-specific prompts beat the 93-prompt generic vocabulary: fewer
+  # competing concepts, higher precision. Task configs may narrow this further.
+  target_classes:
+    - storage cabinet
+    - cabinet
+    - shelf
+    - desk
+    - table
+    - bed
+    - sofa
+    - chair
+    - hand
+    - human hand
+    - shoes
+    - cell phone
+    - phone
+    - laptop
+    - book
+    - bottle
+    - water bottle
+    - mug
+    - cooking pot
+    - bowl
+    - plate
+    - basket
+    - garbage bag
+    - trash bin
+    - clothes
+    - stove
+    - sink
+    - kitchen counter
+    - toilet
+    - food container
+  sam3_default_threshold: 0.5
+  sam3_class_thresholds:
+    # Category-level priors from the five-video benchmark, not per-dataset.
+    shoes: 0.5
+    hand: 0.4
+    cooking pot: 0.6
+    trash bin: 0.4
+    food container: 0.9
+  confidence_threshold: 0.45
+  iou_threshold: 0.45
+  # Keep adjacent same-class instances (several shoes on one shelf) instead of
+  # merging them; measured across all five benchmark videos.
+  duplicate_iou: 0.7
+  min_points_in_box: 25
+  # Keep identities alive across short detector misses between keyframes.
+  track_max_gap: 3
+  reid_max_gap: 30
+  reid_appearance_threshold: 0.35
+  track_smoothing: 0.65
+  hand_contact_iou_threshold: 0.10
+  hand_contact_max_distance: 0.35
+
+memory:
+  ranking:
+    # Candidate ranking for ambiguous class queries ("Where is the mug?").
+    candidate_limit: 3
+    ambiguity_margin: 0.08
+    recency_half_life_hours: 24.0
+    w_vip: 1.0
+    w_act: 0.45
+    w_disp: 0.25
+    w_rec: 0.20
+    w_cue: 0.10
+    w_visual: 0.10
+  rooms:
+    # Room-level spatial memory (Rooms -> Anchors -> Objects hierarchy).
+    enabled: true
+    # Floor-plane radius (meters, VGGT-Ω scale) at which two camera keyframes
+    # belong to the same room zone; doorway crossings split beyond this.
+    zone_link_radius: 1.5
+    # Minimum keyframes observed in a zone before it becomes a room region.
+    min_zone_keyframes: 3
+  gravity:
+    # Up direction and floor height from a RANSAC floor-plane fit.
+    enabled: true
+    # Below this confidence, under/above/on-the-floor are not asserted.
+    min_confidence: 0.5
+    # Typical chest-held phone height, in reconstruction units.
+    assumed_camera_height: 1.4
+    ransac_iterations: 500
+
+live:
+  # Local FR1/FR2 capture defaults for `aegis-ingest` and the `live` stage.
+  sample_fps: 2
+  # One hour is the NFR-R1 soak target; raise for longer sessions.
+  max_duration_seconds: 3600
+  reconnect_interval_seconds: 3
+  reconnect_timeout_seconds: 30
+  # Bounded outbound queue for short storage stalls (FR2.4 / AC-29).
+  buffer_capacity: 30
+  # Persist a crash-recovery checkpoint every N accepted frames.
+  checkpoint_every: 5
+  keyframe:
+    # Keep sharp, exposed, visually novel frames (FR2.1 / TC3).
+    enabled: true
+    min_sharpness: 15.0
+    min_brightness: 20.0
+    max_brightness: 245.0
+    min_visual_change: 0.008
+    # Force a keyframe during a static scene.
+    max_interval_seconds: 2.0
+
+visualization:
+  log_video: true
+  video_stride: 1
+  point_radius: 0.01
+  camera_radius: 0.04
+
