@@ -63,7 +63,8 @@ detection, tracking, promotion, or any simulator/mutation flow.
 | `src/aegis/remote/` | Modal images/workers (`modal_app.py`, `workers.py`) and FastAPI gateway (`api.py`) |
 | `src/aegis/evaluation/` | Held-out / controlled-room / Ego4D / memory-control harness (no scoring without ground truth) |
 | `src/aegis/visualization/` | Rerun recording (video left, 3D memory right) |
-| `apps/mobile/` | Thin Flutter ask/answer client |
+| `apps/Patient App/` | Flutter patient app (ask, voice search, object history, caregiver call setup) |
+| `apps/Caregiver App/` | Caregiver app folder (mockup; Flutter app to follow) |
 | `scripts/` | Measurement and maintenance scripts |
 | `docs/running_aegis.md` | Operational runbook |
 | `docs/artifact_contracts.md` | Frozen artifact schemas and validators |
