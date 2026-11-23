@@ -40,7 +40,7 @@ Each directory has its own `README.md` describing its modules and contracts.
 | `src/aegis/evaluation/` | Harness that refuses to invent scores (`NOT_READY`/`NO_GO`). |
 | `config/` | `vocabulary.yaml` (single ontology), generic/live/task-scoped runtime configs. |
 | `apps/Patient App/` | Flutter patient app (ask, voice search, object tiles, first-run caregiver setup + call). Built from `patient.html`. |
-| `apps/Caregiver App/` | Caregiver app folder (HTML mockup `caregiver.html`; Flutter app to follow). |
+| `apps/Caregiver App/` | Flutter caregiver app (search + voice, search history, object tracking, rooms, system status). Built from `caregiver.html`. |
 | `scripts/` | Measurement and maintenance scripts. |
 | `tests/` | 356 passing core tests plus fixtures. |
 | `docs/` | Active: `running_aegis.md`, `artifact_contracts.md`, `evaluation_suite.md`; history: `archive/`. |
