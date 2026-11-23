@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 #
-# Build the Aegis Flutter app (apps/mobile).
+# Build an Aegis Flutter app (patient or caregiver).
 #
 # Mirrors what CI/CD does (.github/workflows/ci.yml, cd.yml): fetch packages,
 # analyze, test, then build. Fails loudly if the Flutter SDK is missing instead
 # of pretending the build succeeded.
 #
 # Usage:
-#   scripts/build_app.sh                 # release APK (default)
+#   scripts/build_app.sh                 # patient release APK (default)
+#   scripts/build_app.sh --app caregiver # caregiver release APK
 #   scripts/build_app.sh --debug         # debug APK
 #   scripts/build_app.sh --split         # one APK per ABI (smaller downloads)
 #   scripts/build_app.sh --appbundle     # release AAB for Play upload
@@ -18,8 +19,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$REPO_ROOT/apps/mobile"
 
+APP="patient"
 MODE="release"
 TARGET="apk"
 RUN_ANALYZE=1
@@ -36,6 +37,7 @@ usage() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --app)        [[ $# -ge 2 ]] || die "--app needs a value (patient|caregiver)"; APP="$2"; shift ;;
         --debug)      MODE="debug" ;;
         --release)    MODE="release" ;;
         --web)        TARGET="web" ;;
@@ -49,6 +51,12 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+
+case "$APP" in
+    patient)   APP_DIR="$REPO_ROOT/apps/Patient App" ;;
+    caregiver) APP_DIR="$REPO_ROOT/apps/Caregiver App" ;;
+    *)         die "unknown app '$APP' (choose patient or caregiver)" ;;
+esac
 
 if [[ "$TARGET" != "apk" && "$SPLIT" -eq 1 ]]; then
     die "--split only applies to --apk builds"
@@ -87,6 +95,7 @@ Install it from https://docs.flutter.dev/get-started/install and re-run, or set
 FLUTTER_ROOT to an existing SDK. (CI is the only other check.)"
 export PATH="$(dirname "$FLUTTER"):$PATH"
 say "Using $("$FLUTTER" --version 2>/dev/null | head -1) at $FLUTTER"
+say "Building the $APP app in $APP_DIR"
 
 if [[ "$TARGET" != "web" ]]; then
     command -v java >/dev/null 2>&1 || die "java not found; an Android build needs JDK 17 on PATH"
@@ -149,7 +158,7 @@ case "$TARGET" in
         ;;
 esac
 
-say "Done. Artifacts:"
+say "Done ($APP). Artifacts:"
 find "$ARTIFACTS" -maxdepth 1 -type f \( -name '*.apk' -o -name '*.aab' -o -name 'index.html' \) \
     -printf '  %p (%s bytes)\n' | sort
 
