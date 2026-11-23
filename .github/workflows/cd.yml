@@ -66,7 +66,7 @@ jobs:
           cache: true
 
       - name: Verify Android Network Permissions
-        working-directory: apps/mobile
+        working-directory: apps/Patient App
         run: |
           manifest="android/app/src/main/AndroidManifest.xml"
           if ! grep -q 'android.permission.INTERNET' "$manifest"; then
@@ -80,18 +80,18 @@ jobs:
           echo "Android network permissions and cleartext traffic verified."
 
       - name: Install Flutter dependencies
-        working-directory: apps/mobile
+        working-directory: apps/Patient App
         run: flutter pub get
 
       - name: Build Release APK
-        working-directory: apps/mobile
+        working-directory: apps/Patient App
         run: flutter build apk --release
 
       - name: Archive Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aegis-mobile-release-apk
-          path: apps/mobile/build/app/outputs/flutter-apk/*.apk
+          name: aegis-patient-release-apk
+          path: apps/Patient App/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: warn
 
       - name: Publish Release APK to GitHub Releases
@@ -100,7 +100,7 @@ jobs:
         with:
           tag_name: v0.2.0-mid2
           name: Aegis v0.2.0-mid2 (FYP-1 Mid Supervisory Release)
-          files: apps/mobile/build/app/outputs/flutter-apk/*.apk
+          files: apps/Patient App/build/app/outputs/flutter-apk/*.apk
           generate_release_notes: true
           overwrite_files: true
         continue-on-error: true
