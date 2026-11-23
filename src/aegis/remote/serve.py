@@ -61,7 +61,25 @@ SERVE_ENV = {
 )
 @modal.asgi_app()
 def serve_memory_api() -> Any:
-    """Serve the FastAPI gateway, including /api/v1/ask, from the volume."""
+    """Serve the FastAPI gateway, including /api/v1/ask, from the volume.
+
+    A pipeline run commits new artifacts to the volume from another container.
+    Without an explicit reload this container keeps its stale mount, so the app
+    would keep answering from the old graph until it was restarted. Reload
+    (throttled) before each request so a rerun is visible immediately.
+    """
+    import asyncio
+    import time
+
     import aegis.remote.api
 
-    return aegis.remote.api.app
+    last_reload = [0.0]
+
+    async def app_with_fresh_volume(scope, receive, send):
+        now = time.monotonic()
+        if now - last_reload[0] >= 1.0:
+            await asyncio.to_thread(data_volume.reload)
+            last_reload[0] = now
+        await aegis.remote.api.app(scope, receive, send)
+
+    return app_with_fresh_volume
