@@ -29,6 +29,20 @@ class ObjectTile {
     required this.question,
   });
 
+
+  /// Build tiles from server labels, collapsing repeated instances of the
+  /// same object class into one card.
+  static List<ObjectTile> fromServerLabels(Iterable<String> labels) {
+    final seen = <String>{};
+    final tiles = <ObjectTile>[];
+    for (final label in labels) {
+      final tile = ObjectTile.fromServerLabel(label);
+      final key = tile.label.toLowerCase();
+      if (seen.add(key)) tiles.add(tile);
+    }
+    return tiles;
+  }
+
   /// Build a tile from a server label such as "Cell Phone #4".
   factory ObjectTile.fromServerLabel(String raw) {
     final name = raw.replaceFirst(RegExp(r'\s*#\d+.*$'), '').trim();
