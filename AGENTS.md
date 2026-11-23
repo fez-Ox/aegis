@@ -70,7 +70,7 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
 5. **Patient App (`apps/Patient App/`)**:
    - Flutter patient client built from `apps/Patient App/patient.html`: warm espresso/ochre theme, natural-language querying + voice search, quick-tap object history, and bottom-sheet answers with labelled resolution badges.
    - First-run setup stores the caregiver name and phone number on-device; the Call screen dials via `tel:`. An object with no memory shows "Not found. Object not in history".
-   - The caregiver app lives in `apps/Caregiver App/` (mockup `caregiver.html`) and is not implemented yet. Build either app with `scripts/build_app.sh --app patient|caregiver`.
+   - The caregiver app lives in `apps/Caregiver App/` (built from `caregiver.html`): voice/text search, local search history, object tracking, room overview and honest system status. Build either app with `scripts/build_app.sh --app patient|caregiver`.
 
 6. **Testing & Code Quality**:
    - All unit tests passing (`tests/test_config.py`, `test_geometry.py`, `test_lifting.py`, `test_scene_graph.py`, `test_rooms.py`, `test_home_registry.py`, `test_reasoning.py`, `test_api.py`, `test_rerun_visualization.py`); `ruff` lint and format 100% compliant.
