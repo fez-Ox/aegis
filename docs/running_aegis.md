@@ -138,13 +138,17 @@ curl 'http://localhost:8000/api/v1/activities?home_id=home01'
 
 The mobile app always sends `dataset_id`, so it reads one video's graph. The `home_id` endpoints read the long-term store.
 
-## 7. Run the mobile app
+## 7. Run the patient app
 
 ```bash
-cd apps/mobile
+cd "apps/Patient App"
 flutter pub get
 flutter run            # with the phone connected over USB
 ```
+
+On first launch the app asks for the caregiver's name and phone number; the
+number is stored on-device and used by the Call button. Set `AEGIS_BASE_URL`
+with `--dart-define` if the server is not on `http://127.0.0.1:8000`.
 
 - **Over USB:** `run_server.py` sets up `adb reverse` automatically when it finds a device, so the app's default `http://127.0.0.1:8000` works.
 - **Over Wi-Fi:** open the app's server settings and enter the laptop's LAN IP (printed by `run_server.py`); port 8000 is added automatically.
@@ -251,7 +255,7 @@ These code paths were changed but have only been tested locally with fakes. Your
 
 - [ ] `http://localhost:8000/docs` loads.
 - [ ] Without `--enable-simulator`, `/api/v1/simulate/floor` returns 404 and the app has no simulator button.
-- [ ] **The app builds on your machine.** Run `flutter analyze` (no errors) and `flutter test` (all pass) in `apps/mobile`. These Dart changes were never compiled locally; CI is their only check so far.
+- [ ] **The patient app builds on your machine.** Run `flutter analyze` (no errors) and `flutter test` (all pass) in `apps/Patient App`. `scripts/build_app.sh --app patient` does the full analyze/test/build cycle.
 - [ ] The app on the phone answers a query from the running server (`LOCATED` card with the server's sentence).
 - [ ] Stopping the server and querying again shows *"Can't reach Aegis memory…"*, and no location appears.
 - [ ] **The GitHub Actions run for `feat/memory-plan` is green** (Python and Flutter jobs). The Python job now fails below 75% coverage.
