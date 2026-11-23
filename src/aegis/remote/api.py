@@ -25,6 +25,7 @@ from aegis.core.paths import validate_dataset_id
 from aegis.core.vocabulary import default_vocabulary
 from aegis.memory.compaction import compaction_ok
 from aegis.memory.homes import DuplicateRoomLabelError, get_store
+from aegis.memory.personal import enroll as enroll_personal_item
 from aegis.memory.personal import personal_ids_for_query, resolve_alias
 from aegis.memory.reasoning import (
     QueryReasoningEngine,
@@ -166,6 +167,16 @@ class MemoryQueryResponse(BaseModel):
     is_ambiguous: bool = False
     ambiguity_reason: str | None = None
     candidates: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class EnrollRequest(BaseModel):
+    instance_id: int
+    alias: str = Field(..., min_length=1, max_length=60)
+    canonical_class: str | None = None
+    usual_anchor: str | None = None
+    usual_room: str | None = None
+    visual_crop: str | None = None
+    home_id: str | None = None
 
 
 class AskRequest(BaseModel):
@@ -621,6 +632,30 @@ def _answer_question(
         other_instances=result.other_instances,
         dataset_id=result.dataset_id,
     )
+
+
+@app.post("/api/v1/enroll")
+def enroll_item(body: EnrollRequest) -> dict[str, Any]:
+    """Enrol a personal item so T1 queries can resolve its alias."""
+    if not body.home_id or not body.home_id.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="home_id is required to enrol a personal item",
+        )
+    store = get_store(_validated(body.home_id))
+    try:
+        items = enroll_personal_item(
+            store,
+            body.instance_id,
+            alias=body.alias,
+            canonical_class=body.canonical_class,
+            usual_anchor=body.usual_anchor,
+            usual_room=body.usual_room,
+            visual_crop=body.visual_crop,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"status": "ok", "home_id": body.home_id, "items": items}
 
 
 @app.get("/api/v1/ask", response_model=AskResponse)
