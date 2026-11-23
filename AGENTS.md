@@ -67,8 +67,10 @@ Stores and retrieves memories that are grounded in both *when* (temporal) and *w
    - Ingestion at 15 FPS (648 frames); synchronized 2D bounding boxes (`rr.Boxes2D`) on the first-person stream, color-matched to 3D boxes; ≤ 3 non-overlapping boxes per frame.
    - 3D view: anchors, room footprints with per-room palette and room-colored trajectory.
 
-5. **Apple HIG Design Architecture & Patient Search Audit (`apps/mobile/`)**:
-   - Inset grouped cards, SF typography hierarchy, 44×44 pt touch targets, iOS segmented control with haptics, patient recent search history, Cupertino modal sheets/alerts.
+5. **Patient App (`apps/Patient App/`)**:
+   - Flutter patient client built from `apps/Patient App/patient.html`: warm espresso/ochre theme, natural-language querying + voice search, quick-tap object history, and bottom-sheet answers with labelled resolution badges.
+   - First-run setup stores the caregiver name and phone number on-device; the Call screen dials via `tel:`. An object with no memory shows "Not found. Object not in history".
+   - The caregiver app lives in `apps/Caregiver App/` (mockup `caregiver.html`) and is not implemented yet. Build either app with `scripts/build_app.sh --app patient|caregiver`.
 
 6. **Testing & Code Quality**:
    - All unit tests passing (`tests/test_config.py`, `test_geometry.py`, `test_lifting.py`, `test_scene_graph.py`, `test_rooms.py`, `test_home_registry.py`, `test_reasoning.py`, `test_api.py`, `test_rerun_visualization.py`); `ruff` lint and format 100% compliant.
