@@ -72,6 +72,9 @@ class _PatientHomeState extends State<PatientHome> with TickerProviderStateMixin
     final live = await widget.apiService.isServerLive();
     if (!mounted) return;
     setState(() => _serverLive = live);
+    // Tiles are server-backed and must follow the graph, including a graph
+    // that appears after the app was opened.
+    if (live) await _loadTiles();
   }
 
   Future<void> _loadTiles() async {
