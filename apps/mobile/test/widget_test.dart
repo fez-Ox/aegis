@@ -55,7 +55,9 @@ void main() {
     await tester.enterText(find.byKey(const Key('ask-field')), 'where is my teleporter');
     await tester.tap(find.byKey(const Key('ask-send')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('teleporter'), findsOneWidget);
+    // The question itself also contains "teleporter", so assert on the answer
+    // text rather than every widget containing the word.
+    expect(find.text("I haven't seen your teleporter."), findsOneWidget);
     expect(find.text('NOT SURE'), findsOneWidget);
   });
 

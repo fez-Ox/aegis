@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Memory & Object Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            espresso: {
+              950: '#14100A',
+              900: '#1B160F',
+              850: '#221C13',
+              800: '#2A2318',
+              700: '#382E1F',
+              600: '#4A3D29',
+              500: '#635237',
+            },
+            ochre: {
+              300: '#FCD34D',
+              400: '#F5B82E',
+              500: '#D99B26',
+              600: '#B87D14',
+              700: '#8F5E0C',
+            },
+            ivory: {
+              100: '#FAF5EB',
+              200: '#EDE3D1',
+              300: '#CFC0A6',
+              400: '#A39276',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom subtle animations and scrollbars for tactile feel */
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); opacity: 0.7; }
+      70% { transform: scale(1.28); opacity: 0; }
+      100% { transform: scale(1.28); opacity: 0; }
+    }
+    .animate-pulse-ring {
+      animation: pulseRing 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+    }
+    .animate-pulse-ring-delayed {
+      animation: pulseRing 2s cubic-bezier(0.24, 0, 0.38, 1) infinite 0.7s;
+    }
+    /* Hide scrollbar cleanly while preserving scroll */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-espresso-950 text-ivory-100 font-sans antialiased min-h-screen flex items-center justify-center sm:p-4 selection:bg-ochre-500 selection:text-espresso-950">
+
+  <!-- Mobile App Container -->
+  <div class="w-full max-w-[390px] h-screen sm:h-[844px] bg-espresso-900 sm:rounded-[36px] sm:border-[6px] sm:border-espresso-700 shadow-2xl flex flex-col overflow-hidden relative">
+
+    <!-- ==================== CONTEXTUAL HEADER ==================== -->
+    <header class="px-5 pt-4 pb-3.5 bg-espresso-850/95 backdrop-blur-md border-b border-espresso-700/80 flex items-center justify-between gap-3 shrink-0 z-20">
+      <div class="flex-1 min-w-0">
+        <span id="headerSublabel" class="block text-[11px] font-semibold uppercase tracking-wider text-ochre-400 mb-1">Patient Perspective</span>
+        <h1 id="headerTitle" class="text-[18px] leading-[1.3] font-bold text-ivory-100 tracking-tight">
+          See from 
+          <button 
+            id="patientNameBtn"
+            onclick="openNameModal()"
+            title="Tap to edit patient name"
+            class="inline text-ochre-400 hover:text-ochre-300 underline decoration-ochre-500/50 decoration-dotted underline-offset-4 transition-colors focus:outline-none">
+            <span id="patientNameDisplay">[Patient's Name]</span>'s
+          </button>
+          perspective
+        </h1>
+      </div>
+
+      <!-- Right Header Slot: Memory Active Badge & Search History Button -->
+      <div id="headerBadgeSlot" class="shrink-0 flex flex-col items-end gap-2">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 shadow-inner">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+          </span>
+          <span class="text-[11px] font-semibold text-emerald-300 tracking-wide whitespace-nowrap">Memory Active</span>
+        </div>
+        <button 
+          id="viewSearchHistoryBtn"
+          onclick="openSearchHistoryView()"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-espresso-800 hover:bg-espresso-700 active:scale-95 border border-espresso-600 hover:border-ochre-500/60 text-xs font-semibold text-ochre-300 transition-all shadow-sm whitespace-nowrap cursor-pointer">
+          <svg class="w-3.5 h-3.5 text-ochre-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>View search history</span>
+        </button>
+      </div>
+
+      <!-- Right Header Slot: Interaction Button (Object Tracking Tab Only) -->
+      <div id="headerInteractionSlot" class="hidden shrink-0">
+        <button 
+          onclick="openInteractionsView()"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ochre-500/15 hover:bg-ochre-500/25 active:scale-95 border border-ochre-500/50 text-ochre-300 text-xs font-semibold tracking-wide transition-all shadow-sm whitespace-nowrap cursor-pointer">
+          <svg class="w-3.5 h-3.5 text-ochre-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          <span>Interaction</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== MAIN SCROLLABLE CONTENT ==================== -->
+    <main class="flex-1 overflow-y-auto no-scrollbar relative">
+
+      <!-- TAB 1: HOME SCREEN -->
+      <section id="tab-home" class="px-5 pt-6 pb-8 flex flex-col gap-6">
+        
+        <!-- Voice Interaction Hero -->
+        <div class="flex flex-col items-center justify-center py-2">
+          <div class="relative flex items-center justify-center">
+            <!-- Animated Listening Waves (Hidden until active) -->
+            <div id="micWave1" class="hidden absolute w-32 h-32 rounded-full bg-ochre-500/30 animate-pulse-ring pointer-events-none"></div>
+            <div id="micWave2" class="hidden absolute w-32 h-32 rounded-full bg-ochre-500/20 animate-pulse-ring-delayed pointer-events-none"></div>
+            
+            <!-- Subtle Outer Ambient Halo -->
+            <div class="w-32 h-32 rounded-full bg-ochre-500/15 border border-ochre-500/25 flex items-center justify-center transition-transform duration-300">
+              <!-- Main Tactile Gold Microphone Button -->
+              <button 
+                id="micButton"
+                onclick="toggleVoiceListening()"
+                aria-label="Tap to speak"
+                class="w-24 h-24 rounded-full bg-gradient-to-b from-ochre-400 to-ochre-600 hover:from-ochre-300 hover:to-ochre-500 active:scale-95 text-espresso-950 shadow-[0_10px_28px_rgba(217,155,38,0.35)] border-2 border-ochre-300/60 flex items-center justify-center transition-all duration-200 cursor-pointer">
+                <svg class="w-11 h-11" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p id="micStatusText" class="mt-3 text-xs font-medium text-ivory-300 tracking-wide">
+            Tap microphone to speak
+          </p>
+        </div>
+
+        <!-- Search / Question Input Bar -->
+        <form onsubmit="handleSearchSubmit(event)" class="relative">
+          <div class="flex items-center bg-espresso-800 border border-espresso-600 focus-within:border-ochre-500 focus-within:ring-2 focus-within:ring-ochre-500/20 rounded-2xl p-1.5 pl-4 shadow-lg transition-all">
+            <svg class="w-5 h-5 text-ochre-400 shrink-0 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input 
+              id="searchInput"
+              type="text" 
+              placeholder="Type any question or search..."
+              class="w-full bg-transparent text-sm sm:text-base text-ivory-100 placeholder-ivory-400 focus:outline-none py-2"
+            />
+            <button 
+              type="submit"
+              aria-label="Submit question"
+              class="ml-2 w-10 h-10 rounded-xl bg-ochre-500 hover:bg-ochre-400 active:scale-95 text-espresso-950 flex items-center justify-center shrink-0 transition-all shadow-md cursor-pointer">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+          </div>
+        </form>
+
+        <!-- Cohesive Divider: Or tap a picture to locate -->
+        <div class="flex items-center gap-3 pt-1">
+          <span class="text-sm font-medium text-ivory-200">Or tap a picture to locate</span>
+          <div class="h-px flex-1 bg-espresso-700"></div>
+        </div>
+
+        <!-- Quick-Tap Object Cards Grid (2x3) -->
+        <div class="grid grid-cols-2 gap-3.5">
+          <!-- Keys -->
+          <button onclick="locateObject('Keys')" class="group bg-espresso-800 hover:bg-espresso-700/90 active:scale-[0.98] border border-espresso-600 hover:border-ochre-500/60 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-md transition-all cursor-pointer">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ochre-500/25 to-ochre-700/10 border border-ochre-500/35 text-ochre-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+            </div>
+            <span class="text-sm font-bold text-ivory-100 group-hover:text-ochre-300 transition-colors">Keys</span>
+          </button>
+
+          <!-- Glasses -->
+          <button onclick="locateObject('Glasses')" class="group bg-espresso-800 hover:bg-espresso-700/90 active:scale-[0.98] border border-espresso-600 hover:border-ochre-500/60 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-md transition-all cursor-pointer">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ochre-500/25 to-ochre-700/10 border border-ochre-500/35 text-ochre-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="15" r="4"/><circle cx="18" cy="15" r="4"/><path d="M14 15a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/><path d="M2.5 13 5 7c.7-1.3 1.4-2 3-2"/><path d="M21.5 13 19 7c-.7-1.3-1.5-2-3-2"/></svg>
+            </div>
+            <span class="text-sm font-bold text-ivory-100 group-hover:text-ochre-300 transition-colors">Glasses</span>
+          </button>
+
+          <!-- Phone -->
+          <button onclick="locateObject('Phone')" class="group bg-espresso-800 hover:bg-espresso-700/90 active:scale-[0.98] border border-espresso-600 hover:border-ochre-500/60 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-md transition-all cursor-pointer">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ochre-500/25 to-ochre-700/10 border border-ochre-500/35 text-ochre-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            </div>
+            <span class="text-sm font-bold text-ivory-100 group-hover:text-ochre-300 transition-colors">Phone</span>
+          </button>
+
+          <!-- Wallet -->
+          <button onclick="locateObject('Wallet')" class="group bg-espresso-800 hover:bg-espresso-700/90 active:scale-[0.98] border border-espresso-600 hover:border-ochre-500/60 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-md transition-all cursor-pointer">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ochre-500/25 to-ochre-700/10 border border-ochre-500/35 text-ochre-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>
+            </div>
+            <span class="text-sm font-bold text-ivory-100 group-hover:text-ochre-300 transition-colors">Wallet</span>
+          </button>
+
+          <!-- Medicine -->
+          <button onclick="locateObject('Medicine')" class="group bg-espresso-800 hover:bg-espresso-700/90 active:scale-[0.98] border border-espresso-600 hover:border-ochre-500/60 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-md transition-all cursor-pointer">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ochre-500/25 to-ochre-700/10 border border-ochre-500/35 text-ochre-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+            </div>
+            <span class="text-sm font-bold text-ivory-100 group-hover:text-ochre-300 transition-colors">Medicine</span>
+          </button>
+
+          <!-- TV Remote -->
+          <button onclick="locateObject('TV Remote')" class="group bg-espresso-800 hover:bg-espresso-700/90 active:scale-[0.98] border border-espresso-600 hover:border-ochre-500/60 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-md transition-all cursor-pointer">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ochre-500/25 to-ochre-700/10 border border-ochre-500/35 text-ochre-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="7" r="1.5" fill="currentColor"/><line x1="10" y1="12" x2="14" y2="12"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="10" cy="17.5" r="0.75" fill="currentColor"/><circle cx="14" cy="17.5" r="0.75" fill="currentColor"/></svg>
+            </div>
+            <span class="text-sm font-bold text-ivory-100 group-hover:text-ochre-300 transition-colors">TV Remote</span>
+          </button>
+        </div>
+
+      </section>
+
+      <!-- DEDICATED AREA: SEARCH HISTORY VIEW -->
+      <section id="tab-search-history" class="hidden px-5 pt-5 pb-8 flex-col gap-4">
+        <div class="flex items-center gap-2.5">
+          <button 
+            onclick="closeSearchHistoryView()"
+            aria-label="Back to Home"
+            class="w-9 h-9 rounded-xl bg-espresso-800 hover:bg-espresso-700 active:scale-95 border border-espresso-600 text-ivory-200 flex items-center justify-center shrink-0 transition-colors cursor-pointer">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <div>
+            <h2 class="text-lg font-bold text-ivory-100 leading-tight">Search History</h2>
+          </div>
+        </div>
+
+        <!-- Search History Timeframe Filter Pills -->
+        <div class="grid grid-cols-4 gap-1.5 bg-espresso-850 p-1.5 rounded-2xl border border-espresso-700">
+          <button onclick="setSearchHistoryFilter('today')" id="sh-filter-today" class="sh-filter-btn py-2 px-1 rounded-xl text-xs font-semibold bg-ochre-500 text-espresso-950 shadow-sm transition-all cursor-pointer">Today</button>
+          <button onclick="setSearchHistoryFilter('week')" id="sh-filter-week" class="sh-filter-btn py-2 px-1 rounded-xl text-xs font-medium text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer">This week</button>
+          <button onclick="setSearchHistoryFilter('month')" id="sh-filter-month" class="sh-filter-btn py-2 px-1 rounded-xl text-xs font-medium text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer">This month</button>
+          <button onclick="setSearchHistoryFilter('all')" id="sh-filter-all" class="sh-filter-btn py-2 px-1 rounded-xl text-xs font-medium text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer">All time</button>
+        </div>
+
+        <!-- Full-Area Search History Messages List -->
+        <div id="searchHistoryList" class="flex flex-col gap-2.5">
+          <!-- Search history messages populated dynamically by JS -->
+        </div>
+      </section>
+
+      <!-- TAB 2: OBJECT TRACKING (LIST, SINGLE OBJECT HISTORY & INTERACTIONS) -->
+      <section id="tab-tracking" class="hidden px-5 pt-5 pb-8 flex-col gap-4">
+        
+        <!-- VIEW 2A: TRACKED OBJECTS LIST -->
+        <div id="tracking-list-view" class="flex flex-col gap-3.5">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold text-ivory-100">Tracked Objects</h2>
+            <span class="text-xs font-medium text-ochre-400 bg-ochre-500/15 px-2.5 py-1 rounded-full border border-ochre-500/30">8 Items</span>
+          </div>
+          
+          <div id="trackingList" class="flex flex-col gap-2.5 mt-1">
+            <!-- Populated dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- VIEW 2B: SINGLE OBJECT TRACKING HISTORY -->
+        <div id="tracking-detail-view" class="hidden flex-col gap-4">
+          <!-- Single Object Sub-Header with Top-Right Gear Settings -->
+          <div class="flex items-center justify-between gap-2 bg-espresso-800 border border-espresso-600 rounded-2xl p-3 shadow-md">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <button 
+                onclick="closeObjectDetail()"
+                aria-label="Back to tracked objects"
+                class="w-9 h-9 rounded-xl bg-espresso-700 hover:bg-espresso-600 active:scale-95 text-ivory-200 flex items-center justify-center shrink-0 transition-colors cursor-pointer">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+              <div id="detailObjectIcon" class="w-10 h-10 rounded-xl bg-ochre-500/15 border border-ochre-500/30 text-ochre-400 flex items-center justify-center shrink-0">
+                <!-- Dynamic SVG Icon -->
+              </div>
+              <div class="min-w-0">
+                <h2 id="detailObjectName" class="text-base font-bold text-ivory-100 truncate">Keys</h2>
+                <span id="detailActiveFilterBadge" class="inline-block text-[11px] font-medium text-ochre-400">All time</span>
+              </div>
+            </div>
+
+            <!-- Exclusive Top-Right Gear Settings Icon Button -->
+            <button 
+              onclick="openHistorySettingsModal()"
+              aria-label="Filter object sighting history"
+              title="Timeframe settings"
+              class="w-10 h-10 rounded-xl bg-espresso-850 hover:bg-espresso-700 active:scale-95 border border-espresso-600 hover:border-ochre-500/50 text-ochre-400 flex items-center justify-center shrink-0 transition-all cursor-pointer">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Sighting History Timeline -->
+          <div class="flex items-center justify-between px-1">
+            <span class="text-xs font-semibold uppercase tracking-wider text-ivory-300">Recent Sighting History</span>
+            <span id="detailCountLabel" class="text-xs text-ivory-400">6 sightings</span>
+          </div>
+
+          <div id="objectHistoryList" class="flex flex-col gap-2.5">
+            <!-- Populated dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- VIEW 2C: INTERACTIONS ANALYTICS VIEW -->
+        <div id="tracking-interactions-view" class="hidden flex-col gap-4">
+          <div class="flex items-center gap-2.5">
+            <button 
+              onclick="closeInteractionsView()"
+              aria-label="Back to tracked objects"
+              class="w-9 h-9 rounded-xl bg-espresso-800 hover:bg-espresso-700 active:scale-95 border border-espresso-600 text-ivory-200 flex items-center justify-center shrink-0 transition-colors cursor-pointer">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <h2 class="text-lg font-bold text-ivory-100 leading-tight">Interactions</h2>
+          </div>
+
+          <!-- Most Recent & Most Frequent Toggle Buttons Below Header -->
+          <div class="grid grid-cols-2 gap-2 bg-espresso-850 p-1.5 rounded-2xl border border-espresso-700">
+            <button onclick="setInteractionMode('recent')" id="int-mode-recent" class="py-2.5 px-3 rounded-xl text-xs font-semibold text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer">
+              Most Recent
+            </button>
+            <button onclick="setInteractionMode('frequent')" id="int-mode-frequent" class="py-2.5 px-3 rounded-xl text-xs font-semibold bg-ochre-500 text-espresso-950 shadow-sm transition-all cursor-pointer">
+              Most Frequent
+            </button>
+          </div>
+
+          <!-- Interaction Timeframe Filter Pills -->
+          <div class="grid grid-cols-4 gap-1.5 bg-espresso-850 p-1.5 rounded-2xl border border-espresso-700">
+            <button onclick="setInteractionFilter('today')" id="int-filter-today" class="int-filter-btn py-2 px-1 rounded-xl text-xs font-semibold bg-ochre-500 text-espresso-950 shadow-sm transition-all cursor-pointer">Today</button>
+            <button onclick="setInteractionFilter('week')" id="int-filter-week" class="int-filter-btn py-2 px-1 rounded-xl text-xs font-medium text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer">This week</button>
+            <button onclick="setInteractionFilter('month')" id="int-filter-month" class="int-filter-btn py-2 px-1 rounded-xl text-xs font-medium text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer">This month</button>
+            <button onclick="setInteractionFilter('all')" id="int-filter-all" class="int-filter-btn py-2 px-1 rounded-xl text-xs font-medium text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer">All time</button>
+          </div>
+
+          <!-- Most Frequently Interacted With Objects -->
+          <div id="interactionsFrequentSection" class="flex flex-col gap-2.5">
+            <h3 class="text-sm font-bold text-ochre-300 px-0.5">Most frequently interacted with objects</h3>
+            <div id="interactionsRankedList" class="flex flex-col gap-2.5">
+              <!-- Populated dynamically by JS -->
+            </div>
+          </div>
+
+          <!-- Most Recent Interacted With Objects -->
+          <div id="interactionsRecentSection" class="hidden flex-col gap-2.5">
+            <h3 class="text-sm font-bold text-ochre-300 px-0.5">Most recent interacted with objects</h3>
+            <div id="recentInteractionsList" class="flex flex-col gap-2.5">
+              <!-- Populated dynamically by JS -->
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- TAB 3: INTERIOR STRUCTURE -->
+      <section id="tab-interior" class="hidden px-5 pt-6 pb-8 flex-col gap-5">
+        <h2 class="text-lg font-bold text-ivory-100">Interior Structure</h2>
+
+        <!-- GROUND FLOOR -->
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between px-0.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Ground Floor</span>
+            <span class="text-[11px] font-medium text-ivory-400">4 Zones</span>
+          </div>
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-3.5 shadow-inner">
+            <div class="grid grid-cols-2 gap-3">
+              <!-- Living Room -->
+              <div class="bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Living Room</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">📺 TV Remote</span>
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">👓 Glasses</span>
+                </div>
+              </div>
+
+              <!-- Kitchen -->
+              <div class="bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Kitchen</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">🔑 Keys</span>
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">💊 Medicine</span>
+                </div>
+              </div>
+
+              <!-- Bedroom -->
+              <div class="bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Bedroom</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">📱 Phone</span>
+                </div>
+              </div>
+
+              <!-- Entryway -->
+              <div class="bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Entryway</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">👛 Wallet</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FIRST FLOOR -->
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between px-0.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">First Floor</span>
+            <span class="text-[11px] font-medium text-ivory-400">3 Zones</span>
+          </div>
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-3.5 shadow-inner">
+            <div class="grid grid-cols-2 gap-3">
+              <!-- Study Room -->
+              <div class="bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Study Room</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">📖 Reading Book</span>
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">👓 Glasses</span>
+                </div>
+              </div>
+
+              <!-- Guest Suite -->
+              <div class="bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Guest Suite</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">💧 Water Bottle</span>
+                </div>
+              </div>
+
+              <!-- Upper Landing -->
+              <div class="col-span-2 bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Upper Landing</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">🔑 Spare Keys</span>
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">💊 Travel Kit</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECOND FLOOR -->
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between px-0.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Second Floor</span>
+            <span class="text-[11px] font-medium text-ivory-400">2 Zones</span>
+          </div>
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-3.5 shadow-inner">
+            <div class="grid grid-cols-2 gap-3">
+              <!-- Sunroom -->
+              <div class="bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Sunroom</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">💧 Water Bottle</span>
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">📖 Reading Book</span>
+                </div>
+              </div>
+
+              <!-- Loft Lounge -->
+              <div class="bg-espresso-850 border border-espresso-600 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-ochre-400">Loft Lounge</span>
+                  <span class="w-2 h-2 rounded-full bg-ochre-400"></span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">📺 TV Remote</span>
+                  <span class="inline-block text-xs bg-espresso-700 text-ivory-100 px-2 py-1 rounded-md border border-espresso-600">👛 Wallet</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: SYSTEM STATUS -->
+      <section id="tab-status" class="hidden px-5 pt-6 pb-8 flex-col gap-4">
+        <h2 class="text-lg font-bold text-ivory-100">System Status</h2>
+
+        <div class="space-y-3 mt-1">
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <p class="text-sm font-semibold text-ivory-100">Last Video Input</p>
+            <span class="text-xs font-semibold text-ochre-300 bg-espresso-900/90 px-3 py-1 rounded-full border border-espresso-700 whitespace-nowrap">Nov 21, 2026 • 10:08 PM</span>
+          </div>
+
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <p class="text-sm font-semibold text-ivory-100">Currently Live</p>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-500/40 whitespace-nowrap">true</span>
+          </div>
+
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <p class="text-sm font-semibold text-ivory-100">Internet Status</p>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-500/40 whitespace-nowrap">Connected</span>
+          </div>
+
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <p class="text-sm font-semibold text-ivory-100">Memory Capacity</p>
+            <span class="text-xs font-semibold text-ochre-300 bg-ochre-500/15 px-3 py-1 rounded-full border border-ochre-500/40 whitespace-nowrap">14.2 / 32 GB (44%)</span>
+          </div>
+
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <p class="text-sm font-semibold text-ivory-100">Querying Model</p>
+            <span class="text-xs font-semibold text-ivory-200 bg-espresso-900/90 px-3 py-1 rounded-full border border-espresso-700 whitespace-nowrap">Gemini 3 Flash</span>
+          </div>
+
+          <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <p class="text-sm font-semibold text-ivory-100">LLM credits remaining</p>
+            <span class="text-xs font-semibold text-ochre-300 bg-ochre-500/15 px-3 py-1 rounded-full border border-ochre-500/40 whitespace-nowrap">1,280 credits</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ==================== COHESIVE BOTTOM NAVIGATION BAR ==================== -->
+    <nav class="bg-espresso-950 border-t border-espresso-700/90 px-2 py-2.5 grid grid-cols-4 gap-1 shrink-0 z-20">
+      
+      <!-- Nav 1: Home (House Icon) -->
+      <button onclick="switchTab('home')" id="nav-home" class="nav-btn flex flex-col items-center justify-center gap-1 py-1.5 px-1 rounded-xl text-ochre-400 bg-ochre-500/10 transition-colors cursor-pointer">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.69z" />
+          <path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198a2.29 2.29 0 00.091-.086L12 5.43z" />
+        </svg>
+        <span class="text-[11px] font-semibold tracking-tight leading-none">Home</span>
+      </button>
+
+      <!-- Nav 2: Object Tracking (Target / Location Radar Icon) -->
+      <button onclick="switchTab('tracking')" id="nav-tracking" class="nav-btn flex flex-col items-center justify-center gap-1 py-1.5 px-1 rounded-xl text-ivory-400 hover:text-ivory-200 transition-colors cursor-pointer">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <circle cx="12" cy="12" r="3"/>
+          <line x1="12" y1="2" x2="12" y2="5"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="2" y1="12" x2="5" y2="12"/>
+          <line x1="19" y1="12" x2="22" y2="12"/>
+        </svg>
+        <span class="text-[11px] font-medium tracking-tight leading-none">Object Tracking</span>
+      </button>
+
+      <!-- Nav 3: Interior Structure (Floorplan / Architectural Blueprint Icon) -->
+      <button onclick="switchTab('interior')" id="nav-interior" class="nav-btn flex flex-col items-center justify-center gap-1 py-1.5 px-1 rounded-xl text-ivory-400 hover:text-ivory-200 transition-colors cursor-pointer">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M3 12h8"/>
+          <path d="M15 12h6"/>
+          <path d="M12 3v6"/>
+          <path d="M12 15v6"/>
+        </svg>
+        <span class="text-[11px] font-medium tracking-tight leading-none">Interior Structure</span>
+      </button>
+
+      <!-- Nav 4: System Status (Activity / Diagnostic Pulse Icon) -->
+      <button onclick="switchTab('status')" id="nav-status" class="nav-btn flex flex-col items-center justify-center gap-1 py-1.5 px-1 rounded-xl text-ivory-400 hover:text-ivory-200 transition-colors cursor-pointer">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+        <span class="text-[11px] font-medium tracking-tight leading-none">System Status</span>
+      </button>
+
+    </nav>
+
+    <!-- ==================== FEEDBACK / MEMORY ANSWER DRAWER ==================== -->
+    <div id="feedbackModal" class="hidden absolute inset-0 bg-espresso-950/75 backdrop-blur-sm z-30 flex items-end justify-center p-4">
+      <div class="w-full bg-espresso-800 border border-ochre-500/50 rounded-3xl p-5 shadow-2xl transform transition-all">
+        <div class="flex items-start justify-between gap-3 mb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-ochre-500/20 border border-ochre-500/40 flex items-center justify-center text-ochre-400">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+              </svg>
+            </div>
+            <div>
+              <span class="text-[11px] font-bold uppercase tracking-wider text-ochre-400">Memory Recall</span>
+              <h3 id="modalTitle" class="text-base font-bold text-ivory-100">Locating Keys</h3>
+            </div>
+          </div>
+          <button onclick="closeFeedbackModal()" class="p-1.5 rounded-lg bg-espresso-700 text-ivory-300 hover:text-ivory-100 cursor-pointer">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <p id="modalBody" class="text-sm sm:text-base leading-relaxed text-ivory-200 bg-espresso-850/90 border border-espresso-700 rounded-2xl p-4 mb-4">
+          Your keys were last seen on the kitchen counter next to the fruit bowl, 8 minutes ago.
+        </p>
+        <button onclick="closeFeedbackModal()" class="w-full py-3 rounded-xl bg-ochre-500 hover:bg-ochre-400 text-espresso-950 font-bold text-sm transition-colors cursor-pointer">
+          Got it, thank you
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== EDIT PATIENT NAME MODAL ==================== -->
+    <div id="nameModal" class="hidden absolute inset-0 bg-espresso-950/75 backdrop-blur-sm z-30 flex items-center justify-center p-5">
+      <div class="w-full bg-espresso-800 border border-espresso-600 rounded-3xl p-5 shadow-2xl">
+        <h3 class="text-base font-bold text-ivory-100 mb-3">Set Patient Name</h3>
+        <input 
+          id="nameInputField"
+          type="text" 
+          placeholder="e.g., Arthur"
+          class="w-full bg-espresso-900 border border-espresso-600 focus:border-ochre-500 rounded-xl px-3.5 py-2.5 text-sm text-ivory-100 focus:outline-none mb-4"
+        />
+        <div class="flex gap-2.5">
+          <button onclick="closeNameModal()" class="flex-1 py-2.5 rounded-xl bg-espresso-700 text-ivory-200 text-sm font-medium cursor-pointer">Cancel</button>
+          <button onclick="savePatientName()" class="flex-1 py-2.5 rounded-xl bg-ochre-500 text-espresso-950 text-sm font-bold cursor-pointer">Save Name</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SINGLE OBJECT HISTORY TIMEFRAME SETTINGS MODAL ==================== -->
+    <div id="historySettingsModal" class="hidden absolute inset-0 bg-espresso-950/80 backdrop-blur-sm z-30 flex items-end sm:items-center justify-center p-4">
+      <div class="w-full bg-espresso-800 border border-ochre-500/40 rounded-3xl p-5 shadow-2xl">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-base font-bold text-ivory-100">History Timeframe</h3>
+          <button onclick="closeHistorySettingsModal()" class="p-1.5 rounded-lg bg-espresso-700 text-ivory-300 hover:text-ivory-100 cursor-pointer">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        
+        <div id="historyFilterOptions" class="flex flex-col gap-2">
+          <!-- Checkable timeframe options populated by JS -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Unified SVG icon library for all tracked items
+    const objectIcons = {
+      'Keys': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>`,
+      'Glasses': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="15" r="4"/><circle cx="18" cy="15" r="4"/><path d="M14 15a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/><path d="M2.5 13 5 7c.7-1.3 1.4-2 3-2"/><path d="M21.5 13 19 7c-.7-1.3-1.5-2-3-2"/></svg>`,
+      'Phone': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
+      'Wallet': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>`,
+      'Medicine': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>`,
+      'TV Remote': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="7" r="1.5" fill="currentColor"/><line x1="10" y1="12" x2="14" y2="12"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="10" cy="17.5" r="0.75" fill="currentColor"/><circle cx="14" cy="17.5" r="0.75" fill="currentColor"/></svg>`,
+      'Reading Book': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
+      'Water Bottle': `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4"/><path d="M12 2v3"/><rect x="8" y="5" width="8" height="16" rx="2"/><path d="M8 11h8"/></svg>`
+    };
+
+    // Comprehensive object memory, chronological sighting history, and interaction counts
+    const objectMemories = {
+      'Keys': {
+        location: 'Kitchen Counter',
+        time: '8 mins ago',
+        recentOrder: { today: 5, week: 4, month: 3, all: 3 },
+        detail: 'Your keys are resting on the kitchen counter, right beside the ceramic fruit bowl.',
+        interactions: { today: 5, week: 28, month: 112, all: 840 },
+        history: [
+          { dateTime: 'Nov 21, 2026 • 9:36 PM', area: 'Kitchen Counter', bucket: 'today' },
+          { dateTime: 'Nov 21, 2026 • 4:15 PM', area: 'Entryway Console Tray', bucket: 'today' },
+          { dateTime: 'Nov 19, 2026 • 11:20 AM', area: 'Coat Rack Hook', bucket: 'week' },
+          { dateTime: 'Nov 08, 2026 • 6:45 PM', area: 'Dining Room Table', bucket: 'month' },
+          { dateTime: 'Aug 14, 2026 • 2:10 PM', area: 'Living Room Coffee Table', bucket: 'fiveMonths' },
+          { dateTime: 'Mar 22, 2026 • 9:05 AM', area: 'Bedroom Dresser', bucket: 'year' },
+          { dateTime: 'Nov 12, 2025 • 5:30 PM', area: 'Kitchen Counter', bucket: 'all' }
+        ]
+      },
+      'Glasses': {
+        location: 'Living Room Side Table',
+        time: '14 mins ago',
+        recentOrder: { today: 2, week: 2, month: 2, all: 2 },
+        detail: 'Your reading glasses are folded on the wooden side table next to your armchair in the living room.',
+        interactions: { today: 14, week: 86, month: 340, all: 2490 },
+        history: [
+          { dateTime: 'Nov 21, 2026 • 9:30 PM', area: 'Living Room Side Table', bucket: 'today' },
+          { dateTime: 'Nov 21, 2026 • 6:10 PM', area: 'Kitchen Breakfast Nook', bucket: 'today' },
+          { dateTime: 'Nov 21, 2026 • 1:05 PM', area: 'Bedroom Nightstand', bucket: 'today' },
+          { dateTime: 'Nov 18, 2026 • 8:50 PM', area: 'Living Room Sofa Arm', bucket: 'week' },
+          { dateTime: 'Nov 03, 2026 • 10:15 AM', area: 'Study Desk', bucket: 'month' },
+          { dateTime: 'Jul 29, 2026 • 3:40 PM', area: 'Sunroom Bench', bucket: 'fiveMonths' },
+          { dateTime: 'Feb 11, 2026 • 7:20 PM', area: 'Living Room Side Table', bucket: 'year' }
+        ]
+      },
+      'Phone': {
+        location: 'Bedroom Nightstand',
+        time: '3 mins ago',
+        recentOrder: { today: 1, week: 1, month: 1, all: 1 },
+        detail: 'Your phone is plugged into its charger on the bedroom nightstand.',
+        interactions: { today: 19, week: 118, month: 465, all: 3120 },
+        history: [
+          { dateTime: 'Nov 21, 2026 • 9:41 PM', area: 'Bedroom Nightstand', bucket: 'today' },
+          { dateTime: 'Nov 21, 2026 • 7:55 PM', area: 'Living Room Coffee Table', bucket: 'today' },
+          { dateTime: 'Nov 20, 2026 • 3:30 PM', area: 'Kitchen Island', bucket: 'week' },
+          { dateTime: 'Nov 11, 2026 • 12:10 PM', area: 'Dining Room Table', bucket: 'month' },
+          { dateTime: 'Sep 04, 2026 • 5:45 PM', area: 'Entryway Bench', bucket: 'fiveMonths' },
+          { dateTime: 'Apr 19, 2026 • 8:15 AM', area: 'Bedroom Nightstand', bucket: 'year' }
+        ]
+      },
+      'Wallet': {
+        location: 'Entryway Console',
+        time: '25 mins ago',
+        recentOrder: { today: 4, week: 5, month: 6, all: 6 },
+        detail: 'Your wallet is inside the small wooden tray on the entryway table near the front door.',
+        interactions: { today: 3, week: 19, month: 74, all: 615 },
+        history: [
+          { dateTime: 'Nov 21, 2026 • 9:19 PM', area: 'Entryway Console', bucket: 'today' },
+          { dateTime: 'Nov 17, 2026 • 2:45 PM', area: 'Kitchen Counter', bucket: 'week' },
+          { dateTime: 'Nov 06, 2026 • 4:20 PM', area: 'Bedroom Dresser', bucket: 'month' },
+          { dateTime: 'Aug 21, 2026 • 11:00 AM', area: 'Study Bookshelf', bucket: 'fiveMonths' },
+          { dateTime: 'Jan 30, 2026 • 6:10 PM', area: 'Entryway Console', bucket: 'year' },
+          { dateTime: 'Oct 14, 2025 • 1:50 PM', area: 'Living Room Side Table', bucket: 'all' }
+        ]
+      },
+      'Medicine': {
+        location: 'Kitchen Cabinet',
+        time: '1 hr ago',
+        recentOrder: { today: 7, week: 7, month: 7, all: 7 },
+        detail: 'Your daily organizer is on the lower shelf of the kitchen cabinet next to the water glasses.',
+        interactions: { today: 4, week: 28, month: 120, all: 1095 },
+        history: [
+          { dateTime: 'Nov 21, 2026 • 8:40 PM', area: 'Kitchen Cabinet', bucket: 'today' },
+          { dateTime: 'Nov 21, 2026 • 8:30 AM', area: 'Kitchen Dining Table', bucket: 'today' },
+          { dateTime: 'Nov 19, 2026 • 8:45 PM', area: 'Kitchen Counter', bucket: 'week' },
+          { dateTime: 'Nov 02, 2026 • 9:00 AM', area: 'Bedroom Nightstand', bucket: 'month' },
+          { dateTime: 'Jul 15, 2026 • 8:25 AM', area: 'Kitchen Cabinet', bucket: 'fiveMonths' },
+          { dateTime: 'Feb 03, 2026 • 8:50 PM', area: 'Kitchen Cabinet', bucket: 'year' }
+        ]
+      },
+      'TV Remote': {
+        location: 'Living Room Sofa',
+        time: '5 mins ago',
+        recentOrder: { today: 3, week: 3, month: 4, all: 4 },
+        detail: 'The TV remote is sitting on the right cushion of the living room sofa.',
+        interactions: { today: 11, week: 64, month: 255, all: 1890 },
+        history: [
+          { dateTime: 'Nov 21, 2026 • 9:39 PM', area: 'Living Room Sofa', bucket: 'today' },
+          { dateTime: 'Nov 21, 2026 • 7:15 PM', area: 'Living Room Coffee Table', bucket: 'today' },
+          { dateTime: 'Nov 18, 2026 • 9:10 PM', area: 'Living Room Armchair', bucket: 'week' },
+          { dateTime: 'Nov 09, 2026 • 8:00 PM', area: 'Living Room Media Stand', bucket: 'month' },
+          { dateTime: 'Aug 02, 2026 • 6:30 PM', area: 'Living Room Sofa', bucket: 'fiveMonths' },
+          { dateTime: 'May 12, 2026 • 9:45 PM', area: 'Living Room Coffee Table', bucket: 'year' }
+        ]
+      },
+      'Reading Book': {
+        location: 'Living Room Armchair',
+        time: '42 mins ago',
+        recentOrder: { today: 8, week: 8, month: 8, all: 8 },
+        detail: 'Your hardcover book is resting on the ottoman in front of the living room armchair.',
+        interactions: { today: 6, week: 31, month: 118, all: 790 },
+        history: [
+          { dateTime: 'Nov 21, 2026 • 9:02 PM', area: 'Living Room Armchair', bucket: 'today' },
+          { dateTime: 'Nov 20, 2026 • 10:15 PM', area: 'Bedroom Nightstand', bucket: 'week' },
+          { dateTime: 'Nov 05, 2026 • 3:20 PM', area: 'Sunroom Reading Nook', bucket: 'month' },
+          { dateTime: 'Sep 18, 2026 • 4:50 PM', area: 'Living Room Coffee Table', bucket: 'fiveMonths' },
+          { dateTime: 'Mar 08, 2026 • 2:15 PM', area: 'Study Desk', bucket: 'year' }
+        ]
+      },
+      'Water Bottle': {
+        location: 'Kitchen Island',
+        time: '19 mins ago',
+        recentOrder: { today: 6, week: 6, month: 5, all: 5 },
+        detail: 'Your insulated water bottle is standing on the center of the kitchen island.',
+        interactions: { today: 9, week: 54, month: 210, all: 1450 },
+        history: [
+          { dateTime: 'Nov 21, 2026 • 9:25 PM', area: 'Kitchen Island', bucket: 'today' },
+          { dateTime: 'Nov 21, 2026 • 3:10 PM', area: 'Living Room Side Table', bucket: 'today' },
+          { dateTime: 'Nov 19, 2026 • 1:40 PM', area: 'Bedroom Nightstand', bucket: 'week' },
+          { dateTime: 'Nov 04, 2026 • 11:15 AM', area: 'Entryway Console', bucket: 'month' },
+          { dateTime: 'Jul 22, 2026 • 5:00 PM', area: 'Kitchen Counter', bucket: 'fiveMonths' }
+        ]
+      }
+    };
+
+    // Timeframe definitions for Single Object History Settings
+    const historyFilterDefs = [
+      { id: 'today', label: 'Today only', buckets: ['today'] },
+      { id: 'week', label: 'This week', buckets: ['today', 'week'] },
+      { id: 'month', label: 'This month', buckets: ['today', 'week', 'month'] },
+      { id: 'fiveMonths', label: 'Past 5 months', buckets: ['today', 'week', 'month', 'fiveMonths'] },
+      { id: 'year', label: 'This year', buckets: ['today', 'week', 'month', 'fiveMonths', 'year'] },
+      { id: 'all', label: 'All time', buckets: ['today', 'week', 'month', 'fiveMonths', 'year', 'all'] }
+    ];
+
+    let selectedObjectName = 'Keys';
+    let selectedHistoryFilter = 'all';
+    let selectedInteractionFilter = 'today';
+    let selectedInteractionMode = 'frequent';
+    let selectedSearchHistoryFilter = 'today';
+
+    // Search history store (pre-populated across timeframes with realistic patient queries & responses)
+    const searchHistoryEntries = [
+      {
+        id: 1,
+        query: 'Where did I leave my keys?',
+        response: 'Your keys are resting on the kitchen counter, right beside the ceramic fruit bowl.',
+        timestamp: 'Today • 9:36 PM',
+        bucket: 'today'
+      },
+      {
+        id: 2,
+        query: 'Locate Glasses',
+        response: 'Your reading glasses are folded on the wooden side table next to your armchair in the living room.',
+        timestamp: 'Today • 9:30 PM',
+        bucket: 'today'
+      },
+      {
+        id: 3,
+        query: 'Did I take my evening medicine?',
+        response: 'Your daily organizer is on the lower shelf of the kitchen cabinet next to the water glasses. Last accessed at 8:40 PM.',
+        timestamp: 'Today • 8:45 PM',
+        bucket: 'today'
+      },
+      {
+        id: 4,
+        query: 'Where is the TV remote?',
+        response: 'The TV remote is sitting on the right cushion of the living room sofa.',
+        timestamp: 'Nov 19, 2026 • 7:15 PM',
+        bucket: 'week'
+      },
+      {
+        id: 5,
+        query: 'Where is my wallet?',
+        response: 'Your wallet is inside the small wooden tray on the entryway table near the front door.',
+        timestamp: 'Nov 08, 2026 • 4:20 PM',
+        bucket: 'month'
+      },
+      {
+        id: 6,
+        query: 'Where did I put my reading book?',
+        response: 'Your hardcover book is resting on the ottoman in front of the living room armchair.',
+        timestamp: 'Oct 14, 2026 • 3:10 PM',
+        bucket: 'all'
+      }
+    ];
+    let expandedHistoryId = null;
+
+    // Populate Object Tracking main list dynamically
+    function renderTrackingList() {
+      const container = document.getElementById('trackingList');
+      container.innerHTML = Object.entries(objectMemories).map(([name, info]) => `
+        <button onclick="openObjectDetail('${name}')" class="group w-full text-left bg-espresso-800 hover:bg-espresso-700/85 active:scale-[0.99] border border-espresso-600 hover:border-ochre-500/60 rounded-2xl p-3.5 flex items-center justify-between gap-3 transition-all shadow-sm cursor-pointer">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-ochre-500/20 to-ochre-700/10 border border-ochre-500/30 text-ochre-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              ${objectIcons[name] || ''}
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-bold text-ivory-100 group-hover:text-ochre-300 transition-colors truncate">${name}</p>
+              <p class="text-xs text-ochre-400/90 font-medium mt-0.5 truncate">${info.location}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-[11px] text-ivory-300 bg-espresso-900/90 px-2.5 py-1 rounded-lg border border-espresso-700">${info.time}</span>
+            <svg class="w-4 h-4 text-ivory-400 group-hover:text-ochre-400 group-hover:translate-x-0.5 transition-all" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </div>
+        </button>
+      `).join('');
+    }
+    renderTrackingList();
+
+    // Open Single Object Tracking History View
+    function openObjectDetail(itemName) {
+      selectedObjectName = itemName;
+      document.getElementById('tracking-list-view').classList.add('hidden');
+      document.getElementById('tracking-interactions-view').classList.add('hidden');
+      document.getElementById('tracking-interactions-view').classList.remove('flex');
+      
+      const detailView = document.getElementById('tracking-detail-view');
+      detailView.classList.remove('hidden');
+      detailView.classList.add('flex');
+
+      document.getElementById('detailObjectName').textContent = itemName;
+      document.getElementById('detailObjectIcon').innerHTML = objectIcons[itemName] || '';
+      renderObjectHistory();
+    }
+
+    function closeObjectDetail() {
+      document.getElementById('tracking-detail-view').classList.add('hidden');
+      document.getElementById('tracking-detail-view').classList.remove('flex');
+      document.getElementById('tracking-list-view').classList.remove('hidden');
+    }
+
+    // Render Single Object Sighting History based on active timeframe filter
+    function renderObjectHistory() {
+      const data = objectMemories[selectedObjectName];
+      const filterObj = historyFilterDefs.find(f => f.id === selectedHistoryFilter) || historyFilterDefs[5];
+      document.getElementById('detailActiveFilterBadge').textContent = `Showing: ${filterObj.label}`;
+
+      const filtered = data.history.filter(entry => filterObj.buckets.includes(entry.bucket));
+      document.getElementById('detailCountLabel').textContent = `${filtered.length} ${filtered.length === 1 ? 'sighting' : 'sightings'}`;
+
+      const listEl = document.getElementById('objectHistoryList');
+      if (filtered.length === 0) {
+        listEl.innerHTML = `
+          <div class="bg-espresso-800/70 border border-espresso-700 rounded-2xl p-6 text-center">
+            <p class="text-sm font-medium text-ivory-300">No sightings in this timeframe.</p>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map((entry, idx) => `
+        <div class="bg-espresso-800 border ${idx === 0 ? 'border-ochre-500/50' : 'border-espresso-600/80'} rounded-2xl p-3.5 flex items-start justify-between gap-3">
+          <div class="flex items-start gap-3">
+            <div class="mt-1 w-2.5 h-2.5 rounded-full ${idx === 0 ? 'bg-ochre-400 ring-4 ring-ochre-500/20' : 'bg-espresso-500'} shrink-0"></div>
+            <div>
+              <p class="text-sm font-bold text-ivory-100">${entry.area}</p>
+              <p class="text-xs text-ivory-300 mt-0.5">${entry.dateTime}</p>
+            </div>
+          </div>
+          ${idx === 0 ? '<span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-ochre-500/20 text-ochre-300 border border-ochre-500/40 shrink-0">Latest</span>' : ''}
+        </div>
+      `).join('');
+    }
+
+    // Single Object Gear Settings Modal
+    function openHistorySettingsModal() {
+      const optionsContainer = document.getElementById('historyFilterOptions');
+      optionsContainer.innerHTML = historyFilterDefs.map(opt => {
+        const isChecked = opt.id === selectedHistoryFilter;
+        return `
+          <button 
+            onclick="selectHistoryFilter('${opt.id}')"
+            class="w-full flex items-center justify-between px-4 py-3 rounded-xl border ${isChecked ? 'bg-ochre-500/15 border-ochre-500 text-ivory-100' : 'bg-espresso-850 border-espresso-700 text-ivory-300 hover:border-espresso-500'} text-sm font-medium transition-all cursor-pointer">
+            <span>${opt.label}</span>
+            <span class="w-5 h-5 rounded-md flex items-center justify-center border ${isChecked ? 'bg-ochre-500 border-ochre-400 text-espresso-950' : 'border-espresso-500 bg-espresso-900'}">
+              ${isChecked ? '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+            </span>
+          </button>
+        `;
+      }).join('');
+      document.getElementById('historySettingsModal').classList.remove('hidden');
+    }
+
+    function closeHistorySettingsModal() {
+      document.getElementById('historySettingsModal').classList.add('hidden');
+    }
+
+    function selectHistoryFilter(filterId) {
+      selectedHistoryFilter = filterId;
+      renderObjectHistory();
+      closeHistorySettingsModal();
+    }
+
+    // Interactions Analytics View (Opened from Object Tracking header "Interaction" button)
+    function openInteractionsView() {
+      document.getElementById('tracking-list-view').classList.add('hidden');
+      document.getElementById('tracking-detail-view').classList.add('hidden');
+      document.getElementById('tracking-detail-view').classList.remove('flex');
+
+      const intView = document.getElementById('tracking-interactions-view');
+      intView.classList.remove('hidden');
+      intView.classList.add('flex');
+      setInteractionMode(selectedInteractionMode);
+    }
+
+    function closeInteractionsView() {
+      document.getElementById('tracking-interactions-view').classList.add('hidden');
+      document.getElementById('tracking-interactions-view').classList.remove('flex');
+      document.getElementById('tracking-list-view').classList.remove('hidden');
+    }
+
+    function setInteractionMode(mode) {
+      selectedInteractionMode = mode;
+      const recentBtn = document.getElementById('int-mode-recent');
+      const frequentBtn = document.getElementById('int-mode-frequent');
+      const frequentSec = document.getElementById('interactionsFrequentSection');
+      const recentSec = document.getElementById('interactionsRecentSection');
+
+      if (mode === 'recent') {
+        recentBtn.className = 'py-2.5 px-3 rounded-xl text-xs font-semibold bg-ochre-500 text-espresso-950 shadow-sm transition-all cursor-pointer';
+        frequentBtn.className = 'py-2.5 px-3 rounded-xl text-xs font-semibold text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer';
+        recentSec.classList.remove('hidden');
+        recentSec.classList.add('flex');
+        frequentSec.classList.add('hidden');
+        frequentSec.classList.remove('flex');
+      } else {
+        frequentBtn.className = 'py-2.5 px-3 rounded-xl text-xs font-semibold bg-ochre-500 text-espresso-950 shadow-sm transition-all cursor-pointer';
+        recentBtn.className = 'py-2.5 px-3 rounded-xl text-xs font-semibold text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer';
+        frequentSec.classList.remove('hidden');
+        frequentSec.classList.add('flex');
+        recentSec.classList.add('hidden');
+        recentSec.classList.remove('flex');
+      }
+      renderInteractionsList();
+    }
+
+    function setInteractionFilter(period) {
+      selectedInteractionFilter = period;
+      ['today', 'week', 'month', 'all'].forEach(p => {
+        const btn = document.getElementById(`int-filter-${p}`);
+        if (p === period) {
+          btn.className = 'int-filter-btn py-2 px-1 rounded-xl text-xs font-semibold bg-ochre-500 text-espresso-950 shadow-sm transition-all cursor-pointer';
+        } else {
+          btn.className = 'int-filter-btn py-2 px-1 rounded-xl text-xs font-medium text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer';
+        }
+      });
+      renderInteractionsList();
+    }
+
+    function renderInteractionsList() {
+      const sorted = Object.entries(objectMemories)
+        .map(([name, info]) => ({
+          name,
+          count: info.interactions[selectedInteractionFilter] || 0
+        }))
+        .sort((a, b) => b.count - a.count);
+
+      const maxCount = sorted.length > 0 ? Math.max(sorted[0].count, 1) : 1;
+      const container = document.getElementById('interactionsRankedList');
+
+      container.innerHTML = sorted.map((item, idx) => {
+        const pct = Math.max(8, Math.round((item.count / maxCount) * 100));
+        const isTop = idx === 0;
+        return `
+          <div class="bg-espresso-800 border ${isTop ? 'border-ochre-500/60' : 'border-espresso-600/80'} rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-sm">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="w-6 h-6 rounded-lg ${isTop ? 'bg-ochre-500 text-espresso-950 font-bold' : 'bg-espresso-700 text-ivory-200 font-semibold'} text-xs flex items-center justify-center shrink-0">
+                  ${idx + 1}
+                </span>
+                <div class="w-9 h-9 rounded-xl bg-ochre-500/15 border border-ochre-500/30 text-ochre-400 flex items-center justify-center shrink-0">
+                  ${objectIcons[item.name] || ''}
+                </div>
+                <span class="text-sm font-bold text-ivory-100 truncate">${item.name}</span>
+              </div>
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${isTop ? 'bg-ochre-500/20 text-ochre-300 border border-ochre-500/40' : 'bg-espresso-900 text-ivory-200 border border-espresso-700'} shrink-0">
+                ${item.count} ${item.count === 1 ? 'interaction' : 'interactions'}
+              </span>
+            </div>
+            <!-- Warm Golden-Ochre Progress Bar -->
+            <div class="w-full h-2 bg-espresso-900 rounded-full overflow-hidden border border-espresso-700/70">
+              <div class="h-full bg-gradient-to-r from-ochre-600 to-ochre-400 rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Populate Most recent interacted with objects
+      const recentSorted = Object.entries(objectMemories)
+        .map(([name, info]) => ({
+          name,
+          time: info.time,
+          location: info.location,
+          rank: (info.recentOrder && info.recentOrder[selectedInteractionFilter]) || 99
+        }))
+        .sort((a, b) => a.rank - b.rank);
+
+      const recentContainer = document.getElementById('recentInteractionsList');
+      recentContainer.innerHTML = recentSorted.map((item, idx) => `
+        <div class="bg-espresso-800 border ${idx === 0 ? 'border-ochre-500/60' : 'border-espresso-600/80'} rounded-2xl p-3.5 flex items-center justify-between gap-2.5 shadow-sm">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-ochre-500/15 border border-ochre-500/30 text-ochre-400 flex items-center justify-center shrink-0">
+              ${objectIcons[item.name] || ''}
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-bold text-ivory-100 truncate">${item.name}</p>
+              <p class="text-xs text-ivory-400 truncate">${item.location}</p>
+            </div>
+          </div>
+          <span class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-espresso-900 text-ochre-300 border border-espresso-700 shrink-0">
+            ${item.time}
+          </span>
+        </div>
+      `).join('');
+    }
+
+    // Voice microphone toggle interaction
+    let isListening = false;
+    let voiceResponseTimer = null;
+    const sampleVoicePrompts = [
+      {
+        question: '"Where did I put my keys?"',
+        item: 'Keys'
+      },
+      {
+        question: '"Have I seen my glasses today?"',
+        item: 'Glasses'
+      },
+      {
+        question: '"Where is the TV remote?"',
+        item: 'TV Remote'
+      }
+    ];
+    let voicePromptIndex = 0;
+
+    function stopListeningVisuals() {
+      isListening = false;
+      if (voiceResponseTimer) {
+        clearTimeout(voiceResponseTimer);
+        voiceResponseTimer = null;
+      }
+      document.getElementById('micWave1').classList.add('hidden');
+      document.getElementById('micWave2').classList.add('hidden');
+      const statusText = document.getElementById('micStatusText');
+      statusText.textContent = 'Tap microphone to speak';
+      statusText.classList.remove('text-ochre-400');
+    }
+
+    function toggleVoiceListening() {
+      const wave1 = document.getElementById('micWave1');
+      const wave2 = document.getElementById('micWave2');
+      const statusText = document.getElementById('micStatusText');
+
+      if (!isListening) {
+        isListening = true;
+        wave1.classList.remove('hidden');
+        wave2.classList.remove('hidden');
+        statusText.textContent = 'Listening... ask a question';
+        statusText.classList.add('text-ochre-400');
+
+        voiceResponseTimer = setTimeout(() => {
+          if (!isListening) return;
+          const prompt = sampleVoicePrompts[voicePromptIndex % sampleVoicePrompts.length];
+          voicePromptIndex++;
+          const info = objectMemories[prompt.item];
+          const answerText = info ? info.detail : 'Your item was recently seen on the kitchen counter.';
+
+          stopListeningVisuals();
+
+          searchHistoryEntries.unshift({
+            id: Date.now(),
+            query: `${prompt.question} (Voice)`,
+            response: answerText,
+            timestamp: 'Just now',
+            bucket: 'today'
+          });
+
+          document.getElementById('modalTitle').textContent = prompt.question;
+          document.getElementById('modalBody').textContent = answerText;
+          document.getElementById('feedbackModal').classList.remove('hidden');
+        }, 1800);
+      } else {
+        stopListeningVisuals();
+      }
+    }
+
+    // Locate object interaction
+    function locateObject(itemName) {
+      const data = objectMemories[itemName];
+      const titleText = `Where are my ${itemName}?`;
+      const responseText = data ? data.detail : `Searching memory for ${itemName}...`;
+
+      // Record interaction in search history
+      searchHistoryEntries.unshift({
+        id: Date.now(),
+        query: titleText,
+        response: responseText,
+        timestamp: 'Just now',
+        bucket: 'today'
+      });
+
+      document.getElementById('modalTitle').textContent = titleText;
+      document.getElementById('modalBody').textContent = responseText;
+      document.getElementById('feedbackModal').classList.remove('hidden');
+    }
+
+    function closeFeedbackModal() {
+      document.getElementById('feedbackModal').classList.add('hidden');
+    }
+
+    // Handle search submission
+    function handleSearchSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('searchInput');
+      const query = input.value.trim();
+      if (!query) return;
+
+      const lower = query.toLowerCase();
+      const matchedKey = Object.keys(objectMemories).find(k => lower.includes(k.toLowerCase()));
+
+      if (matchedKey) {
+        const data = objectMemories[matchedKey];
+        const responseText = data ? data.detail : `Searching memory for ${matchedKey}...`;
+        searchHistoryEntries.unshift({
+          id: Date.now(),
+          query: query,
+          response: responseText,
+          timestamp: 'Just now',
+          bucket: 'today'
+        });
+        document.getElementById('modalTitle').textContent = `Where are my ${matchedKey}?`;
+        document.getElementById('modalBody').textContent = responseText;
+        document.getElementById('feedbackModal').classList.remove('hidden');
+      } else {
+        const fallbackResponse = `Based on recent room observations for "${query}", everything appears to be in its usual spot. Check the Living Room or Kitchen zones for recent activity.`;
+        searchHistoryEntries.unshift({
+          id: Date.now(),
+          query: query,
+          response: fallbackResponse,
+          timestamp: 'Just now',
+          bucket: 'today'
+        });
+        document.getElementById('modalTitle').textContent = 'Memory Assistant';
+        document.getElementById('modalBody').textContent = fallbackResponse;
+        document.getElementById('feedbackModal').classList.remove('hidden');
+      }
+      input.value = '';
+    }
+
+    // Dedicated Full-Area Search History View Handlers
+    function openSearchHistoryView() {
+      expandedHistoryId = null;
+      document.getElementById('tab-home').classList.add('hidden');
+      document.getElementById('tab-home').classList.remove('flex');
+      const historySection = document.getElementById('tab-search-history');
+      historySection.classList.remove('hidden');
+      historySection.classList.add('flex');
+      setSearchHistoryFilter(selectedSearchHistoryFilter);
+    }
+
+    function closeSearchHistoryView() {
+      const historySection = document.getElementById('tab-search-history');
+      historySection.classList.add('hidden');
+      historySection.classList.remove('flex');
+      const homeSection = document.getElementById('tab-home');
+      homeSection.classList.remove('hidden');
+      homeSection.classList.add('flex');
+    }
+
+    function setSearchHistoryFilter(period) {
+      selectedSearchHistoryFilter = period;
+      ['today', 'week', 'month', 'all'].forEach(p => {
+        const btn = document.getElementById(`sh-filter-${p}`);
+        if (p === period) {
+          btn.className = 'sh-filter-btn py-2 px-1 rounded-xl text-xs font-semibold bg-ochre-500 text-espresso-950 shadow-sm transition-all cursor-pointer';
+        } else {
+          btn.className = 'sh-filter-btn py-2 px-1 rounded-xl text-xs font-medium text-ivory-300 hover:text-ivory-100 transition-all cursor-pointer';
+        }
+      });
+      renderSearchHistoryList();
+    }
+
+    function toggleSearchHistoryItem(id) {
+      expandedHistoryId = expandedHistoryId === id ? null : id;
+      renderSearchHistoryList();
+    }
+
+    function renderSearchHistoryList() {
+      const container = document.getElementById('searchHistoryList');
+      const allowedBuckets = {
+        today: ['today'],
+        week: ['today', 'week'],
+        month: ['today', 'week', 'month'],
+        all: ['today', 'week', 'month', 'all']
+      }[selectedSearchHistoryFilter] || ['today', 'week', 'month', 'all'];
+
+      const filteredEntries = searchHistoryEntries.filter(entry => allowedBuckets.includes(entry.bucket));
+
+      if (filteredEntries.length === 0) {
+        container.innerHTML = `
+          <div class="bg-espresso-800/70 border border-espresso-700 rounded-2xl p-6 text-center">
+            <p class="text-sm font-medium text-ivory-300">No search messages recorded in this timeframe.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filteredEntries.map(entry => {
+        const isExpanded = expandedHistoryId === entry.id;
+        return `
+          <div class="bg-espresso-800 border ${isExpanded ? 'border-ochre-500/60' : 'border-espresso-600/80'} rounded-2xl overflow-hidden transition-all shadow-sm">
+            <button 
+              onclick="toggleSearchHistoryItem(${entry.id})"
+              class="w-full text-left p-3.5 flex items-center justify-between gap-3 hover:bg-espresso-700/40 transition-colors cursor-pointer">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-ivory-100 truncate">${entry.query}</p>
+                <span class="text-[11px] text-ivory-400 mt-0.5 block">${entry.timestamp}</span>
+              </div>
+              <svg class="w-4 h-4 text-ochre-400 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            ${isExpanded ? `
+              <div class="px-3.5 pb-3.5 pt-2.5 border-t border-espresso-700/80 bg-espresso-900/60">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-ochre-400 block mb-1">App Response</span>
+                <p class="text-xs sm:text-sm leading-relaxed text-ivory-200">${entry.response}</p>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Bottom Navigation Tab Switcher & Contextual Header Handler
+    function switchTab(tabName) {
+      // Ensure dedicated search history area is hidden when switching tabs
+      const historySection = document.getElementById('tab-search-history');
+      historySection.classList.add('hidden');
+      historySection.classList.remove('flex');
+
+      const tabs = ['home', 'tracking', 'interior', 'status'];
+      tabs.forEach(t => {
+        const section = document.getElementById(`tab-${t}`);
+        const navBtn = document.getElementById(`nav-${t}`);
+        if (t === tabName) {
+          section.classList.remove('hidden');
+          section.classList.add('flex');
+          navBtn.classList.add('text-ochre-400', 'bg-ochre-500/10');
+          navBtn.classList.remove('text-ivory-400');
+        } else {
+          section.classList.add('hidden');
+          section.classList.remove('flex');
+          navBtn.classList.remove('text-ochre-400', 'bg-ochre-500/10');
+          navBtn.classList.add('text-ivory-400');
+        }
+      });
+
+      // Contextual Header Updates per Tab
+      const sublabel = document.getElementById('headerSublabel');
+      const title = document.getElementById('headerTitle');
+      const badgeSlot = document.getElementById('headerBadgeSlot');
+      const interactionSlot = document.getElementById('headerInteractionSlot');
+      const viewHistoryBtn = document.getElementById('viewSearchHistoryBtn');
+      const currentPatient = document.getElementById('patientNameDisplay')
+        ? document.getElementById('patientNameDisplay').textContent
+        : "[Patient's Name]";
+
+      if (tabName === 'tracking') {
+        // Object tracking tab: replace "Memory Active" badge with "Interaction" button
+        badgeSlot.classList.add('hidden');
+        interactionSlot.classList.remove('hidden');
+        sublabel.textContent = 'Spatial Memory';
+        title.innerHTML = 'Object tracking';
+        // Reset subviews back to main list when switching into Object Tracking
+        closeObjectDetail();
+        closeInteractionsView();
+      } else {
+        // Restore "Memory Active" badge on all other tabs
+        interactionSlot.classList.add('hidden');
+        badgeSlot.classList.remove('hidden');
+
+        if (tabName === 'home') {
+          viewHistoryBtn.classList.remove('hidden');
+          viewHistoryBtn.classList.add('inline-flex');
+          sublabel.textContent = 'Patient Perspective';
+          title.innerHTML = `
+            See from 
+            <button 
+              id="patientNameBtn"
+              onclick="openNameModal()"
+              title="Tap to edit patient name"
+              class="inline-flex items-center gap-1 text-ochre-400 hover:text-ochre-300 underline decoration-ochre-500/50 decoration-dotted underline-offset-4 transition-colors focus:outline-none">
+              <span id="patientNameDisplay">${currentPatient}</span>'s
+            </button>
+            perspective
+          `;
+        } else {
+          viewHistoryBtn.classList.add('hidden');
+          viewHistoryBtn.classList.remove('inline-flex');
+          if (tabName === 'interior') {
+            sublabel.textContent = 'Home Layout';
+            title.innerHTML = 'Interior Structure';
+          } else if (tabName === 'status') {
+            sublabel.textContent = 'Diagnostics';
+            title.innerHTML = 'System Status';
+          }
+        }
+      }
+    }
+
+    // Editable Patient Name Modal
+    function openNameModal() {
+      const current = document.getElementById('patientNameDisplay').textContent;
+      document.getElementById('nameInputField').value = current === "[Patient's Name]" ? "" : current;
+      document.getElementById('nameModal').classList.remove('hidden');
+    }
+    function closeNameModal() {
+      document.getElementById('nameModal').classList.add('hidden');
+    }
+    function savePatientName() {
+      const val = document.getElementById('nameInputField').value.trim();
+      document.getElementById('patientNameDisplay').textContent = val || "[Patient's Name]";
+      closeNameModal();
+    }
+  </script>
+</body>
+</html>

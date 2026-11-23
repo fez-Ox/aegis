@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Memory &amp; Object Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:Inter,sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.absolute{position:absolute}.relative{position:relative}.inset-0{inset:0}.z-20{z-index:20}.z-30{z-index:30}.-mt-3{margin-top:-.75rem}.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.ml-2{margin-left:.5rem}.mr-3{margin-right:.75rem}.mt-1{margin-top:.25rem}.mt-1\.5{margin-top:.375rem}.mt-2{margin-top:.5rem}.mt-2\.5{margin-top:.625rem}.mt-3{margin-top:.75rem}.flex{display:flex}.inline-flex{display:inline-flex}.table{display:table}.grid{display:grid}.hidden{display:none}.h-10{height:2.5rem}.h-11{height:2.75rem}.h-16{height:4rem}.h-24{height:6rem}.h-32{height:8rem}.h-4{height:1rem}.h-40{height:10rem}.h-5{height:1.25rem}.h-7{height:1.75rem}.h-9{height:2.25rem}.h-full{height:100%}.h-px{height:1px}.h-screen{height:100vh}.max-h-\[94\%\]{max-height:94%}.min-h-0{min-height:0}.min-h-\[20px\]{min-height:20px}.min-h-\[48px\]{min-height:48px}.min-h-\[52px\]{min-height:52px}.min-h-screen{min-height:100vh}.w-10{width:2.5rem}.w-11{width:2.75rem}.w-16{width:4rem}.w-24{width:6rem}.w-28{width:7rem}.w-32{width:8rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-7{width:1.75rem}.w-9{width:2.25rem}.w-full{width:100%}.min-w-0{min-width:0}.max-w-\[430px\]{max-width:430px}.flex-1{flex:1 1 0%}.shrink-0{flex-shrink:0}.transform{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.flex-col{flex-direction:column}.items-start{align-items:flex-start}.items-end{align-items:flex-end}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1\.5{gap:.375rem}.gap-2{gap:.5rem}.gap-2\.5{gap:.625rem}.gap-3{gap:.75rem}.gap-3\.5{gap:.875rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.overflow-hidden{overflow:hidden}.overflow-y-auto{overflow-y:auto}.rounded-2xl{border-radius:1rem}.rounded-3xl{border-radius:1.5rem}.rounded-full{border-radius:9999px}.rounded-xl{border-radius:.75rem}.border{border-width:1px}.border-2{border-width:2px}.border-b{border-bottom-width:1px}.border-emerald-500\/40{border-color:rgba(16,185,129,.4)}.border-espresso-600{--tw-border-opacity:1;border-color:rgb(74 61 41/var(--tw-border-opacity,1))}.border-espresso-700{--tw-border-opacity:1;border-color:rgb(56 46 31/var(--tw-border-opacity,1))}.border-espresso-700\/80{border-color:rgba(56,46,31,.8)}.border-ochre-300\/60{border-color:rgba(252,211,77,.6)}.border-ochre-500\/25{border-color:rgba(217,155,38,.25)}.border-ochre-500\/30{border-color:rgba(217,155,38,.3)}.border-ochre-500\/40{border-color:rgba(217,155,38,.4)}.border-ochre-500\/50{border-color:rgba(217,155,38,.5)}.bg-emerald-950\/70{background-color:rgba(2,44,34,.7)}.bg-espresso-700{--tw-bg-opacity:1;background-color:rgb(56 46 31/var(--tw-bg-opacity,1))}.bg-espresso-700\/80{background-color:rgba(56,46,31,.8)}.bg-espresso-800{--tw-bg-opacity:1;background-color:rgb(42 35 24/var(--tw-bg-opacity,1))}.bg-espresso-850\/90{background-color:rgba(34,28,19,.9)}.bg-espresso-900{--tw-bg-opacity:1;background-color:rgb(27 22 15/var(--tw-bg-opacity,1))}.bg-espresso-950\/75{background-color:rgba(20,16,10,.75)}.bg-ochre-500{--tw-bg-opacity:1;background-color:rgb(217 155 38/var(--tw-bg-opacity,1))}.bg-ochre-500\/15{background-color:rgba(217,155,38,.15)}.bg-ochre-500\/20{background-color:rgba(217,155,38,.2)}.bg-ochre-500\/30{background-color:rgba(217,155,38,.3)}.bg-ochre-700\/20{background-color:rgba(143,94,12,.2)}.bg-transparent{background-color:transparent}.bg-gradient-to-b{background-image:linear-gradient(to bottom,var(--tw-gradient-stops))}.bg-gradient-to-br{background-image:linear-gradient(to bottom right,var(--tw-gradient-stops))}.from-ochre-400{--tw-gradient-from:#f5b82e var(--tw-gradient-from-position);--tw-gradient-to:rgba(245,184,46,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-ochre-500\/20{--tw-gradient-from:rgba(217,155,38,.2) var(--tw-gradient-from-position);--tw-gradient-to:rgba(217,155,38,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.to-ochre-600{--tw-gradient-to:#b87d14 var(--tw-gradient-to-position)}.to-ochre-700\/10{--tw-gradient-to:rgba(143,94,12,.1) var(--tw-gradient-to-position)}.p-1\.5{padding:.375rem}.p-3\.5{padding:.875rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.px-1{padding-left:.25rem;padding-right:.25rem}.px-2{padding-left:.5rem;padding-right:.5rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-3\.5{padding-left:.875rem;padding-right:.875rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-2\.5{padding-top:.625rem;padding-bottom:.625rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-4{padding-top:1rem}.pb-4,.py-4{padding-bottom:1rem}.pb-8{padding-bottom:2rem}.pl-4{padding-left:1rem}.pt-1{padding-top:.25rem}.pt-5{padding-top:1.25rem}.pt-6{padding-top:1.5rem}.text-center{text-align:center}.font-sans{font-family:Inter,sans-serif}.text-2xl{font-size:1.5rem;line-height:2rem}.text-\[11px\]{font-size:11px}.text-\[20px\]{font-size:20px}.text-base{font-size:1rem;line-height:1.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.leading-\[1\.25\]{line-height:1.25}.leading-relaxed{line-height:1.625}.leading-snug{line-height:1.375}.leading-tight{line-height:1.25}.tracking-tight{letter-spacing:-.025em}.tracking-wide{letter-spacing:.025em}.tracking-wider{letter-spacing:.05em}.text-emerald-300{--tw-text-opacity:1;color:rgb(110 231 183/var(--tw-text-opacity,1))}.text-espresso-950{--tw-text-opacity:1;color:rgb(20 16 10/var(--tw-text-opacity,1))}.text-ivory-100{--tw-text-opacity:1;color:rgb(250 245 235/var(--tw-text-opacity,1))}.text-ivory-200{--tw-text-opacity:1;color:rgb(237 227 209/var(--tw-text-opacity,1))}.text-ivory-300{--tw-text-opacity:1;color:rgb(207 192 166/var(--tw-text-opacity,1))}.text-ivory-400{--tw-text-opacity:1;color:rgb(163 146 118/var(--tw-text-opacity,1))}.text-ochre-300{--tw-text-opacity:1;color:rgb(252 211 77/var(--tw-text-opacity,1))}.text-ochre-400{--tw-text-opacity:1;color:rgb(245 184 46/var(--tw-text-opacity,1))}.underline{text-decoration-line:underline}.decoration-ochre-500\/50{text-decoration-color:rgba(217,155,38,.5)}.decoration-dotted{text-decoration-style:dotted}.underline-offset-4{text-underline-offset:4px}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.placeholder-ivory-400::-moz-placeholder{--tw-placeholder-opacity:1;color:rgb(163 146 118/var(--tw-placeholder-opacity,1))}.placeholder-ivory-400::placeholder{--tw-placeholder-opacity:1;color:rgb(163 146 118/var(--tw-placeholder-opacity,1))}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgba(0,0,0,.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color)}.shadow-2xl,.shadow-\[0_10px_28px_rgba\(217\2c 155\2c 38\2c 0\.35\)\]{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-\[0_10px_28px_rgba\(217\2c 155\2c 38\2c 0\.35\)\]{--tw-shadow:0 10px 28px rgba(217,155,38,.35);--tw-shadow-colored:0 10px 28px var(--tw-shadow-color)}.shadow-\[0_8px_22px_rgba\(217\2c 155\2c 38\2c 0\.3\)\]{--tw-shadow:0 8px 22px rgba(217,155,38,.3);--tw-shadow-colored:0 8px 22px var(--tw-shadow-color)}.shadow-\[0_8px_22px_rgba\(217\2c 155\2c 38\2c 0\.3\)\],.shadow-lg{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color)}.shadow-md{--tw-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color),0 2px 4px -2px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.ring{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(3px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.selection\:bg-ochre-500 ::-moz-selection{--tw-bg-opacity:1;background-color:rgb(217 155 38/var(--tw-bg-opacity,1))}.selection\:bg-ochre-500 ::selection{--tw-bg-opacity:1;background-color:rgb(217 155 38/var(--tw-bg-opacity,1))}.selection\:text-espresso-950 ::-moz-selection{--tw-text-opacity:1;color:rgb(20 16 10/var(--tw-text-opacity,1))}.selection\:text-espresso-950 ::selection{--tw-text-opacity:1;color:rgb(20 16 10/var(--tw-text-opacity,1))}.selection\:bg-ochre-500::-moz-selection{--tw-bg-opacity:1;background-color:rgb(217 155 38/var(--tw-bg-opacity,1))}.selection\:bg-ochre-500::selection{--tw-bg-opacity:1;background-color:rgb(217 155 38/var(--tw-bg-opacity,1))}.selection\:text-espresso-950::-moz-selection{--tw-text-opacity:1;color:rgb(20 16 10/var(--tw-text-opacity,1))}.selection\:text-espresso-950::selection{--tw-text-opacity:1;color:rgb(20 16 10/var(--tw-text-opacity,1))}.focus-within\:border-ochre-500:focus-within{--tw-border-opacity:1;border-color:rgb(217 155 38/var(--tw-border-opacity,1))}.focus-within\:ring-2:focus-within{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.focus-within\:ring-ochre-500\/20:focus-within{--tw-ring-color:rgba(217,155,38,.2)}.hover\:border-ochre-500\/70:hover{border-color:rgba(217,155,38,.7)}.hover\:bg-espresso-600:hover{--tw-bg-opacity:1;background-color:rgb(74 61 41/var(--tw-bg-opacity,1))}.hover\:bg-espresso-700\/80:hover{background-color:rgba(56,46,31,.8)}.hover\:bg-ochre-400:hover{--tw-bg-opacity:1;background-color:rgb(245 184 46/var(--tw-bg-opacity,1))}.hover\:from-ochre-300:hover{--tw-gradient-from:#fcd34d var(--tw-gradient-from-position);--tw-gradient-to:rgba(252,211,77,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.hover\:to-ochre-500:hover{--tw-gradient-to:#d99b26 var(--tw-gradient-to-position)}.hover\:text-ivory-100:hover{--tw-text-opacity:1;color:rgb(250 245 235/var(--tw-text-opacity,1))}.hover\:text-ochre-300:hover{--tw-text-opacity:1;color:rgb(252 211 77/var(--tw-text-opacity,1))}.focus\:border-ochre-500:focus{--tw-border-opacity:1;border-color:rgb(217 155 38/var(--tw-border-opacity,1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.active\:scale-95:active{--tw-scale-x:.95;--tw-scale-y:.95}.active\:scale-95:active,.active\:scale-\[0\.98\]:active{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.active\:scale-\[0\.98\]:active{--tw-scale-x:0.98;--tw-scale-y:0.98}.group:hover .group-hover\:text-ochre-300{--tw-text-opacity:1;color:rgb(252 211 77/var(--tw-text-opacity,1))}@media (min-width:640px){.sm\:h-\[820px\]{height:820px}.sm\:rounded-\[36px\]{border-radius:36px}.sm\:border-\[6px\]{border-width:6px}.sm\:border-espresso-700{--tw-border-opacity:1;border-color:rgb(56 46 31/var(--tw-border-opacity,1))}.sm\:p-4{padding:1rem}}
+</style>
+<style>
+:root{box-sizing:border-box;color-scheme:dark;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:#14100A}
+@keyframes ring{0%{transform:scale(.95);opacity:.7}70%,100%{transform:scale(1.28);opacity:0}}
+.ring{animation:ring 2s cubic-bezier(.24,0,.38,1) infinite}.ring2{animation:ring 2s cubic-bezier(.24,0,.38,1) infinite .7s}
+@media (prefers-reduced-motion:reduce){.ring,.ring2{animation:none}}
+.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}
+button:focus-visible,input:focus-visible{outline:2px solid #F5B82E;outline-offset:2px}
+</style>
+</head>
+<body class="text-ivory-100 font-sans antialiased min-h-screen flex items-center justify-center sm:p-4 selection:bg-ochre-500 selection:text-espresso-950">
+<div class="w-full max-w-[430px] h-screen sm:h-[820px] bg-espresso-900 sm:rounded-[36px] sm:border-[6px] sm:border-espresso-700 shadow-2xl flex flex-col overflow-hidden relative">
+
+<!-- HEADER -->
+<header class="px-5 pt-5 pb-4 bg-espresso-850/90 border-b border-espresso-700/80 flex items-start justify-between gap-3 shrink-0 z-20">
+  <div class="flex-1 min-w-0">
+    <span class="text-[11px] font-semibold tracking-wider text-ochre-400">Patient perspective</span>
+    <h1 class="text-[20px] leading-[1.25] font-bold tracking-tight mt-1">Ask from
+      <button onclick="openName()" title="Tap to edit patient name" class="text-ochre-400 hover:text-ochre-300 underline decoration-ochre-500/50 decoration-dotted underline-offset-4"><span id="pname">Arthur</span>’s</button> perspective</h1>
+  </div>
+  <div class="shrink-0 pt-1 flex flex-col items-end gap-2">
+    <button onclick="showTab('call')" aria-label="Call caregiver" class="inline-flex items-center gap-2.5 px-6 py-4 rounded-2xl bg-gradient-to-b from-ochre-400 to-ochre-600 hover:from-ochre-300 hover:to-ochre-500 active:scale-95 text-espresso-950 text-lg font-bold shadow-[0_8px_22px_rgba(217,155,38,0.3)] border-2 border-ochre-300/60 transition-all">
+      <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>Call</button>
+  </div>
+</header>
+
+<main class="flex-1 overflow-y-auto no-scrollbar relative">
+
+<!-- HOME TAB -->
+<section id="tab-home" class="px-5 pt-6 pb-8 flex flex-col gap-6">
+  <div class="flex flex-col items-center py-2">
+    <div class="relative flex items-center justify-center">
+      <div id="w1" class="hidden absolute w-32 h-32 rounded-full bg-ochre-500/30 ring pointer-events-none"></div>
+      <div id="w2" class="hidden absolute w-32 h-32 rounded-full bg-ochre-500/20 ring2 pointer-events-none"></div>
+      <div class="w-32 h-32 rounded-full bg-ochre-500/15 border border-ochre-500/25 flex items-center justify-center">
+        <button onclick="toggleVoice()" aria-label="Tap to speak" class="w-24 h-24 rounded-full bg-gradient-to-b from-ochre-400 to-ochre-600 hover:from-ochre-300 hover:to-ochre-500 active:scale-95 text-espresso-950 shadow-[0_10px_28px_rgba(217,155,38,0.35)] border-2 border-ochre-300/60 flex items-center justify-center transition-all">
+          <svg class="w-11 h-11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        </button>
+      </div>
+    </div>
+    <p id="micText" class="mt-3 text-xs font-medium text-ivory-300 tracking-wide">Tap microphone to speak</p>
+  </div>
+
+  <form onsubmit="submitSearch(event)">
+    <div class="flex items-center bg-espresso-800 border border-espresso-600 focus-within:border-ochre-500 focus-within:ring-2 focus-within:ring-ochre-500/20 rounded-2xl p-1.5 pl-4 shadow-lg transition-all">
+      <svg class="w-5 h-5 text-ochre-400 shrink-0 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="q" type="text" aria-label="Search" placeholder="Try: Where is my mug?" class="w-full bg-transparent text-base text-ivory-100 placeholder-ivory-400 focus:outline-none py-2">
+      <button type="submit" aria-label="Submit question" class="ml-2 w-10 h-10 rounded-xl bg-ochre-500 hover:bg-ochre-400 active:scale-95 text-espresso-950 flex items-center justify-center shrink-0 shadow-md">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
+  </form>
+  <p class="text-xs text-ivory-400 -mt-3 px-1">You can add a time: “Where were my keys yesterday?”</p>
+
+  <div class="flex items-center gap-3 pt-1"><span class="text-sm font-medium text-ivory-200">Or tap a picture to locate</span><div class="h-px flex-1 bg-espresso-700/80"></div></div>
+  <div id="grid" class="grid grid-cols-2 gap-3.5"></div>
+</section>
+
+<!-- CALL SCREEN -->
+<section id="tab-call" class="hidden px-5 pt-6 pb-8 flex-col gap-4">
+  <h2 class="text-xl font-bold">Need a hand?</h2>
+  <p class="text-sm text-ivory-300">You are safe at home. Sarah is always happy to help.</p>
+  <div class="bg-espresso-800 border border-espresso-600 rounded-2xl p-5">
+    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/70 border border-emerald-500/40 rounded-full px-3 py-1">Available nearby</span>
+    <h3 class="text-2xl font-bold mt-3">Sarah</h3>
+    <p class="text-sm text-ivory-400 mb-4">Your daughter · Caretaker</p>
+    <button onclick="callMsg('Calling Sarah...')" class="w-full py-3 rounded-xl bg-ochre-500 hover:bg-ochre-400 text-espresso-950 font-bold">Call Sarah now</button>
+    <button onclick="callMsg('Message sent to Sarah')" class="w-full py-3 mt-2.5 rounded-xl bg-espresso-700 hover:bg-espresso-600 text-ivory-200 font-semibold text-sm">Send “Please check in on me”</button>
+    <p id="callStatus" class="text-center text-sm text-emerald-300 mt-3 min-h-[20px]"></p>
+  </div>
+  <button onclick="showTab('home')" class="w-full py-3 rounded-xl bg-ochre-500 hover:bg-ochre-400 text-espresso-950 font-bold">Back to home</button>
+</section>
+</main>
+
+<!-- ANSWER DRAWER -->
+<div id="drawer" class="hidden absolute inset-0 bg-espresso-950/75 backdrop-blur-sm z-30 flex items-end justify-center p-4">
+  <div class="w-full max-h-[94%] flex flex-col bg-espresso-800 border border-ochre-500/50 rounded-3xl p-5 shadow-2xl">
+    <div class="flex items-start justify-between gap-3 mb-3 shrink-0">
+      <div class="min-w-0"><span class="text-[11px] font-bold tracking-wider text-ochre-400">Memory recall</span><h3 id="dTitle" class="text-lg font-bold leading-snug"></h3><span id="dBadge" class="inline-flex mt-2"></span></div>
+      <button onclick="closeDrawer()" aria-label="Close" class="w-11 h-11 shrink-0 flex items-center justify-center rounded-xl bg-espresso-700 text-ivory-300 hover:text-ivory-100">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="dBody" class="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-3 mb-3"></div>
+    <div id="dTime" class="shrink-0 mb-3"></div>
+    <button onclick="closeDrawer()" class="shrink-0 w-full min-h-[52px] rounded-xl bg-ochre-500 hover:bg-ochre-400 text-espresso-950 font-bold text-base">Got it, thank you</button>
+  </div>
+</div>
+
+<!-- NAME MODAL -->
+<div id="nameModal" class="hidden absolute inset-0 bg-espresso-950/75 backdrop-blur-sm z-30 flex items-center justify-center p-5">
+  <div class="w-full bg-espresso-800 border border-espresso-600 rounded-3xl p-5 shadow-2xl">
+    <h3 class="text-base font-bold mb-3">Set patient name</h3>
+    <input id="nameIn" type="text" placeholder="e.g., Arthur" class="w-full bg-espresso-900 border border-espresso-600 focus:border-ochre-500 rounded-xl px-3.5 py-2.5 text-sm mb-4 focus:outline-none">
+    <div class="flex gap-2.5">
+      <button onclick="nameModal.classList.add('hidden')" class="flex-1 py-2.5 rounded-xl bg-espresso-700 text-ivory-200 text-sm font-medium">Cancel</button>
+      <button onclick="saveName()" class="flex-1 py-2.5 rounded-xl bg-ochre-500 text-espresso-950 text-sm font-bold">Save name</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+// Icons (24x24 line icons) keyed by object stem
+const IC={
+ key:'<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
+ glasses:'<circle cx="6" cy="15" r="4"/><circle cx="18" cy="15" r="4"/><path d="M14 15a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/><path d="M2.5 13 5 7c.7-1.3 1.4-2 3-2"/><path d="M21.5 13 19 7c-.7-1.3-1.5-2-3-2"/>',
+ phone:'<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
+ wallet:'<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+ medicine:'<path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>',
+ remote:'<rect x="7" y="2" width="10" height="20" rx="2"/><line x1="10" y1="12" x2="14" y2="12"/><line x1="12" y1="10" x2="12" y2="14"/>',
+ mug:'<path d="M5 8h11v7a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M16 10h2a2 2 0 0 1 0 4h-2"/><path d="M9 3v2M12 3v2"/>',
+ shoe:'<path d="M3 17v-4l4-1 3-4 3 3 6 1a3 3 0 0 1 2 3v2z"/><path d="M2 20h20"/>'
+};
+// Mock of the /api/v1/query response. mode = resolution_mode: direct | ranked | ambiguous
+// c = candidates (max 3, one per place, best first). past = answer when a time cue (as_of) is given.
+const mem={
+ 'Keys':{kind:'key',q:'Where are my keys?',p:'Where were my keys',mode:'direct',c:[{place:'Kitchen counter',sub:'Next to the fruit bowl',seen:'Seen 10 minutes ago',tone:0}],past:{place:'Entryway table',sub:'Near the front door',tone:1}},
+ 'Glasses':{kind:'glasses',q:'Where are my glasses?',p:'Where were my glasses',mode:'direct',c:[{place:'Living room side table',sub:'Next to your armchair',seen:'Seen 5 minutes ago',tone:1}],past:{place:'Bedroom nightstand',sub:'Beside your lamp',tone:2}},
+ 'Phone':{kind:'phone',q:'Where is my phone?',p:'Where was my phone',mode:'direct',c:[{place:'Bedroom nightstand',sub:'Plugged into its charger',seen:'Seen 15 minutes ago',tone:2}],past:{place:'Kitchen table',sub:'Near the window',tone:0}},
+ 'Wallet':{kind:'wallet',q:'Where is my wallet?',p:'Where was my wallet',mode:'ranked',c:[{place:'Entryway tray',sub:'The small wooden tray by the door',seen:'Seen 1 hour ago',tone:1},{place:'Bedroom dresser',sub:'On top of the dresser',seen:'Seen yesterday',tone:2}],past:{place:'Hallway coat',sub:'In the coat by the door',tone:0}},
+ 'Medicine':{kind:'medicine',q:'Where is my medicine?',p:'Where was my medicine',mode:'direct',c:[{place:'Kitchen cabinet',sub:'Lower shelf, by the water glasses',seen:'Seen 30 minutes ago',tone:0}],past:{place:'Kitchen table',sub:'Next to the fruit bowl',tone:1}},
+ 'TV Remote':{kind:'remote',q:'Where is the TV remote?',p:'Where was the TV remote',mode:'direct',c:[{place:'Living room sofa',sub:'On the right cushion',seen:'Seen 20 minutes ago',tone:2}],past:{place:'Coffee table',sub:'In front of the sofa',tone:1}},
+ 'Mug':{kind:'mug',q:'Where is my mug?',p:'Where was my mug',mode:'ambiguous',c:[{place:'Dish rack',sub:'Beside the kitchen sink',seen:'Seen 20 minutes ago',tone:0},{place:'Kitchen counter',sub:'Next to the kettle',seen:'Seen this morning',tone:1},{place:'Living room side table',sub:'Next to your armchair',seen:'Seen yesterday',tone:2}],past:{place:'Kitchen table',sub:'By the window',tone:0}},
+ 'Shoes':{kind:'shoe',q:'Where are my shoes?',p:'Where were my shoes',mode:'ambiguous',c:[{place:'Shoe cabinet',sub:'By the front door',seen:'Seen 2 hours ago',tone:2},{place:'Bedroom floor',sub:'Beside the bed',seen:'Seen this morning',tone:0}],past:{place:'Laundry room',sub:'Under the shelf',tone:1}}
+};
+// Friendly badge for resolution_mode (never a raw probability)
+const B={direct:['Found it','text-emerald-300 bg-emerald-950/70 border-emerald-500/40'],ranked:['Best guess','text-ochre-300 bg-ochre-700/20 border-ochre-500/40'],ambiguous:['I’m not sure — which one?','text-ochre-300 bg-ochre-700/20 border-ochre-500/40'],none:['I’m not sure','text-ivory-300 bg-espresso-700 border-espresso-600']};
+const TONES=[['#4A3D29','#2A2318'],['#5a4a33','#221C13'],['#3b3426','#2e281c']];
+
+// Placeholder "photo" – in the real app this is the candidate's crop_url
+function photo(c){const t=TONES[c.tone%3];
+ return `<svg class="w-full h-full" viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Photo of ${c.place}"><rect width="160" height="100" fill="${t[0]}"/><rect y="66" width="160" height="34" fill="${t[1]}"/><rect x="52" y="20" width="56" height="54" rx="6" fill="none" stroke="#F5B82E" stroke-width="2" stroke-dasharray="6 4"/><g transform="translate(59 27) scale(1.75)" fill="none" stroke="#FCD34D" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${IC[c.kind]}</g></svg>`}
+function card(c,big,tag){
+ return `<div class="bg-espresso-850/90 border border-espresso-700 rounded-2xl overflow-hidden ${big?'':'flex'}"><div class="${big?'h-40':'w-28 shrink-0'}">${photo(c)}</div><div class="p-3.5 flex flex-col justify-center min-w-0">${tag?`<span class="text-[11px] font-bold tracking-wider text-ochre-400 mb-1">${tag}</span>`:''}<p class="${big?'text-xl':'text-lg'} font-bold leading-tight">${c.place}</p><p class="text-sm text-ivory-300 mt-1">${c.sub}</p><p class="text-xs text-ivory-400 mt-1.5">${c.seen}</p></div></div>`}
+
+function openDrawer(title,html,mode){
+ $('dTitle').textContent=title;$('dBody').innerHTML=html;$('dBody').scrollTop=0;
+ $('dBadge').className='inline-flex mt-2 text-xs font-semibold border rounded-full px-3 py-1 '+B[mode][1];$('dBadge').textContent=B[mode][0];
+ $('drawer').classList.remove('hidden')}
+function closeDrawer(){$('drawer').classList.add('hidden')}
+function renderTime(n,when){
+ const b=(w,l)=>`<button onclick="showAnswer('${n}','${w}')" class="flex-1 min-h-[48px] rounded-xl bg-espresso-700 hover:bg-espresso-600 text-ivory-200 text-sm font-semibold px-2">${l}</button>`;
+ $('dTime').innerHTML=when==='now'?`<p class="text-sm text-ivory-300 mb-2">Was it somewhere else earlier?</p><div class="flex gap-2">${b('am','This morning')}${b('yday','Yesterday')}</div>`:`<div class="flex">${b('now','Back to now')}</div>`}
+function showAnswer(n,when,ttl){
+ when=when||'now';const m=mem[n];let mode=m.mode,L=m.c;
+ if(when!=='now'){mode='direct';L=[Object.assign({},m.past,{seen:when==='am'?'Seen this morning':'Seen yesterday'})]}
+ L=L.map(c=>Object.assign({kind:m.kind},c));
+ let h='';
+ if(mode==='direct')h=card(L[0],1);
+ else if(mode==='ranked')h=card(L[0],1)+`<button onclick="this.nextElementSibling.classList.remove('hidden');this.remove()" class="min-h-[48px] rounded-xl bg-espresso-700 hover:bg-espresso-600 text-ivory-200 text-sm font-semibold">Not there? See other places</button><div class="hidden flex flex-col gap-3">${L.slice(1).map(c=>card(c)).join('')}</div>`;
+ else h=`<p class="text-base text-ivory-200">It could be in one of these places:</p>`+L.map((c,i)=>card(c,0,i?'':'Most likely')).join('');
+ const T=ttl||(when==='now'?m.q:m.p+(when==='am'?' this morning?':' yesterday?'));openDrawer(T,h,mode);
+ renderTime(n,when)}
+function locateObject(n){showAnswer(n)}
+function submitSearch(e){
+ e.preventDefault();const v=$('q').value.trim();if(!v)return;const l=v.toLowerCase();
+ const k=Object.keys(mem).find(k=>l.includes(k.toLowerCase())||l.includes(mem[k].kind));
+ const w=/yesterday/.test(l)?'yday':/morning|earlier/.test(l)?'am':'now';
+ if(k)showAnswer(k,w,'“'+v+'”');
+ else{openDrawer('“'+v+'”',`<p class="text-base leading-relaxed text-ivory-200 bg-espresso-850/90 border border-espresso-700 rounded-2xl p-4">I’m not sure where that is. Let’s ask Sarah to help.</p><button onclick="closeDrawer();showTab('call')" class="min-h-[48px] rounded-xl bg-espresso-700 hover:bg-espresso-600 text-ivory-200 font-semibold">Call Sarah</button>`,'none');$('dTime').innerHTML=''}
+ $('q').value=''}
+// Build the picture tiles
+function buildGrid(){$('grid').innerHTML=Object.keys(mem).map(n=>`<button onclick="locateObject('${n}')" class="group bg-espresso-800 hover:bg-espresso-700/80 active:scale-[0.98] border border-espresso-600 hover:border-ochre-500/70 rounded-2xl p-4 flex flex-col items-center gap-3 shadow-md transition-all"><div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-ochre-500/20 to-ochre-700/10 border border-ochre-500/30 flex items-center justify-center"><svg class="w-9 h-9 text-ochre-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[mem[n].kind]}</svg></div><span class="text-base font-semibold text-ivory-100 group-hover:text-ochre-300">${n}</span></button>`).join('');}buildGrid();
+let listening=false,t=null;
+function toggleVoice(){
+  listening=!listening;
+  $('w1').classList.toggle('hidden',!listening);$('w2').classList.toggle('hidden',!listening);
+  $('micText').textContent=listening?'Listening... Speak naturally':'Tap microphone to speak';
+  $('micText').classList.toggle('text-ochre-400',listening);
+  clearTimeout(t);
+  if(listening)t=setTimeout(()=>{toggleVoice();showAnswer('Mug',0,'“Where is my mug?”')},3200);
+}
+function showTab(x){
+  ['home','call'].forEach(id=>{const s=$('tab-'+id),on=id===x;s.classList.toggle('hidden',!on);s.classList.toggle('flex',on)});
+  $('callStatus').textContent='';
+}
+function callMsg(m){$('callStatus').textContent=m}
+function openName(){$('nameIn').value=$('pname').textContent;$('nameModal').classList.remove('hidden')}
+function saveName(){$('pname').textContent=$('nameIn').value.trim()||'Arthur';$('nameModal').classList.add('hidden')}
+</script>
+</body>
+</html>
