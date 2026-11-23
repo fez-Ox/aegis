@@ -351,9 +351,9 @@ class DetectorModels:
 
 
 class DinoEmbedder:
-    """DINOv2 ViT-S/14 CLS embedding of a masked box crop (L2-normalised)."""
+    """DINOv3 ViT-S/16 CLS embedding of a masked box crop (L2-normalised)."""
 
-    MODEL_ID = "facebook/dinov2-small"
+    MODEL_ID = "facebook/dinov3-vits16-pretrain-lvd1689m"
 
     def __init__(self) -> None:
         import torch
