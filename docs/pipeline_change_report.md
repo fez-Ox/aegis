@@ -115,7 +115,15 @@ tier metadata or ranker mode to clients. Add:
 - A `GET /api/v1/evaluation/tiers` summary that reports NOT RUN tiers honestly
   instead of zeros — this is what the report/UI should read.
 
-### 3.2 Mobile UI/UX (Flutter, `apps/mobile/lib`)
+### 3.2 Mobile UI/UX (Flutter)
+
+> **Implemented (patient app):** the patient client now lives in
+> `apps/Patient App/` (built from `patient.html`). It models ambiguity and
+> candidates in `lib/models/memory_answer.dart`, consumes `/api/v1/query`
+> first and `/api/v1/ask` as a fallback, and shows candidates as Apple-HIG
+> inset cards with a labelled `resolution_mode` badge. The caregiver app is
+> planned in `apps/Caregiver App/`. The older file paths below describe the
+> original pre-rewrite client and are kept for context.
 
 `apps/mobile/lib/models/query_result.dart` currently models a single answer:
 `found`, `instanceLabel`, `anchorLabel`, `roomLabel`, one `cropUrl`, one
