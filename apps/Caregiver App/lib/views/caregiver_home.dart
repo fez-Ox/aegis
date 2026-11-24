@@ -184,6 +184,12 @@ class _CaregiverHomeState extends State<CaregiverHome> {
         ),
         actions: [
           TextButton(
+            key: const Key('caregiver-server-default'),
+            onPressed: () =>
+                Navigator.pop(context, ApiService.defaultBaseUrl),
+            child: const Text('Use default'),
+          ),
+          TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),

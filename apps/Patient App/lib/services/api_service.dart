@@ -10,6 +10,8 @@ import '../models/memory_answer.dart';
 /// candidates and ambiguity. `/api/v1/ask` is the natural-language fallback for
 /// questions the class-level matcher cannot parse.
 class ApiService {
+  static const String defaultBaseUrl =
+      'https://sans42699--aegis-memory-api-serve-memory-api.us-east.modal.run';
   static const requestTimeout = Duration(seconds: 8);
   static const unreachableMessage =
       "Can't reach Aegis memory. Check the connection and try again.";
@@ -129,7 +131,7 @@ class ApiService {
     try {
       final response = await _client
           .get(Uri.parse('$baseUrl/api/v1/health'))
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 8));
       return response.statusCode == 200;
     } catch (_) {
       return false;

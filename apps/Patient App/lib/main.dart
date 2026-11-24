@@ -13,8 +13,7 @@ void main() {
   // Override at build time for a local server, or from inside the app.
   const baseUrl = String.fromEnvironment(
     'AEGIS_BASE_URL',
-    defaultValue:
-        'https://sans42699--aegis-memory-api-serve-memory-api.us-east.modal.run',
+    defaultValue: ApiService.defaultBaseUrl,
   );
   runApp(AegisPatientApp(
     apiService: ApiService(baseUrl: baseUrl),

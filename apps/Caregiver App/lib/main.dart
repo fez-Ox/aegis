@@ -12,8 +12,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   const baseUrl = String.fromEnvironment(
     'AEGIS_BASE_URL',
-    defaultValue:
-        'https://sans42699--aegis-memory-api-serve-memory-api.us-east.modal.run',
+    defaultValue: ApiService.defaultBaseUrl,
   );
   runApp(AegisCaregiverApp(
     apiService: ApiService(baseUrl: baseUrl),

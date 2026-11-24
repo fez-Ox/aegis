@@ -299,6 +299,12 @@ class _PatientHomeState extends State<PatientHome> with TickerProviderStateMixin
         ),
         actions: [
           TextButton(
+            key: const Key('server-url-default'),
+            onPressed: () =>
+                Navigator.pop(context, ApiService.defaultBaseUrl),
+            child: const Text('Use default'),
+          ),
+          TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
