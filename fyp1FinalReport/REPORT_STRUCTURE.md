@@ -6,6 +6,14 @@
 **Base document:** the FYP-1 mid report in `fyp_report/` (LaTeX, 128 pages, compiled 22 Oct 2026)
 **Code baseline for this guide:** branch `develop` at `ce49dcc` (24 Nov 2026), which contains `main` and `feat/NLQ`
 
+**Companion files in this folder:**
+
+| File | Contents |
+|---|---|
+| `DIAGRAM_SPECS.md` | Exact contents of every figure. **Its figure IDs and specs are authoritative and supersede §6 below** |
+| `MID_REPORT_ERRATA.md` | 69 mistakes found in the mid report, each with a fix |
+| `NEW_CONTENT.md` | Draft prose and filled tables for every chapter |
+
 ---
 
 ## 0. Read this first
@@ -688,6 +696,12 @@ Remove the mid sentence "The diagrams in this report are synchronized with the i
 ---
 
 ## 6. Master diagram register
+
+> **Superseded by `DIAGRAM_SPECS.md`.** This register was the first pass. The full code read changed some figure IDs and corrected two facts:
+> - The patient query sequence calls **`/api/v1/query` first** and `/api/v1/ask` only as a fallback (`apps/Patient App/lib/services/api_service.dart`).
+> - Home-store ingest runs **only after `--download`** (`run_pipeline.py`).
+>
+> Use the IDs in `DIAGRAM_SPECS.md` §1.
 
 Legend:
 - **Status vs mid:** KEEP = reuse the mid PNG; FIX = reuse but rename or fix the caption; REDRAW = same diagram type, new content to match `develop`; NEW = did not exist.
