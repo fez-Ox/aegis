@@ -2,9 +2,9 @@
 ' F5.5 Domain model (conceptual): attributes only, no methods.
 ' Verified against: src/aegis/memory/store.py (_SCHEMA tables, CHECK enums, FKs),
 ' src/aegis/memory/relations.py (RELATIONS), src/aegis/memory/runs.py (_event_type),
+' Enum values (relation, event_type) are listed in the figure caption, not drawn.
 ' src/aegis/memory/ingest.py (moved_while_unobserved), src/aegis/memory/personal.py
 !include _aegis_style.iuml
-!pragma layout smetana
 
 hide methods
 hide circle
@@ -69,40 +69,28 @@ class PersonalItem {
   usual_anchor, usual_room
 }
 
-package "Planned (FR8)" #FFFFFF {
-  class Caregiver #FFFFFF;line.dashed;line:6B7785
-  class AccessGrant #FFFFFF;line.dashed;line:6B7785
-  class AuditEntry #FFFFFF;line.dashed;line:6B7785
+class "Caregiver access\n(planned, FR8)" as Planned #FFFFFF;line.dashed;line:6B7785 {
+  Caregiver, AccessGrant,
+  AuditEntry
 }
 
 Home *-- "0..*" Session
 Home *-- "0..*" Room
-Session "1" -- "0..*" RoomVisit
+Planned .right. Home : grants\naccess to
+Session "1" -right- "0..*" RoomVisit
 Session "1" -- "0..*" Activity
 Session "1" -- "0..*" StateRun
-Room "1" -- "0..*" RoomVisit
+RoomVisit "0..*" -right- "1" Room
 Room "0..1" -- "0..*" StateRun : in
 Room "0..1" -- "0..*" Anchor : contains
 ObjectInstance "1" -- "1..*" StateRun : history
-StateRun "0..*" -right- "0..1" Anchor : relative to
+StateRun "0..*" -- "0..1" Anchor : relative to
 ObjectInstance "0..1" -- "0..*" Event
 Activity "0..1" -- "0..*" Event : groups
+Activity -[hidden]right- StateRun
+Evidence -[hidden]right- Anchor
 StateRun "0..1" -- "0..1" Evidence
-ObjectInstance "1" -- "0..*" Summary : summarises
-ObjectInstance "1" -- "0..1" PersonalItem : enrols
-Caregiver "1" .. "0..*" AccessGrant
-Caregiver "1" .. "0..*" AuditEntry
-Home "1" .up. "0..*" AccessGrant
-RoomVisit -[hidden]right- StateRun
-StateRun -[hidden]right- Anchor
+ObjectInstance "1" -up- "0..*" Summary : summarises
+ObjectInstance "1" -up- "0..1" PersonalItem : enrols
 
-note bottom of StateRun
-  relation: inside, on_surface, under, above,
-  next_to, on_floor, near, in_room, carried_by_user
-end note
-note bottom of Event
-  pickup, placement, anchor_change,
-  state_change, room_change,
-  moved_while_unobserved
-end note
 @enduml

@@ -1,0 +1,46 @@
+@startuml ch6-class-scene-graph-v1
+' F6.1b Iteration 1 scene graph, as at tag v0.2.0-mid2 (13 Oct 2026).
+' Verified against: git show v0.2.0-mid2:src/aegis/memory/scene_graph.py
+' (BoundingBox3D shown as a name only; its fields are in F6.1a)
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+
+  class BoundingBox3D <<capture>>
+  class Relative4DSceneGraph <<memory>> {
+    +anchors: list[SpatialAnchor]
+    +memory_timeline: dict[int,
+      list[ObjectMemoryEntry]]
+    +events: list[dict]
+  }
+  class SpatialAnchor <<memory>> {
+    +anchor_id: int
+    +label: str
+    +center, size: tuple[3 × float]
+    +observations_count: int
+  }
+  class ObjectMemoryEntry <<memory>> {
+    +frame_id, instance_id: int
+    +timestamp: float
+    +label: str
+    +center, size: tuple[3 × float]
+    +anchor_id: int | None
+    +anchor_label: str | None
+    +relative_vector: tuple[3 × float]
+    +relative_distance: float
+    +relation: str
+    +is_active_view: bool
+    +last_seen_timestamp: float
+    +is_in_hand: bool
+    +carrier: str | None
+  }
+
+Relative4DSceneGraph *-- "0..*" SpatialAnchor
+Relative4DSceneGraph *-- "0..*" ObjectMemoryEntry : per frame
+ObjectMemoryEntry "0..*" -right-> "0..1" SpatialAnchor : anchor_id
+BoundingBox3D ..> ObjectMemoryEntry : «derives»
+
+legend bottom right
+  |<#DFF0E3> | aegis.memory.scene_graph (M-B) |
+  |<#DCE9F7> | aegis.core.models (M-A) |
+endlegend
+@enduml

@@ -12,23 +12,24 @@ skinparam ActivityDiamondBorderColor $MC_BORDER
 skinparam ActivityStartColor $INK
 skinparam ActivityEndColor $INK
 
+!pragma useVerticalIf on
 start
 :question;
 if (empty?) then (yes)
   #F1F3F5:empty_query;
-elseif (time or\nactivity words?) then (yes)
-  #F1F3F5:temporal_ /\nactivity_handler_\nnot_implemented;
-elseif (no locate word\nand no known item?) then (yes)
+elseif (time or activity words?) then (yes)
+  #F1F3F5:temporal_ / activity_handler_\nnot_implemented;
+elseif (no locate word and no known item?) then (yes)
   #F1F3F5:unknown_intent;
-elseif (item not in\ndictionary?) then (yes)
-  #F1F3F5:item_not_in_\ndictionary\n+ suggestions;
-elseif (item never\nseen?) then (yes)
-  #F1F3F5:not_observed_\nin_memory;
-elseif (room named,\nnone there?) then (yes)
-  #F1F3F5:no_match_\nin_room;
+elseif (item not in dictionary?) then (yes)
+  #F1F3F5:item_not_in_dictionary\n+ suggestions;
+elseif (item never seen?) then (yes)
+  #F1F3F5:not_observed_in_memory;
+elseif (room named, none there?) then (yes)
+  #F1F3F5:no_match_in_room;
 else (no)
-  :most recent\n(in view first);
-  :answer template\n+ evidence;
+  :most recent state (in view first);
+  :answer template + evidence;
 endif
 :return AskResult;
 stop

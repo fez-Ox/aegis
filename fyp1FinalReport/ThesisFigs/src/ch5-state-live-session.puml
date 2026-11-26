@@ -3,7 +3,6 @@
 ' Verified against: src/aegis/ingestion/live_pipeline.py (ingest_live, LiveIngestConfig defaults),
 ' src/aegis/ingestion/contracts.py (SESSION_STATUSES, GAP_REASONS)
 !include _aegis_style.iuml
-!pragma layout smetana
 
 skinparam StateBackgroundColor $MA_FILL
 skinparam StateBorderColor $MA_BORDER

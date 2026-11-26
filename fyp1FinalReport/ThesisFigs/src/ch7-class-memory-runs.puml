@@ -1,0 +1,59 @@
+@startuml ch7-class-memory-runs
+' F7.1b Relation and state-run building (aegis.memory). Key attributes and public
+' operations only; private (_) members omitted.
+' Verified against: src/aegis/memory/relations.py (box_footprint, classify_relation,
+' Footprint3D, RelationResult), runs.py (Observation, StateRun, build_state_runs,
+' build_events)
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+skinparam class<<utility>> {
+  BackgroundColor #FFFFFF
+  BorderColor $MB_BORDER
+}
+
+class "relations" as relations <<utility>> {
+  +box_footprint(box, gravity): Footprint3D
+  +classify_relation(obj, anchors,\n      gravity): RelationResult
+}
+class "runs" as runs <<utility>> {
+  +build_state_runs(observations): dict
+  +build_events(runs): list[dict]
+}
+class Footprint3D <<memory>> {
+  +polygon: tuple
+  +up_min, up_max: float
+}
+class RelationResult <<memory>> {
+  +relation: str
+  +anchor_id: int | None
+  +certain: bool
+}
+class Observation <<memory>> {
+  +frame_id: int
+  +relation: str
+  +anchor_id: int | None
+  +hand_cue: bool
+  --
+  +state(): tuple
+}
+class StateRun <<memory>> {
+  +instance_id: int
+  +relation: str
+  +anchor_id: int | None
+  +start_time, end_time: float
+  +confidence: float
+  +certain: bool
+}
+
+relations ..> Footprint3D : creates
+relations ..> RelationResult : returns
+runs ..> Observation : reads
+runs ..> StateRun : creates
+StateRun o-right- "1..*" Observation
+relations -[hidden]right- runs
+
+legend right
+  |<#DFF0E3> | aegis.memory class (M-B) |
+  |<#FFFFFF> | «utility» module functions |
+endlegend
+@enduml

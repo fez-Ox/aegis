@@ -24,7 +24,7 @@ Where a value is **unknown**, the spec says so and gives the command or person t
 | Background | **Opaque white.** Several mid figures had transparent backgrounds that turn black in dark PDF viewers (errata D17) |
 | Embedded titles | **None.** No "Figure 5.x", "(a)", "(b) Frame 1" inside the image (errata A10). Captions come from LaTeX only |
 | Fonts | One sans-serif family (Inter, Helvetica or Arial). Element names 14–18 pt at final size; labels ≥ 10 pt at final size. Code identifiers in a monospace face (JetBrains Mono / Consolas) |
-| Aspect | Landscape ≤ 16:10 for most figures. The page allows width 15.9 cm × height 0.55 × text height (`\aegisfig` caps height at `0.55\textheight`); very tall figures shrink and become unreadable |
+| Aspect | Landscape ≤ 16:10 for most figures. The text block is 15.0 cm wide (A4, 3 cm side margins). `\aegisfig` caps height at `0.55\textheight` (about 13 cm); `\aegisfigtall` (REPORT_STRUCTURE §1.4) allows about 20 cm for sequence diagrams and long flowcharts. Very tall figures in the normal slot shrink and become unreadable |
 | Legend | Every figure with more than one line style or colour has a legend box at the bottom, as in the mid figures |
 | Line crossings | No connector may pass **through** another element (errata D2, D3). Route around |
 | Labels | Every arrow carries a label: data name, message or protocol. No floating labels without an arrow (errata D9) |
@@ -60,7 +60,9 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 | Size | At most 12 boxes per diagram, at most 8 lifelines per sequence diagram; split the figure (a/b) rather than shrink it |
 | One message | Each figure answers one question; detail that does not serve it goes in the text |
 | Crossings | No line through a box; line-over-line crossings kept to the unavoidable minimum |
-| Printed text | At least 8 pt at final printed size. A 13 pt PlantUML font prints at 10 pt when the PNG is ≤ 2400 px wide at full text width (and ≤ 1900 px tall at the default height cap) |
+| Printed text | At least 8 pt at final printed size. A 13 pt PlantUML font at 300 dpi prints at 9 pt when the PNG is ≤ 2560 px wide and ≤ 2210 px tall (normal slot) or ≤ 3400 px tall (`\aegisfigtall`); at 8 pt the limits are 2880 px wide, 2490 px / 3830 px tall |
+| Placement | Use `\aegisfigtall` for F5.13–F5.16 (sequence diagrams), F5.20 (NLQ flow) and F7.3 (relations flow). Every other figure uses `\aegisfig` |
+| Layout engine | PlantUML 1.2024.7 with Graphviz (`dot`). Class and state diagrams use Graphviz layout; do not add `!pragma layout smetana` |
 | Colour | Module palette of §0.3 only; colour means module, never decoration; every coloured figure has a legend |
 | Shared style | PlantUML sources include `ThesisFigs/src/_aegis_style.iuml` (palette, fonts, 300 dpi) and, for class diagrams, `_aegis_class.iuml` |
 | Verification | Every source file names, in a header comment, the code files and functions it was checked against |
@@ -105,14 +107,18 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 | F5.18 | `ch5-state-object.png` | 5.9 | UML state machine | NEW | PlantUML (state) |
 | F5.19 | `ch5-activity-compaction.png` | 5.9 | UML activity | NEW | PlantUML (activity) |
 | F5.20 | `ch5-activity-nlq.png` | 5.9 | UML activity | NEW | PlantUML (activity) |
-| F6.1 | `ch6-class-core-models.png` | 6.3 | UML class (Iteration 1) | FIX (rename + notation) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
+| F6.1a | `ch6-class-core-models.png` | 6.3 | UML class (Iteration 1, capture models) | FIX (rename + split) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
+| F6.1b | `ch6-class-scene-graph-v1.png` | 6.3 | UML class (Iteration 1, scene graph) | FIX (split) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
 | F6.2a | `ch6-class-live.png` | 6.3 | UML class (Iteration 1, live capture) | FIX (split) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
 | F6.2b | `ch6-class-api.png` | 6.3 | UML class (Iteration 1, API models) | FIX (split) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
 | F6.3 | `batchvideosamplingflowchart.png` | 6.3 | Flowchart | KEEP | — (reuse existing PNG) |
 | F6.4 | `chapter6-screenshot-evidence.jpeg` | 6.8 | Screenshot | KEEP | — (reuse existing PNG) |
-| F7.1a | `ch7-class-memory-graph.png` | 7.3 | UML class (session graph) | NEW | PlantUML (class) |
-| F7.1b | `ch7-class-memory-store.png` | 7.3 | UML class (home store) | NEW | PlantUML (class) |
-| F7.2 | `ch7-class-query-api-apps.png` | 7.3 | UML class (real code) | NEW | PlantUML (class) |
+| F7.1a | `ch7-class-memory-graph.png` | 7.3 | UML class (session scene graph) | NEW | PlantUML (class) |
+| F7.1b | `ch7-class-memory-runs.png` | 7.3 | UML class (relations and state runs) | NEW | PlantUML (class) |
+| F7.1c | `ch7-class-memory-store.png` | 7.3 | UML class (home store, repository, personal items) | NEW | PlantUML (class) |
+| F7.1d | `ch7-class-memory-ingest.png` | 7.3 | UML class (ingest and compaction) | NEW | PlantUML (class) |
+| F7.2a | `ch7-class-api-apps.png` | 7.3 | UML class (Patient App client, API responses) | NEW | PlantUML (class) |
+| F7.2b | `ch7-class-query.png` | 7.3 | UML class (ranking and NLQ) | NEW | PlantUML (class) |
 | F7.3 | `ch7-flow-relations.png` | 7.3 | Flowchart / activity | NEW | PlantUML (activity) |
 | F7.4 | `ch7-flow-matching.png` | 7.3 | Flowchart / activity | NEW | PlantUML (activity) |
 | F7.5 | `ch7-flow-keyframe.png` | 7.3 | Flowchart | NEW | PlantUML (activity) |
@@ -1002,7 +1008,7 @@ Dashed side branch from step 3: "Optional LLM planner (P1.9, off by default; par
 
 ## 7. Chapter 6 figures (Iteration 1, frozen)
 
-### F6.1 / F6.2 (`ch6-class-core-models.png`, `ch6-class-live-api.png`)
+### F6.1 / F6.2 (drawn as F6.1a `ch6-class-core-models.png`, F6.1b `ch6-class-scene-graph-v1.png`, F6.2a `ch6-class-live.png`, F6.2b `ch6-class-api.png`)
 
 Reuse the mid content, but fix these (errata D14, D15):
 - Rename the files.
@@ -1082,9 +1088,9 @@ KEEP.
 - `StoreRepository` → `HomeStore`.
 - `compact` uses `HomeStore`, `SummaryDraft`, raises `VerificationError`, returns `CompactionReport`.
 
-**Size control:** if it does not fit, split it into F7.1a (session graph: geometry, relations, runs, scene graph) and F7.1b (home store: store, ingest, matching, compaction, personal, repository).
+**Size control (applied):** drawn as four figures so each prints at ≥ 9 pt: F7.1a scene graph and its parts, F7.1b relation classification and state runs, F7.1c home store, repository and personal items, F7.1d ingest, matching and compaction.
 
-### F7.2 Class diagram: query, API and apps (`ch7-class-query-api-apps.png`)
+### F7.2 Class diagram: query, API and apps (drawn as F7.2a `ch7-class-api-apps.png` and F7.2b `ch7-class-query.png`)
 
 **Package `aegis.nlq`:**
 - `Intent` «enumeration» `LOCATE`, `TEMPORAL`, `ACTIVITY`, `UNKNOWN`.

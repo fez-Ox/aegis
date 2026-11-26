@@ -4,7 +4,6 @@
 ' Verified against: src/aegis/memory/matching.py (match_rooms, match_anchors,
 ' match_instances and their default thresholds), src/aegis/memory/ingest.py (call order)
 !include _aegis_style.iuml
-!pragma layout smetana
 left to right direction
 
 skinparam rectangle {

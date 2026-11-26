@@ -63,19 +63,14 @@ class "rooms [ ]" as Rooms <<memory>> {
 }
 }
 
-Events .right.> Latest : instance_id
-Latest ..> Runs : instance_id
-Runs ..> Anchors : anchor_id
-Runs ..> Rooms : room_id
+Latest <.right. Events : instance_id
+Events -[hidden]right- Gravity
+Gravity -[hidden]right- Session
+Latest .down.> Runs : instance_id
+Runs .right.> Anchors : anchor_id
 Anchors .right.> Rooms : room_id
-Visits ..> Rooms : room_id
-Session -[hidden]right- Gravity
-Session -[hidden]- Events
-Gravity -[hidden]- Latest
-
-
-legend bottom right
-  Each box is one top-level key of the file. Dashed arrow: id reference (not a foreign key).
-  No per-keyframe data: the file does not grow with video length.
-endlegend
+Rooms <.right. Visits : room_id
+Runs .right.> Rooms : room_id
+' Legend text ("each box is one top-level key; dashed arrow = id reference; no
+' per-keyframe data") goes in the figure caption.
 @enduml

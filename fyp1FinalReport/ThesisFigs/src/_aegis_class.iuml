@@ -1,5 +1,4 @@
 ' Shared settings for code-level UML class diagrams.
-!pragma layout smetana
 hide empty members
 skinparam ClassBorderThickness 1.2
 skinparam ClassFontStyle bold

@@ -1,0 +1,62 @@
+@startuml ch7-class-api-apps
+' F7.2a Patient App client and API response classes. Key members only.
+' Verified against: apps/Patient App/lib/services/api_service.dart, voice_service.dart,
+' apps/Patient App/lib/models/memory_answer.dart, src/aegis/remote/api.py
+' (query_memory, ask_question, MemoryQueryResponse, AskResponse)
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+skinparam class<<utility>> {
+  BackgroundColor #FFFFFF
+  BorderColor $NEUTRAL_BORDER
+}
+
+interface VoiceService <<interface>> {
+  +start(), stop(), cancel()
+}
+class DeviceVoiceService <<app>>
+class ApiService <<app>> {
+  +baseUrl: String
+  +requestTimeout = 8 s
+  --
+  +ask(text, cue): MemoryAnswer
+  +lookupObject(label, cue)
+  +isServerLive(): bool
+}
+class MemoryAnswer <<app>> {
+  +mode: ResolutionMode
+  +candidates: List<MemoryCandidate>
+  --
+  +fromQuery(json)
+  +fromAsk(json)
+}
+class "API routes" as routes <<utility>> {
+  +query_memory(item): MemoryQueryResponse
+  +ask_question(text): AskResponse
+}
+class MemoryQueryResponse <<infra>> {
+  +found: bool
+  +location_summary: str
+  +crop_url: str | None
+  +resolution_mode: str | None
+  +candidates: list[dict]
+}
+class AskResponse <<infra>> {
+  +found: bool
+  +answer: str
+  +abstain_reason: str | None
+  +evidence: list[dict]
+}
+
+VoiceService <|.. DeviceVoiceService
+ApiService ..> MemoryAnswer : creates
+ApiService .right.> routes : GET /query,\nGET /ask
+routes ..> MemoryQueryResponse : returns
+routes ..> AskResponse : returns
+VoiceService -[hidden]right- ApiService
+
+legend right
+  |<#E9DFF2> | Patient App, Flutter (M-D) |
+  |<#F1F3F5> | aegis.remote.api response models |
+  |<#FFFFFF> | «utility» route functions, «interface» |
+endlegend
+@enduml

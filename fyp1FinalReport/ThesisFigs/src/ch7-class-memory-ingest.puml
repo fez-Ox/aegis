@@ -1,0 +1,58 @@
+@startuml ch7-class-memory-ingest
+' F7.1d Ingest and compaction (aegis.memory). Key attributes and public operations only.
+' Verified against: src/aegis/memory/ingest.py (ingest_session, IngestReport),
+' matching.py (match_rooms, match_anchors, match_instances), compaction.py (compact,
+' rollup, CompactionReport, VerificationError), summaries.py (SummaryDraft)
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+skinparam class<<utility>> {
+  BackgroundColor #FFFFFF
+  BorderColor $MB_BORDER
+}
+
+class "ingest" as ingest <<utility>> {
+  +ingest_session(store, graph): IngestReport
+}
+class "matching" as matching <<utility>> {
+  +match_rooms(...)
+  +match_anchors(...)
+  +match_instances(...)
+}
+class "compaction" as compaction <<utility>> {
+  +compact(store, now): CompactionReport
+  +rollup(store, now): int
+}
+class HomeStore <<memory>>
+class IngestReport <<memory>> {
+  +session_id: str
+  +status: str
+  +runs_inserted: int
+  +runs_extended: int
+  +days_compacted: int
+}
+class CompactionReport <<memory>> {
+  +days_compacted: list[str]
+  +days_failed: list
+  +summaries_written: int
+}
+class SummaryDraft <<memory>> {
+  +kind: str
+  +subject_key: str
+  +text: str
+}
+class VerificationError <<memory>>
+
+ingest ..> matching : uses
+ingest ..> IngestReport : returns
+ingest ..> HomeStore : writes
+ingest ..> compaction : calls
+compaction ..> HomeStore : writes
+compaction ..> CompactionReport : returns
+compaction ..> SummaryDraft : verifies
+compaction ..> VerificationError : raises
+
+legend right
+  |<#DFF0E3> | aegis.memory class (M-B) |
+  |<#FFFFFF> | «utility» module functions |
+endlegend
+@enduml

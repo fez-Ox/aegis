@@ -1,7 +1,6 @@
 @startuml ch6-class-core-models
-' F6.1 Iteration 1 core models and scene graph, as at tag v0.2.0-mid2 (13 Oct 2026).
-' Verified against: git show v0.2.0-mid2:src/aegis/core/models.py and
-' v0.2.0-mid2:src/aegis/memory/scene_graph.py
+' F6.1a Iteration 1 core capture models, as at tag v0.2.0-mid2 (13 Oct 2026).
+' Verified against: git show v0.2.0-mid2:src/aegis/core/models.py
 !include _aegis_style.iuml
 !include _aegis_class.iuml
 
@@ -45,42 +44,12 @@
     +held_by_hand_track_id: int | None
   }
 
-  class Relative4DSceneGraph <<memory>> {
-    +anchors: list[SpatialAnchor]
-    +memory_timeline: dict[int,
-      list[ObjectMemoryEntry]]
-    +events: list[dict]
-  }
-  class SpatialAnchor <<memory>> {
-    +anchor_id: int
-    +label: str
-    +center, size: tuple[3 × float]
-    +observations_count: int
-  }
-  class ObjectMemoryEntry <<memory>> {
-    +frame_id, instance_id: int
-    +timestamp: float
-    +label: str
-    +center, size: tuple[3 × float]
-    +anchor_id: int | None
-    +anchor_label: str | None
-    +relative_vector: tuple[3 × float]
-    +relative_distance: float
-    +relation: str
-    +is_active_view: bool
-    +last_seen_timestamp: float
-    +is_in_hand: bool
-    +carrier: str | None
-  }
-
-Relative4DSceneGraph *-- "0..*" SpatialAnchor
-Relative4DSceneGraph *-- "0..*" ObjectMemoryEntry : per frame
-ObjectMemoryEntry "0..*" -right-> "0..1" SpatialAnchor : anchor_id
-BoundingBox3D ..> ObjectMemoryEntry : «derives»
-Detection2D ..> BoundingBox3D : «lifted to»
+CameraIntrinsics -[hidden]right- Frame
+Frame -[hidden]right- Pose
+CameraIntrinsics -[hidden]down- Detection2D
+Detection2D ..right..> BoundingBox3D : «lifted to»
 
 legend bottom right
   |<#DCE9F7> | aegis.core.models (M-A) |
-  |<#DFF0E3> | aegis.memory.scene_graph (M-B) |
 endlegend
 @enduml

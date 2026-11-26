@@ -50,10 +50,10 @@ class LiveSessionWriter <<capture>> {
 
 FrameSource <|.. OpenCVMjpegSource
 FrameSource ..> DecodedFrame : yields
-LP ..> FrameSource : reads
+FrameSource <.right. LP : reads
 LP ..> LiveIngestionConfig : uses
 LP ..> LiveSessionWriter : uses
-LP ..> LiveIngestionResult : returns
+LP .right.> LiveIngestionResult : returns
 
 legend bottom right
   |<#DCE9F7> | aegis.ingestion, live capture (M-A) |

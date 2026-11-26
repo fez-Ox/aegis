@@ -107,6 +107,15 @@ In the mid report the file names did not match the printed chapter numbers. `cha
 - `\aegisfig[width]{file}{caption}{label}` only looks for **`ThesisFigs/<file>.png`**. A `.svg` or `.jpeg` will show "Missing figure". Export every diagram as PNG, at 300 dpi or at least 2000 px wide.
   - The mid report embedded `chapter6-screenshot-evidence.jpeg` with a raw `\includegraphics` call.
   - Screenshots may stay JPEG only if they use the same raw `\includegraphics`. Converting them to PNG is simpler.
+- **Tall figures.** Add one macro to `main.tex`, next to `\aegisfig`, for figures that need most of a page (sequence diagrams F5.13–F5.16, NLQ flow F5.20, relations flow F7.3):
+  ```latex
+  \newcommand{\aegisfigtall}[4][\textwidth]{%
+    \needspace{0.88\textheight}%
+    \begin{figure}[H]\centering
+    \IfFileExists{ThesisFigs/#2.png}{\includegraphics[width=#1,height=0.85\textheight,keepaspectratio]{ThesisFigs/#2.png}}{\fbox{\parbox[c][5cm][c]{0.85\textwidth}{\centering Missing figure: ThesisFigs/#2.png}}}
+    \caption{#3}\label{#4}\end{figure}}
+  ```
+  It is `\aegisfig` with a 0.85 height cap instead of 0.55; nothing else changes. In the normal slot these figures would print at 6–7 pt.
 - **Line-style convention, stated at the top of Chapter 5:** solid elements are implemented and dashed elements are planned. Every redrawn diagram must follow it.
 - **Notation:**
   - UML 2.5 for use case, class, component, deployment, sequence, state and activity diagrams.
@@ -115,7 +124,7 @@ In the mid report the file names did not match the printed chapter numbers. `cha
   - Draw.io, PlantUML or `tikz-uml` are all fine. Keep the editable source next to the PNG (`ThesisFigs/src/<file>.drawio` or `.puml`) so diagrams can be defended and updated.
 - **File naming:** `ch<N>-<short-name>.png`, lowercase, hyphens, no spaces, brackets or double dots. Fix these mid-report names:
   - `classdiagram(a).png` → `ch6-class-core-models.png`
-  - `classdiagram(b).png` → `ch6-class-live-api.png`
+  - `classdiagram(b).png` → split into `ch6-class-live.png` and `ch6-class-api.png`
   - `chapter8-gantt..png` → `ch9-commit-timeline.png`
   - `queryframe2planned-dequence.png` → `ch5-seq-spoken-query.png`
 - **Captions must not apologise.** Many mid-report captions said things like "room types are described in the text but are not yet depicted". The rubric penalises design artefacts that do not match the code (Form 2 #5, Form 3 #5 and #6). Every Chapter 5 and Chapter 7 diagram must be **redrawn to match `develop`**, so the captions can simply say what the figure shows.
@@ -754,12 +763,14 @@ Legend:
 
 | ID | File | Type | Must show | Status |
 |---|---|---|---|---|
-| F6.1 | `ch6-class-core-models.png` | UML class (real code) | Iteration 1 core models; caption "as at `v0.2.0-mid2`" | FIX (rename from `classdiagram(a)`) |
-| F6.2 | `ch6-class-live-api.png` | UML class (real code) | Iteration 1 live capture and API | FIX (rename from `classdiagram(b)`) |
+| F6.1a | `ch6-class-core-models.png` | UML class (real code) | Iteration 1 capture models; caption "as at `v0.2.0-mid2`" | FIX (rename from `classdiagram(a)`, split) |
+| F6.1b | `ch6-class-scene-graph-v1.png` | UML class (real code) | Iteration 1 scene graph | FIX (split from `classdiagram(a)`) |
+| F6.2a | `ch6-class-live.png` | UML class (real code) | Iteration 1 live capture | FIX (split from `classdiagram(b)`) |
+| F6.2b | `ch6-class-api.png` | UML class (real code) | Iteration 1 API models | FIX (split from `classdiagram(b)`) |
 | F6.3 | `batchvideosamplingflowchart.png` | Flowchart | Batch sampling and keyframe selection | KEEP |
 | F6.4 | `chapter6-screenshot-evidence.jpeg` | Screenshot | Iteration 1 prototype | KEEP |
-| F7.1 | `ch7-class-memory.png` | UML class (real code, key attributes and methods only) | `HomeStore`, `StateRun`, relation classifier, `SceneGraphBuilder`, matching functions, `CompactionReport`, `SummaryDraft`, activities, evidence | NEW |
-| F7.2 | `ch7-class-nlq-api.png` | UML class (real code) | NLQ `Dictionary`, engine, answer model, `AskResponse`; FastAPI request/response models; Flutter `ApiService`, `VoiceService`, answer/candidate models | NEW |
+| F7.1a–d | `ch7-class-memory-graph.png`, `ch7-class-memory-runs.png`, `ch7-class-memory-store.png`, `ch7-class-memory-ingest.png` | UML class (real code, key attributes and methods only) | Scene graph and parts; relation classification and state runs; home store, repository and personal items; ingest, matching and compaction (details in DIAGRAM_SPECS F7.1) | NEW |
+| F7.2a–b | `ch7-class-api-apps.png`, `ch7-class-query.png` | UML class (real code) | Patient App client and API response models; ranking and NLQ engine (details in DIAGRAM_SPECS F7.2) | NEW |
 | F7.3 | `ch7-flow-relations.png` | Flowchart | Relation classification from the OBB and support surface in the gravity frame (inside → on_surface → under → above → next_to → on_floor → near) with thresholds | NEW |
 | F7.4 | `ch7-flow-matching.png` | Flowchart | Session → home store matching: room (landmarks, then proximity) → anchor → instance (label + appearance re-ID) → new or matched IDs | NEW |
 | F7.5 | `ch7-shot-patient-app.png` | Real screenshots (2–3 panels) | Home with tiles, answer drawer with evidence crop, abstention answer | NEW |

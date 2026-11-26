@@ -1,6 +1,7 @@
 @startuml ch5-seq-query
 ' F5.14 Patient asks where an object is.
-' Verified against: apps/Patient App/lib/services/api_service.dart (ask),
+' On timeout the app shows "Can't reach Aegis memory", never a guessed answer.
+' Verified against: apps/Patient App/lib/services/api_service.dart (ask), voice_service.dart,
 ' src/aegis/remote/api.py (query_memory, _answer_question), src/aegis/nlq/engine.py (ask)
 !include _aegis_style.iuml
 
@@ -17,7 +18,6 @@ skinparam ParticipantBorderThickness 1.2
 actor Patient
 box "Patient App (phone)" #FAFBFC
   participant "PatientHome" as Home <<app>>
-  participant "Voice\nService" as Voice <<app>>
   participant "ApiService" as ApiSvc <<app>>
 end box
 box "Aegis server (Modal)" #FAFBFC
@@ -28,12 +28,10 @@ end box
 
 Patient -> Home : asks a question
 opt spoken question
-  Home -> Voice : start()
-  Voice --> Home : text
-  note right of Voice : on-device speech-to-text;\nno audio leaves the phone
+  Home -> Home : VoiceService:\non-device speech-to-text\n(no audio leaves the phone)
 end
 
-Home -> ApiSvc : ask(text)
+Home -> ApiSvc : ask(text)\n8 s timeout
 ApiSvc -> API : GET /query?item=…
 API -> Repo : latest_states()
 Repo --> API : object states
@@ -50,12 +48,8 @@ else not found
   ApiSvc --> Home : answer, or "Not found"
 end
 
-Home --> Patient : answer drawer
+Home --> Patient : answer drawer, or\n"Can't reach\nAegis memory"
 
-note over ApiSvc, API
-  No reply within 8 s → "Can't reach Aegis memory".
-  The app never shows a guessed answer.
-end note
 legend bottom right
   |<#E9DFF2> | Apps (M-D) |
   |<#DFF0E3> | Memory (M-B) |

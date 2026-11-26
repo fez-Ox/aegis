@@ -14,7 +14,7 @@ skinparam SequenceBoxBorderColor $NEUTRAL_BORDER
 skinparam SequenceLifeLineBorderColor #9AA5B1
 skinparam ParticipantBorderThickness 1.2
 
-actor Operator as Op
+
 participant "run_pipeline.py" as RP <<infra>>
 box "Modal cloud" #FAFBFC
   database "Volume\n/data" as Vol <<infra>>
@@ -24,21 +24,21 @@ box "Modal cloud" #FAFBFC
 end box
 database "Home store\n(laptop)" as Home <<memory>>
 
-Op -> RP : ~--live-session <dir> ~--stage live
+[-> RP : operator:\n~--live-session <dir>\n~--stage live
 loop each segment (once if not segmented)
   RP -> Vol : promote, upload frames
   RP -> Pre : run_preprocess
   Pre -> Vol : frames, metadata
   RP -> Rec : run_vggt
-  Rec -> Vol : poses, pointmaps, gravity.json
+  Rec -> Vol : poses, pointmaps,\ngravity.json
   RP -> Per : run_detect_and_lift
-  Per -> Vol : r4d_scene_graph.json, crops
+  Per -> Vol : r4d_scene_graph.json,\ncrops
   opt ~--download (off by default)
     Vol --> RP : outputs
     RP -> Home : ingest_session(graph)\n(skipped with ~--no-ingest)
   end
 end
-RP --> Op : stage timings
+[<-- RP : stage timings
 
 
 legend bottom right
