@@ -1,0 +1,92 @@
+@startuml ch7-class-memory-store
+' F7.1b Home store classes (aegis.memory). Key attributes and public operations only.
+' Verified against: src/aegis/memory/store.py (HomeStore), repository.py
+' (MemoryRepository, JsonGraphRepository, StoreRepository), ingest.py (IngestReport,
+' ingest_session), matching.py, compaction.py (CompactionReport, VerificationError),
+' summaries.py (SummaryDraft), personal.py (PersonalItem, enroll, resolve_alias)
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+skinparam class<<utility>> {
+  BackgroundColor #FFFFFF
+  BorderColor $MB_BORDER
+}
+
+  interface MemoryRepository <<interface>> {
+    +ready: bool
+    --
+    +latest_states(): dict
+    +anchors(), rooms(), events(): list
+    +rename_room(room_id, label)
+    +keyframe_count(): int
+  }
+  class JsonGraphRepository <<memory>>
+  class StoreRepository <<memory>>
+  class HomeStore <<memory>> {
+    +home_id: str
+    +path: Path
+    --
+    +transaction()
+    +insert(table, values): int
+    +latest_states(): list
+    +states_as_of(as_of)
+    +events(start, end)
+    +recompute_last_known(id)
+    +delete_session_rows(id)
+  }
+  class "ingest" as ingest <<utility>> {
+    +ingest_session(store, graph): IngestReport
+  }
+  class "matching" as matching <<utility>> {
+    +match_rooms(...)
+    +match_anchors(...)
+    +match_instances(...)
+  }
+  class "compaction" as compaction <<utility>> {
+    +compact(store, now): CompactionReport
+    +rollup(store, now): int
+  }
+  class "personal" as personal <<utility>> {
+    +enroll(store, instance_id, ...)
+    +resolve_alias(store, query)
+  }
+  class IngestReport <<memory>> {
+    +session_id: str
+    +status: str
+    +runs_inserted, runs_extended: int
+    +days_compacted: int
+  }
+  class CompactionReport <<memory>> {
+    +days_compacted: list[str]
+    +days_failed: list
+    +summaries_written: int
+  }
+  class SummaryDraft <<memory>> {
+    +kind: str
+    +subject_key: str
+    +text: str
+  }
+  class VerificationError <<memory>>
+  class PersonalItem <<memory>> {
+    +instance_id: int
+    +alias: str | None
+    +usual_anchor, usual_room
+  }
+
+MemoryRepository <|.. JsonGraphRepository
+MemoryRepository <|.. StoreRepository
+StoreRepository --> "1" HomeStore
+ingest ..> HomeStore : writes
+ingest ..> matching : uses
+ingest ..> IngestReport : returns
+ingest ..> compaction : calls
+compaction ..> HomeStore : writes
+compaction ..> SummaryDraft : verifies
+compaction ..> VerificationError : raises
+compaction ..> CompactionReport : returns
+personal ..> PersonalItem : stores in meta
+
+legend bottom right
+  |<#DFF0E3> | aegis.memory class (M-B) |
+  |<#FFFFFF> | «utility» module functions / «interface» |
+endlegend
+@enduml

@@ -1,0 +1,63 @@
+@startuml ch6-class-api
+' F6.2b Iteration 1 API models and query reasoning, as at tag v0.2.0-mid2 (13 Oct 2026).
+' Verified against: git show v0.2.0-mid2:src/aegis/ingestion/live_source.py,
+' live_storage.py, live_pipeline.py, src/aegis/remote/api.py, src/aegis/memory/reasoning.py
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+skinparam class<<utility>> {
+  BackgroundColor #FFFFFF
+  BorderColor $MA_BORDER
+}
+
+class QueryReasoningEngine <<query>> {
+  +extract_target_item(query): str
+  +reason_spatio_temporal_state(...)
+}
+class HealthResponse <<infra>> {
+  +status: str
+  +version: str
+  +dataset_loaded: str
+  +num_anchors, num_events: int
+  +total_timeline_frames: int
+}
+class AnchorModel <<infra>> {
+  +anchor_id: int
+  +label: str
+  +center, size: list[float]
+  +contained_objects: list[str]
+}
+class TimelineEventModel <<infra>> {
+  +event_id, event_type: str
+  +object: str
+  +source_/destination_relation: str | None
+  +source_/destination_anchor: str | None
+  +start_time, end_time: float
+  +summary: str
+}
+class MemoryQueryResponse <<infra>> {
+  +query: str
+  +found: bool
+  +item, instance_label: str | None
+  +instance_id, anchor_id: int | None
+  +anchor_label, relation: str | None
+  +relative_distance_m: float | None
+  +location_summary: str
+  +explanation: str | None
+  +last_seen_timestamp_s: float | None
+  +last_seen_time_ago: str
+  +is_persistent_memory: bool
+  +crop_url: str | None
+  +confidence: float
+  +other_instances: list[dict]
+}
+
+QueryReasoningEngine ..> MemoryQueryResponse : result used in
+QueryReasoningEngine -[hidden]right- HealthResponse
+HealthResponse -[hidden]- TimelineEventModel
+HealthResponse -[hidden]right- AnchorModel
+
+legend bottom right
+  |<#FCE8D0> | aegis.memory.reasoning (M-C) |
+  |<#F1F3F5> | aegis.remote.api Pydantic models |
+endlegend
+@enduml

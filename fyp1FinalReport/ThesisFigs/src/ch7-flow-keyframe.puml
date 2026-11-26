@@ -1,0 +1,39 @@
+@startuml ch7-flow-keyframe
+' F7.5 Live keyframe selection.
+' Verified against: src/aegis/ingestion/keyframe.py (KeyframeSelector._decide),
+' src/aegis/core/config.py (KeyframeConfig defaults)
+!include _aegis_style.iuml
+
+skinparam ActivityBackgroundColor $MA_FILL
+skinparam ActivityBorderColor $MA_BORDER
+skinparam ActivityBorderThickness 1.2
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor $MA_BORDER
+skinparam ActivityStartColor $INK
+skinparam ActivityEndColor $INK
+
+start
+:measure brightness, sharpness\nand change since last kept frame;
+if (brightness\n< 20?) then (yes)
+  #F1F3F5:reject\ntoo_dark;
+elseif (brightness\n> 245?) then (yes)
+  #F1F3F5:reject\ntoo_bright;
+elseif (sharpness\n< 15?) then (yes)
+  #F1F3F5:reject\nblurred;
+elseif (first\nframe?) then (yes)
+  :keep\nfirst_frame;
+elseif (change\n≥ 0.8 %?) then (yes)
+  :keep\nscene_change;
+elseif (≥ 2 s since\nlast keep?) then (yes)
+  :keep\nmax_interval;
+else (no)
+  #F1F3F5:reject\nduplicate;
+endif
+:return decision;
+stop
+
+legend bottom right
+  |<#DCE9F7> | frame kept (capture, M-A) |
+  |<#F1F3F5> | frame rejected |
+endlegend
+@enduml

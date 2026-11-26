@@ -1,0 +1,99 @@
+@startuml ch7-class-memory-graph
+' F7.1a Session graph classes (aegis.geometry, aegis.memory). Key attributes and
+' public operations only; private (_) members omitted.
+' Verified against: src/aegis/geometry/gravity.py (GravityFrame),
+' src/aegis/memory/anchors.py, rooms.py, relations.py, runs.py, scene_graph.py
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+
+class GravityFrame <<capture>> {
+    +up: tuple[float, float, float]
+    +floor_offset: float | None
+    +source: str
+    +confidence: float
+    +camera_height: float | None
+    --
+    +elevation(point): float
+    +horizontal(point): tuple
+    +is_reliable(min_confidence): bool
+}
+
+package aegis.memory {
+  class Relative4DSceneGraph <<memory>> {
+    +anchors: list[SpatialAnchor]
+    +rooms: list[RoomRegion]
+    +state_runs: list[dict]
+    +latest_states: list[dict]
+    +events: list[dict]
+    +gravity: GravityFrame
+    --
+    +as_dict(): dict
+  }
+  class SpatialAnchor <<memory>> {
+    +anchor_id: int
+    +canonical: str
+    +center, size: tuple
+    +room_id: int | None
+    +up_min, up_max: float | None
+  }
+  class RoomRegion <<memory>> {
+    +room_id: int
+    +label, room_type: str
+    +evidence_labels: list[str]
+  }
+  class StateRun <<memory>> {
+    +instance_id: int
+    +relation: str
+    +anchor_id: int | None
+    +start_time, end_time: float
+    +confidence: float
+    +certain: bool
+  }
+  class Observation <<memory>> {
+    +frame_id: int
+    +relation: str
+    +anchor_id: int | None
+    +hand_cue: bool
+    --
+    +state(): tuple
+  }
+  class RelationResult <<memory>> {
+    +relation: str
+    +anchor_id: int | None
+    +certain: bool
+  }
+  class Footprint3D <<memory>> {
+    +polygon: tuple
+    +up_min, up_max: float
+  }
+  class "relations" as relations <<utility>> {
+    +box_footprint(box, gravity)
+    +classify_relation(obj, anchors,\n      gravity): RelationResult
+  }
+  class "runs" as runs <<utility>> {
+    +build_state_runs(observations): dict
+    +build_events(runs): list[dict]
+  }
+}
+skinparam class<<utility>> {
+  BackgroundColor #FFFFFF
+  BorderColor $MB_BORDER
+}
+
+Relative4DSceneGraph *-- "0..*" SpatialAnchor
+Relative4DSceneGraph *-- "0..*" RoomRegion
+Relative4DSceneGraph *-- "1" GravityFrame
+StateRun o-- "1..*" Observation
+relations ..> Footprint3D : creates
+relations ..> RelationResult : returns
+runs ..> Observation : reads
+runs ..> StateRun : creates
+RelationResult -[hidden]- SpatialAnchor
+Footprint3D -[hidden]- RoomRegion
+
+legend bottom right
+  |<#DCE9F7> | aegis.geometry (M-A) |
+  |<#DFF0E3> | Memory (M-B) |
+  |<#FFFFFF> | «utility» module functions |
+endlegend
+@enduml

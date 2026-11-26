@@ -1,0 +1,81 @@
+@startuml ch5-scene-graph-v2
+' F5.6 Session scene graph, schema v2 (r4d_scene_graph.json). Key fields per part.
+' Verified against: src/aegis/memory/scene_graph.py (Relative4DSceneGraph.as_dict,
+' session dict, latest_states), anchors.py (SpatialAnchor), rooms.py (RoomRegion),
+' runs.py (StateRun.as_dict, build_events), geometry/gravity.py (GravityFrame.as_dict),
+' remote/workers.py (root dataset_id)
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+hide stereotype
+skinparam PackageBorderColor $MB_BORDER
+skinparam PackageBorderThickness 2
+
+package "r4d_scene_graph.json   (schema_version: 2, dataset_id)" as Doc {
+class "session {}" as Session <<memory>> {
+  started_at, ended_at
+  time_source {capture, none}
+  keyframe_count
+  duration_seconds
+}
+class "gravity {}" as Gravity <<capture>> {
+  up [3], floor_offset
+  source, confidence
+  camera_height
+}
+class "events [ ]" as Events <<memory>> {
+  event_id
+  event_type: pickup, placement,
+    anchor_change, state_change,
+    room_change
+  instance_id
+  source_/destination_relation
+  source_/destination_anchor_id
+  start_time, end_time
+}
+class "latest_states [ ]" as Latest <<memory>> {
+  instance_id, label, canonical
+  relation, anchor_label, room_label
+  is_active_view, is_in_hand
+  last_seen_wallclock
+}
+class "state_runs [ ]" as Runs <<memory>> {
+  instance_id, relation
+  relation_certain
+  anchor_id, room_id
+  start_time, end_time
+  confidence, best_frame
+}
+class "room_visits [ ]" as Visits <<memory>> {
+  room_id, room_label
+  start_time, end_time
+  keyframe_count
+}
+class "anchors [ ]" as Anchors <<memory>> {
+  anchor_id, canonical, label
+  center [3], size [3], yaw
+  room_id
+  up_min, up_max, support_up
+}
+class "rooms [ ]" as Rooms <<memory>> {
+  room_id, label, room_type
+  footprint [ ]
+  evidence_labels [ ]
+}
+}
+
+Events .right.> Latest : instance_id
+Latest ..> Runs : instance_id
+Runs ..> Anchors : anchor_id
+Runs ..> Rooms : room_id
+Anchors .right.> Rooms : room_id
+Visits ..> Rooms : room_id
+Session -[hidden]right- Gravity
+Session -[hidden]- Events
+Gravity -[hidden]- Latest
+
+
+legend bottom right
+  Each box is one top-level key of the file. Dashed arrow: id reference (not a foreign key).
+  No per-keyframe data: the file does not grow with video length.
+endlegend
+@enduml

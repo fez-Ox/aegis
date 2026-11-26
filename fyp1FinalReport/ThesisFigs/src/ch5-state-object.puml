@@ -1,0 +1,31 @@
+@startuml ch5-state-object
+' F5.18 Life of one object instance: each state is one StateRun, each transition one event.
+' Verified against: src/aegis/memory/runs.py (_segments, build_state_runs, _event_type),
+' src/aegis/memory/ingest.py (_ingest_runs: extend vs moved_while_unobserved),
+' src/aegis/core/config.py (MemoryBuildConfig: min_observations=2,
+' min_run_observations=2, trailing_single_confidence=0.5)
+!include _aegis_style.iuml
+!pragma layout smetana
+scale 1.35
+
+skinparam StateBackgroundColor $MB_FILL
+skinparam StateBorderColor $MB_BORDER
+skinparam StateBorderThickness 1.2
+skinparam StateFontStyle bold
+skinparam StateAttributeFontSize 12
+skinparam StateAttributeFontStyle plain
+
+state Placed : relation to an anchor:\ninside, on_surface, under, above,\nnext_to, on_floor, near\nor in_room (no anchor)
+state Carried : carried_by_user
+state "Out of view" as Away #F1F3F5;line:6B7785 : last-known state kept\n(object permanence)
+
+[*] --> Placed : seen in 2+ frames\n/ new instance
+Placed --> Carried : pickup
+Carried --> Placed : placement
+Placed --> Placed : anchor_change (other anchor)\nstate_change (same anchor)
+Placed --> Away : leaves view\n(no event)
+Away --> Placed : next session, same place\n/ extend last run
+Away --> Placed : next session, elsewhere\n/ moved_while_unobserved
+
+note "A new state starts only after 2 frames in a row agree\n(or 1 final frame with confidence ≥ 0.5)." as N1
+@enduml

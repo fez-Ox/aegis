@@ -1,0 +1,49 @@
+@startuml ch5-seq-pipeline
+' F5.13 One pipeline run over a live capture.
+' Verified against: run_pipeline.py (main, _run_stages, _run_live_segmented,
+' _ingest_into_home, _download_outputs), src/aegis/remote/workers.py
+' (run_preprocess, run_vggt, run_detect_and_lift, run_rerun)
+!include _aegis_style.iuml
+
+hide footbox
+hide stereotype
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 10
+skinparam BoxPadding 8
+skinparam SequenceBoxBorderColor $NEUTRAL_BORDER
+skinparam SequenceLifeLineBorderColor #9AA5B1
+skinparam ParticipantBorderThickness 1.2
+
+actor Operator as Op
+participant "run_pipeline.py" as RP <<infra>>
+box "Modal cloud" #FAFBFC
+  database "Volume\n/data" as Vol <<infra>>
+  participant "Preprocess\n(CPU)" as Pre <<capture>>
+  participant "Reconstructor\n(GPU)" as Rec <<capture>>
+  participant "Perception\n(GPU)" as Per <<memory>>
+end box
+database "Home store\n(laptop)" as Home <<memory>>
+
+Op -> RP : ~--live-session <dir> ~--stage live
+loop each segment (once if not segmented)
+  RP -> Vol : promote, upload frames
+  RP -> Pre : run_preprocess
+  Pre -> Vol : frames, metadata
+  RP -> Rec : run_vggt
+  Rec -> Vol : poses, pointmaps, gravity.json
+  RP -> Per : run_detect_and_lift
+  Per -> Vol : r4d_scene_graph.json, crops
+  opt ~--download (off by default)
+    Vol --> RP : outputs
+    RP -> Home : ingest_session(graph)\n(skipped with ~--no-ingest)
+  end
+end
+RP --> Op : stage timings
+
+
+legend bottom right
+  |<#DCE9F7> | Capture (M-A) |
+  |<#DFF0E3> | Memory (M-B) |
+  |<#F1F3F5> | Infrastructure |
+endlegend
+@enduml

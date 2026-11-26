@@ -1,0 +1,40 @@
+@startuml ch5-activity-nlq
+' F5.20 Rule-based NLQ answer engine.
+' Verified against: src/aegis/nlq/engine.py (classify_intent, ask, _answer_locate),
+' src/aegis/nlq/dictionary.py (lookup_item, suggestions_for)
+!include _aegis_style.iuml
+
+skinparam ActivityBackgroundColor $MC_FILL
+skinparam ActivityBorderColor $MC_BORDER
+skinparam ActivityBorderThickness 1.2
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor $MC_BORDER
+skinparam ActivityStartColor $INK
+skinparam ActivityEndColor $INK
+
+start
+:question;
+if (empty?) then (yes)
+  #F1F3F5:empty_query;
+elseif (time or\nactivity words?) then (yes)
+  #F1F3F5:temporal_ /\nactivity_handler_\nnot_implemented;
+elseif (no locate word\nand no known item?) then (yes)
+  #F1F3F5:unknown_intent;
+elseif (item not in\ndictionary?) then (yes)
+  #F1F3F5:item_not_in_\ndictionary\n+ suggestions;
+elseif (item never\nseen?) then (yes)
+  #F1F3F5:not_observed_\nin_memory;
+elseif (room named,\nnone there?) then (yes)
+  #F1F3F5:no_match_\nin_room;
+else (no)
+  :most recent\n(in view first);
+  :answer template\n+ evidence;
+endif
+:return AskResult;
+stop
+
+legend bottom right
+  |<#FCE8D0> | answer step (query, M-C) |
+  |<#F1F3F5> | abstain (reason code shown) |
+endlegend
+@enduml

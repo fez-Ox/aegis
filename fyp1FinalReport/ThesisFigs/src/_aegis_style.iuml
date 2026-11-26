@@ -1,0 +1,79 @@
+' Shared PlantUML style for every Aegis report diagram.
+' Colours follow DIAGRAM_SPECS.md section 0.3 (module palette).
+!$INK = "#1F2933"
+!$LINE = "#52606D"
+!$NEUTRAL_FILL = "#F1F3F5"
+!$NEUTRAL_BORDER = "#6B7785"
+!$MA_FILL = "#DCE9F7"
+!$MA_BORDER = "#2F6DB5"
+!$MB_FILL = "#DFF0E3"
+!$MB_BORDER = "#2E8B57"
+!$MC_FILL = "#FCE8D0"
+!$MC_BORDER = "#D9822B"
+!$MD_FILL = "#E9DFF2"
+!$MD_BORDER = "#7B4BA8"
+!$RISK_FILL = "#F8D7DA"
+!$RISK_BORDER = "#C0392B"
+
+skinparam backgroundColor white
+skinparam dpi 300
+skinparam shadowing false
+skinparam roundCorner 8
+skinparam defaultFontName "Liberation Sans"
+skinparam defaultFontSize 13
+skinparam defaultFontColor $INK
+skinparam ArrowColor $LINE
+skinparam ArrowFontSize 12
+skinparam ArrowThickness 1.2
+skinparam NoteBackgroundColor #FFFBEA
+skinparam NoteBorderColor #B7A86B
+skinparam NoteFontSize 12
+skinparam padding 4
+skinparam LegendBackgroundColor white
+skinparam LegendBorderColor $NEUTRAL_BORDER
+skinparam LegendFontSize 12
+
+' Module styles: tag an element with <<capture>>, <<memory>>, <<query>>, <<app>>, <<infra>> or <<risk>>.
+skinparam participant<<capture>> {
+  BackgroundColor $MA_FILL
+  BorderColor $MA_BORDER
+}
+skinparam participant<<memory>> {
+  BackgroundColor $MB_FILL
+  BorderColor $MB_BORDER
+}
+skinparam participant<<query>> {
+  BackgroundColor $MC_FILL
+  BorderColor $MC_BORDER
+}
+skinparam participant<<app>> {
+  BackgroundColor $MD_FILL
+  BorderColor $MD_BORDER
+}
+skinparam participant<<infra>> {
+  BackgroundColor $NEUTRAL_FILL
+  BorderColor $NEUTRAL_BORDER
+}
+skinparam participant<<risk>> {
+  BackgroundColor $RISK_FILL
+  BorderColor $RISK_BORDER
+}
+
+' Same module colours for database and actor shapes.
+skinparam database<<memory>> {
+  BackgroundColor $MB_FILL
+  BorderColor $MB_BORDER
+}
+skinparam database<<infra>> {
+  BackgroundColor $NEUTRAL_FILL
+  BorderColor $NEUTRAL_BORDER
+}
+skinparam actor {
+  BackgroundColor $MD_FILL
+  BorderColor $MD_BORDER
+}
+' Sequence fragments (loop/alt/opt): thin neutral frame, not heavy black.
+skinparam SequenceGroupBorderColor $NEUTRAL_BORDER
+skinparam SequenceGroupBorderThickness 1
+skinparam SequenceGroupHeaderFontStyle plain
+skinparam SequenceGroupBackgroundColor $NEUTRAL_FILL

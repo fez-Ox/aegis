@@ -1,0 +1,53 @@
+@startuml ch5-seq-caregiver
+' F5.15 Caregiver operations: rename a room, enrol a personal item, read capture status.
+' Verified against: apps/Caregiver App/lib/services/api_service.dart (renameRoom,
+' instanceIdFor, enrollItem, captureStatus), apps/Caregiver App/lib/views
+' (InteriorTab, EnrollDialog, StatusTab), src/aegis/remote/api.py (rename_room,
+' enroll_item, capture_status/pause/resume), src/aegis/memory/homes.py
+' (rename_home_room -> export_registry), src/aegis/memory/personal.py (enroll -> meta)
+!include _aegis_style.iuml
+
+hide footbox
+hide stereotype
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 10
+skinparam BoxPadding 8
+skinparam SequenceBoxBorderColor $NEUTRAL_BORDER
+skinparam SequenceLifeLineBorderColor #9AA5B1
+skinparam ParticipantBorderThickness 1.2
+skinparam SequenceDividerBackgroundColor $NEUTRAL_FILL
+skinparam SequenceDividerBorderColor $NEUTRAL_BORDER
+
+actor Caregiver as CG
+participant "Caregiver App\n(ApiService)" as App <<app>>
+box "Aegis server" #FAFBFC
+  participant "FastAPI\napi.py" as API <<infra>>
+  database "Home store" as Store <<memory>>
+end box
+participant "API client\n(curl, script)" as Cli <<infra>>
+
+== Rename a room (UC-13) ==
+CG -> App : new room name
+App -> API : POST /rooms/rename
+API -> Store : rename_room()
+Store -> Store : unique, ≤ 40 chars;\nwrite home_map.json
+API --> App : ok, or 404 / 409 / 422
+
+== Enrol a personal item (UC-14) ==
+CG -> App : alias, usual place
+App -> API : GET /query (find instance_id)
+App -> API : POST /enroll
+API -> Store : enroll() → meta.personal_items
+API --> App : enrolled items
+
+== Capture status (UC-11, partial) ==
+App -> API : GET /capture/status
+API --> App : CaptureStatusModel
+Cli -> API : POST /capture/pause or /resume\n(no app calls these)
+API -> API : create or delete pause file
+
+note across #F8D7DA
+  **Risk:** CORS * and no authentication: these writes are open to any client.
+  Planned (FR8.1): caregiver login, access-grant scope check, audit entry.
+end note
+@enduml

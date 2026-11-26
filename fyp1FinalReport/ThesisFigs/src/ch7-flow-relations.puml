@@ -1,0 +1,56 @@
+@startuml ch7-flow-relations
+' F7.3 Relation classification of one object against the room's anchors.
+' Verified against: src/aegis/memory/relations.py (classify_relation, _over_anchor,
+' _PRIORITY, VERTICAL_RELATIONS); defaults overlap_threshold=0.5,
+' vertical_tolerance=0.15, floor_tolerance_fraction=0.06, min_gravity_confidence=0.5
+!include _aegis_style.iuml
+
+skinparam ActivityBackgroundColor $MB_FILL
+skinparam ActivityBorderColor $MB_BORDER
+skinparam ActivityBorderThickness 1.2
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor $MB_BORDER
+skinparam ActivityStartColor $INK
+skinparam ActivityEndColor $INK
+
+start
+:on floor = bottom near the floor\n(within 6 % of camera height);
+repeat :next anchor;
+  if (≥ 50 % of object\nover the anchor?) then (yes)
+    :relation over anchor;
+    note left
+      **Over an anchor** (tol = 15 % of height)
+      bottom above anchor top → above
+      container: centre above top → on_surface
+      container: centre inside it → inside
+      bottom at surface → on_surface
+      bottom above surface → on_surface (uncertain)
+      open underneath, top below surface → under
+      otherwise → near (uncertain)
+    end note
+  elseif (centre within\nanchor reach?) then (yes)
+    :on_floor if on floor,\nelse next_to;
+  else (no)
+    #F1F3F5:skip;
+  endif
+repeat while (more anchors?) is (yes)
+->no;
+:pick the highest-priority candidate:
+inside, on_surface > under > on_floor
+> next_to > above > near;
+note right
+  **No candidate:** on_floor if on floor,
+  else near (uncertain) if an anchor is
+  within 3 × reach, else in_room
+end note
+#F8D7DA:if gravity confidence < 0.5:
+under, above, on_floor → near,
+all marked uncertain;
+:RelationResult;
+stop
+
+legend bottom right
+  |<#DFF0E3> | memory step (M-B) |
+  |<#F8D7DA> | fallback for unreliable gravity |
+endlegend
+@enduml

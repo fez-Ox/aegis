@@ -52,7 +52,21 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 | Infrastructure / external / neutral | `#F1F3F5` | `#6B7785` |
 | Risk / gap | `#F8D7DA` | `#C0392B` |
 
-### 0.4 File naming
+### 0.4 Clarity rules (binding; check every rendered PNG against them)
+
+| Rule | Limit |
+|---|---|
+| Labels | 1–4 words per box or arrow label; identifiers copied exactly from the code |
+| Size | At most 12 boxes per diagram, at most 8 lifelines per sequence diagram; split the figure (a/b) rather than shrink it |
+| One message | Each figure answers one question; detail that does not serve it goes in the text |
+| Crossings | No line through a box; line-over-line crossings kept to the unavoidable minimum |
+| Printed text | At least 8 pt at final printed size. A 13 pt PlantUML font prints at 10 pt when the PNG is ≤ 2400 px wide at full text width (and ≤ 1900 px tall at the default height cap) |
+| Colour | Module palette of §0.3 only; colour means module, never decoration; every coloured figure has a legend |
+| Shared style | PlantUML sources include `ThesisFigs/src/_aegis_style.iuml` (palette, fonts, 300 dpi) and, for class diagrams, `_aegis_class.iuml` |
+| Verification | Every source file names, in a header comment, the code files and functions it was checked against |
+| Inspection | Render, open the PNG and look at it before committing; fix overlaps, clipped text and stray labels |
+
+### 0.5 File naming
 
 `ch<N>-<short-name>.png`: lowercase, hyphens only, no spaces, brackets or double dots. The IDs below (`F5.3` etc.) are guide IDs; LaTeX numbers the figures.
 
@@ -76,7 +90,7 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 | F5.3 | `ch5-deployment.png` | 5.2 | UML deployment | REDRAW | draw.io |
 | F5.4 | `ch5-design-evolution.png` | 5.5 | Before/after architecture | NEW | draw.io |
 | F5.5 | `ch5-domain-model.png` | 5.6 | UML conceptual class (domain model) | REDRAW | PlantUML (class) |
-| F5.6 | `ch5-scene-graph-v2.png` | 5.7 | JSON document model | REDRAW | PlantUML (json) |
+| F5.6 | `ch5-scene-graph-v2.png` | 5.7 | JSON document model | REDRAW | PlantUML (class notation, one box per top-level key) |
 | F5.7 | `ch5-erd-home-store.png` | 5.7 | Crow's-foot ERD | NEW | Mermaid (erDiagram) |
 | F5.8 | `ch5-live-session-artifacts.png` | 5.7 | Artifact/file layout | NEW | draw.io |
 | F5.9 | `ch5-patient-app-flow.png` | 5.8 | Screen-flow / wireframe map | REDRAW | draw.io + screenshots |
@@ -92,10 +106,12 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 | F5.19 | `ch5-activity-compaction.png` | 5.9 | UML activity | NEW | PlantUML (activity) |
 | F5.20 | `ch5-activity-nlq.png` | 5.9 | UML activity | NEW | PlantUML (activity) |
 | F6.1 | `ch6-class-core-models.png` | 6.3 | UML class (Iteration 1) | FIX (rename + notation) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
-| F6.2 | `ch6-class-live-api.png` | 6.3 | UML class (Iteration 1) | FIX | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
+| F6.2a | `ch6-class-live.png` | 6.3 | UML class (Iteration 1, live capture) | FIX (split) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
+| F6.2b | `ch6-class-api.png` | 6.3 | UML class (Iteration 1, API models) | FIX (split) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
 | F6.3 | `batchvideosamplingflowchart.png` | 6.3 | Flowchart | KEEP | — (reuse existing PNG) |
 | F6.4 | `chapter6-screenshot-evidence.jpeg` | 6.8 | Screenshot | KEEP | — (reuse existing PNG) |
-| F7.1 | `ch7-class-memory.png` | 7.3 | UML class (real code) | NEW | PlantUML (class) |
+| F7.1a | `ch7-class-memory-graph.png` | 7.3 | UML class (session graph) | NEW | PlantUML (class) |
+| F7.1b | `ch7-class-memory-store.png` | 7.3 | UML class (home store) | NEW | PlantUML (class) |
 | F7.2 | `ch7-class-query-api-apps.png` | 7.3 | UML class (real code) | NEW | PlantUML (class) |
 | F7.3 | `ch7-flow-relations.png` | 7.3 | Flowchart / activity | NEW | PlantUML (activity) |
 | F7.4 | `ch7-flow-matching.png` | 7.3 | Flowchart / activity | NEW | PlantUML (activity) |

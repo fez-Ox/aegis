@@ -1,0 +1,47 @@
+' Shared settings for code-level UML class diagrams.
+!pragma layout smetana
+hide empty members
+skinparam ClassBorderThickness 1.2
+skinparam ClassFontStyle bold
+skinparam ClassAttributeFontSize 12
+skinparam ClassAttributeIconSize 0
+set separator none
+hide circle
+skinparam CircledCharacterFontSize 11
+skinparam CircledCharacterRadius 9
+skinparam StereotypeFontSize 11
+skinparam PackageBorderColor $NEUTRAL_BORDER
+skinparam PackageFontStyle bold
+skinparam PackageBackgroundColor #FFFFFF
+skinparam ArrowFontSize 11
+skinparam class<<memory>> {
+  BackgroundColor $MB_FILL
+  BorderColor $MB_BORDER
+}
+skinparam class<<capture>> {
+  BackgroundColor $MA_FILL
+  BorderColor $MA_BORDER
+}
+skinparam class<<query>> {
+  BackgroundColor $MC_FILL
+  BorderColor $MC_BORDER
+}
+skinparam class<<app>> {
+  BackgroundColor $MD_FILL
+  BorderColor $MD_BORDER
+}
+skinparam class<<infra>> {
+  BackgroundColor $NEUTRAL_FILL
+  BorderColor $NEUTRAL_BORDER
+}
+hide <<memory>> stereotype
+hide <<capture>> stereotype
+hide <<query>> stereotype
+hide <<app>> stereotype
+hide <<infra>> stereotype
+skinparam nodesep 25
+skinparam ranksep 50
+skinparam class<<interface>> {
+  BackgroundColor #FFFFFF
+  BorderColor $NEUTRAL_BORDER
+}

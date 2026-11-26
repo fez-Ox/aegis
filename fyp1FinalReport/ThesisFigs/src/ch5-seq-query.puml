@@ -1,0 +1,65 @@
+@startuml ch5-seq-query
+' F5.14 Patient asks where an object is.
+' Verified against: apps/Patient App/lib/services/api_service.dart (ask),
+' src/aegis/remote/api.py (query_memory, _answer_question), src/aegis/nlq/engine.py (ask)
+!include _aegis_style.iuml
+
+hide footbox
+hide stereotype
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 18
+skinparam BoxPadding 12
+skinparam SequenceGroupBodyBackgroundColor transparent
+skinparam SequenceBoxBorderColor $NEUTRAL_BORDER
+skinparam SequenceLifeLineBorderColor #9AA5B1
+skinparam ParticipantBorderThickness 1.2
+
+actor Patient
+box "Patient App (phone)" #FAFBFC
+  participant "PatientHome" as Home <<app>>
+  participant "Voice\nService" as Voice <<app>>
+  participant "ApiService" as ApiSvc <<app>>
+end box
+box "Aegis server (Modal)" #FAFBFC
+  participant "FastAPI\napi.py" as API <<infra>>
+  participant "Repository" as Repo <<memory>>
+  participant "AnswerEngine\n(NLQ)" as NLQ <<query>>
+end box
+
+Patient -> Home : asks a question
+opt spoken question
+  Home -> Voice : start()
+  Voice --> Home : text
+  note right of Voice : on-device speech-to-text;\nno audio leaves the phone
+end
+
+Home -> ApiSvc : ask(text)
+ApiSvc -> API : GET /query?item=…
+API -> Repo : latest_states()
+Repo --> API : object states
+API -> API : rank_candidates()
+API --> ApiSvc : MemoryQueryResponse
+
+alt object found
+  ApiSvc --> Home : answer + evidence
+else not found
+  ApiSvc -> API : GET /ask?text=…
+  API -> NLQ : ask(text, memory)
+  NLQ --> API : answer, or abstain(reason)
+  API --> ApiSvc : AskResponse
+  ApiSvc --> Home : answer, or "Not found"
+end
+
+Home --> Patient : answer drawer
+
+note over ApiSvc, API
+  No reply within 8 s → "Can't reach Aegis memory".
+  The app never shows a guessed answer.
+end note
+legend bottom right
+  |<#E9DFF2> | Apps (M-D) |
+  |<#DFF0E3> | Memory (M-B) |
+  |<#FCE8D0> | Query / NLQ (M-C) |
+  |<#F1F3F5> | Infrastructure |
+endlegend
+@enduml

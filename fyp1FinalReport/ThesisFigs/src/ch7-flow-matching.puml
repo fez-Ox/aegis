@@ -1,0 +1,64 @@
+@startuml ch7-flow-matching
+' F7.4 Cross-session matching: session rooms, anchors and objects to the home store.
+' Each tier only sees what earlier tiers left unmatched; all matches are one-to-one.
+' Verified against: src/aegis/memory/matching.py (match_rooms, match_anchors,
+' match_instances and their default thresholds), src/aegis/memory/ingest.py (call order)
+!include _aegis_style.iuml
+!pragma layout smetana
+left to right direction
+
+skinparam rectangle {
+  BackgroundColor $MB_FILL
+  BorderColor $MB_BORDER
+  BorderThickness 1.2
+  FontSize 13
+}
+
+rectangle R [
+  <b>Rooms</b>
+  ----
+  1. landmark signature overlap
+      ≥ 0.5, with a clear winner
+  2. continuity: session starts
+      in the wearer's last room
+  3. one unlabelled room left
+      on each side
+  ----
+  <color:#6B7785>else: new room</color>
+]
+rectangle A [
+  <b>Anchors</b> (per type and room)
+  ----
+  1. unique: only one of its
+      type in that room
+  2. aligned: position fits the
+      transform from unique matches
+  3. resident: the same objects
+      rest on it
+  4. ordinal: equal counts left,
+      paired in id order (weak)
+  ----
+  <color:#6B7785>else: new anchor</color>
+]
+rectangle O [
+  <b>Objects</b> (per class)
+  ----
+  1. same place as last known
+  2. carried across a
+      segment boundary
+  3. only one of its class
+      on each side
+  4. appearance distance ≤ 0.35,
+      margin 0.1 over runner-up
+  ----
+  <color:#6B7785>else: new object</color>
+]
+
+R --> A : room map
+A --> O : anchor map
+
+legend bottom right
+  Tiers run top to bottom; each tier sees only items still unmatched.
+  Every match is one-to-one.
+endlegend
+@enduml

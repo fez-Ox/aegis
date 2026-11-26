@@ -1,0 +1,86 @@
+@startuml ch6-class-core-models
+' F6.1 Iteration 1 core models and scene graph, as at tag v0.2.0-mid2 (13 Oct 2026).
+' Verified against: git show v0.2.0-mid2:src/aegis/core/models.py and
+' v0.2.0-mid2:src/aegis/memory/scene_graph.py
+!include _aegis_style.iuml
+!include _aegis_class.iuml
+
+  class CameraIntrinsics <<capture>> {
+    +fx, fy, cx, cy: float
+  }
+  class Frame <<capture>> {
+    +frame_id: int
+    +timestamp: float
+    +path: str
+    +width, height: int
+  }
+  class Pose <<capture>> {
+    +frame_id: int
+    +timestamp: float
+    +matrix: 4×4 tuple
+    +convention = "T_world_camera"
+    +source: str
+  }
+  class Detection2D <<capture>> {
+    +frame_id, track_id: int
+    +label: str
+    +confidence: float
+    +bbox: tuple[4 × float]
+    +mask: Any
+    +is_hand: bool
+    +contact_target_track_id: int | None
+  }
+  class BoundingBox3D <<capture>> {
+    +frame_id, track_id: int
+    +label: str
+    +confidence: float
+    +center, size: tuple[3 × float]
+    +bbox_2d: tuple[4 × float]
+    +spatial_state: str
+    +container_relation: str | None
+    +rotation: tuple[4 × float] | None
+    +yaw: float | None
+    +is_hand, is_in_hand: bool
+    +carrier: str | None
+    +held_by_hand_track_id: int | None
+  }
+
+  class Relative4DSceneGraph <<memory>> {
+    +anchors: list[SpatialAnchor]
+    +memory_timeline: dict[int,
+      list[ObjectMemoryEntry]]
+    +events: list[dict]
+  }
+  class SpatialAnchor <<memory>> {
+    +anchor_id: int
+    +label: str
+    +center, size: tuple[3 × float]
+    +observations_count: int
+  }
+  class ObjectMemoryEntry <<memory>> {
+    +frame_id, instance_id: int
+    +timestamp: float
+    +label: str
+    +center, size: tuple[3 × float]
+    +anchor_id: int | None
+    +anchor_label: str | None
+    +relative_vector: tuple[3 × float]
+    +relative_distance: float
+    +relation: str
+    +is_active_view: bool
+    +last_seen_timestamp: float
+    +is_in_hand: bool
+    +carrier: str | None
+  }
+
+Relative4DSceneGraph *-- "0..*" SpatialAnchor
+Relative4DSceneGraph *-- "0..*" ObjectMemoryEntry : per frame
+ObjectMemoryEntry "0..*" -right-> "0..1" SpatialAnchor : anchor_id
+BoundingBox3D ..> ObjectMemoryEntry : «derives»
+Detection2D ..> BoundingBox3D : «lifted to»
+
+legend bottom right
+  |<#DCE9F7> | aegis.core.models (M-A) |
+  |<#DFF0E3> | aegis.memory.scene_graph (M-B) |
+endlegend
+@enduml

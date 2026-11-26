@@ -1,0 +1,35 @@
+@startuml ch5-state-live-session
+' F5.17 Live capture session states.
+' Verified against: src/aegis/ingestion/live_pipeline.py (ingest_live, LiveIngestConfig defaults),
+' src/aegis/ingestion/contracts.py (SESSION_STATUSES, GAP_REASONS)
+!include _aegis_style.iuml
+!pragma layout smetana
+
+skinparam StateBackgroundColor $MA_FILL
+skinparam StateBorderColor $MA_BORDER
+skinparam StateBorderThickness 1.2
+skinparam StateFontStyle bold
+skinparam StateAttributeFontSize 12
+skinparam StateAttributeFontStyle plain
+
+state Sampling : keep frames that pass\nthe keyframe test
+state Paused : frames dropped\nand counted
+state "Storage stalled" as Stalled : buffer up to 30 frames,\ndrop the oldest
+state Reconnecting : retry every 3 s
+
+[*] --> Sampling : start or resume
+
+Sampling --> Paused : pause requested
+Paused --> Sampling : pause cleared\n/ record gap
+
+Sampling --> Stalled : disk write fails
+Stalled --> Sampling : buffer flushed\n/ record gap
+
+Sampling --> Reconnecting : stream lost
+Reconnecting --> Sampling : frames return\n/ record gap
+
+Sampling --> [*] : 10 min reached\n/ time_limit
+Reconnecting --> [*] : 30 s with no frames\n/ disconnected
+
+note "Ctrl+C in any state → stopped\nBuffer not saved at exit → storage_error\nsession_state.json saved every frame → crash resume" as N1
+@enduml

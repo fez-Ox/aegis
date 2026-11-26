@@ -1,0 +1,33 @@
+@startuml ch5-activity-compaction
+' F5.19 Daily memory compaction (three days of detail, then verified summaries).
+' Verified against: src/aegis/memory/compaction.py (compact, _verify),
+' src/aegis/core/config.py (RetentionConfig: hot_days=3, important_hot_days=7)
+!include _aegis_style.iuml
+
+skinparam ActivityBackgroundColor $MB_FILL
+skinparam ActivityBorderColor $MB_BORDER
+skinparam ActivityBorderThickness 1.2
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor $MB_BORDER
+skinparam ActivityStartColor $INK
+skinparam ActivityEndColor $INK
+
+start
+:cutoff = today − 3 days;
+while (next day older than cutoff\nand not yet compacted?) is (yes)
+  :write day summaries\n(objects, activities);
+  if (summaries verified?) then (yes)
+    :delete that day's detail;
+    note right
+      Kept: each object's last-known state
+      and important objects for 7 days
+    end note
+    :log "ok";
+  else (no)
+    #F8D7DA:roll back, keep all detail;
+    :log "failed";
+  endif
+endwhile (none left)
+:delete important objects' detail\nolder than 7 days;
+stop
+@enduml

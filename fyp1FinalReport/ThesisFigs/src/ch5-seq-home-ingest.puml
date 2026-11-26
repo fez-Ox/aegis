@@ -1,0 +1,50 @@
+@startuml ch5-seq-home-ingest
+' F5.16 Merging one session graph into the home store, then compaction.
+' Verified against: src/aegis/memory/ingest.py (ingest_session, _ingest_runs),
+' src/aegis/memory/matching.py, src/aegis/memory/home_registry.py (export_registry),
+' src/aegis/memory/compaction.py (compact, rollup)
+!include _aegis_style.iuml
+
+hide footbox
+hide stereotype
+skinparam sequenceMessageAlign center
+skinparam ParticipantPadding 14
+skinparam SequenceLifeLineBorderColor #9AA5B1
+skinparam ParticipantBorderThickness 1.2
+
+participant "run_pipeline /\naegis-memory" as Caller <<infra>>
+participant "ingest_session" as Ing <<memory>>
+participant "matching" as Match <<memory>>
+database "HomeStore\n(SQLite)" as Store <<memory>>
+participant "compaction" as Comp <<memory>>
+
+Caller -> Ing : ingest_session(store, graph)
+Ing -> Ing : graph_sha256(graph)
+alt same graph already ingested
+  Ing --> Caller : status "unchanged"
+else new or changed graph
+  group one transaction
+    opt graph changed
+      Ing -> Store : delete_session_rows\n(status "replaced")
+    end
+    Ing -> Store : insert session
+    Ing -> Match : match rooms, anchors, objects
+    Match --> Ing : id maps
+    loop each state run
+      Ing -> Store : extend the last-known run if still there,\nelse insert run (+ moved_while_unobserved)
+    end
+    Ing -> Store : events, room visits, activities,\nrecompute_last_known
+  end
+  Ing -> Store : export_registry → home_map.json
+  opt retention configured
+    Ing -> Comp : compact(), rollup()
+    Comp -> Store : one transaction per day
+  end
+  Ing --> Caller : IngestReport
+end
+
+legend bottom right
+  |<#DFF0E3> | Memory (M-B) |
+  |<#F1F3F5> | Infrastructure |
+endlegend
+@enduml
