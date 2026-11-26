@@ -1,0 +1,116 @@
+@startuml ch5-erd-events
+' F5.7b Crow's-foot ERD (events, visits, activities, retention) of the home store, one SQLite file per home:
+' <store_root>/<home_id>/memory.db, SCHEMA_VERSION = 1.
+' Columns verbatim from src/aegis/memory/store.py _SCHEMA. PK bold, FK italic.
+' Solid lines: FOREIGN KEY constraints. Dotted: soft references (no FK constraint).
+' Colours: green never compacted; orange compacted after 3 days; blue written by compaction.
+!include _aegis_style.iuml
+hide circle
+hide stereotype
+hide empty members
+skinparam linetype ortho
+skinparam nodesep 30
+skinparam ranksep 45
+skinparam ClassAttributeFontSize 12
+skinparam ClassFontStyle bold
+skinparam ClassBorderThickness 1.2
+skinparam class<<keep>> {
+  BackgroundColor $MB_FILL
+  BorderColor $MB_BORDER
+}
+skinparam class<<compact>> {
+  BackgroundColor $MC_FILL
+  BorderColor $MC_BORDER
+}
+skinparam class<<written>> {
+  BackgroundColor $MA_FILL
+  BorderColor $MA_BORDER
+}
+
+skinparam class<<stub>> {
+  BackgroundColor #FFFFFF
+  BorderColor $MB_BORDER
+}
+entity event <<compact>> {
+  **event_id** INTEGER
+  --
+  //session_id// → session
+  event_type TEXT
+  //instance_id// → instance
+  from_/to_relation TEXT
+  from_/to_anchor_id INTEGER (soft)
+  from_/to_room_id INTEGER (soft)
+  start_at, end_at TEXT
+  confidence REAL
+  activity_id INTEGER (soft)
+  evidence_id INTEGER (soft)
+}
+entity room_visit <<compact>> {
+  **visit_id** INTEGER
+  --
+  //session_id// → session
+  //room_id// → room
+  start_at, end_at TEXT
+}
+entity activity <<compact>> {
+  **activity_id** INTEGER
+  --
+  //session_id// → session
+  //room_id// → room
+  start_at, end_at TEXT
+  event_count INTEGER
+  summary TEXT
+}
+entity summary <<written>> {
+  **summary_id** INTEGER
+  --
+  level [day|week|month]
+  period_start, period_end TEXT
+  kind [object|activity]
+  subject_key TEXT
+  text TEXT
+  sidecar TEXT (JSON)
+  created_at TEXT
+  UNIQUE (level, period_start,
+    kind, subject_key)
+}
+entity compaction_log <<written>> {
+  **id** INTEGER
+  --
+  ran_at TEXT
+  day TEXT
+  status [ok|failed|skipped]
+  runs_deleted INTEGER
+  events_deleted INTEGER
+  summaries_written INTEGER
+  detail TEXT
+}
+entity meta <<keep>> {
+  **key** TEXT
+  --
+  value TEXT
+  (schema_version,
+   personal_items JSON)
+}
+entity "session" as session <<stub>>
+entity "instance" as instance <<stub>>
+entity "room" as room <<stub>>
+
+session ||--o{ event
+session ||--o{ room_visit
+session ||--o{ activity
+instance |o--o{ event
+room |o--o{ room_visit
+room |o--o{ activity
+activity -[hidden]down- summary
+summary -[hidden]right- compaction_log
+compaction_log -[hidden]right- meta
+
+legend bottom right
+  |<#FFFFFF> | table shown in full in F5.7a |
+  |<#FCE8D0> | compacted after 3 days |
+  |<#DCE9F7> | written by compaction |
+  |<#DFF0E3> | never compacted |
+  (soft) soft reference: id column with no FK constraint
+endlegend
+@enduml

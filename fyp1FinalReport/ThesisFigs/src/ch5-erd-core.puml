@@ -1,0 +1,126 @@
+@startuml ch5-erd-core
+' F5.7a Crow's-foot ERD (core entities) of the home store, one SQLite file per home:
+' <store_root>/<home_id>/memory.db, SCHEMA_VERSION = 1.
+' Columns verbatim from src/aegis/memory/store.py _SCHEMA. PK bold, FK italic.
+' Solid lines: FOREIGN KEY constraints. Dotted: soft references (no FK constraint).
+' Colours: green never compacted; orange compacted after 3 days; blue written by compaction.
+!include _aegis_style.iuml
+hide circle
+hide stereotype
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 30
+skinparam ranksep 45
+skinparam ClassAttributeFontSize 12
+skinparam ClassFontStyle bold
+skinparam ClassBorderThickness 1.2
+skinparam class<<keep>> {
+  BackgroundColor $MB_FILL
+  BorderColor $MB_BORDER
+}
+skinparam class<<compact>> {
+  BackgroundColor $MC_FILL
+  BorderColor $MC_BORDER
+}
+skinparam class<<written>> {
+  BackgroundColor $MA_FILL
+  BorderColor $MA_BORDER
+}
+
+entity room <<keep>> {
+  **room_id** INTEGER
+  --
+  label TEXT
+  room_type TEXT
+  label_source [auto|caregiver]
+  signature TEXT
+  session_count INTEGER
+  last_seen_session TEXT
+  created_at, updated_at TEXT
+}
+entity session <<keep>> {
+  **session_id** TEXT
+  --
+  started_at, ended_at TEXT
+  time_source [capture|recorded_at|ingest]
+  ingested_at TEXT
+  graph_sha256 TEXT
+  keyframe_count INTEGER
+  gravity_confidence REAL
+  //last_wearer_room_id// → room
+}
+entity anchor <<keep>> {
+  **anchor_id** INTEGER
+  --
+  canonical, label TEXT
+  ordinal INTEGER
+  //room_id// → room
+  home_x, home_y REAL
+  match_quality [unique|aligned|
+    resident|ordinal|new]
+  observations INTEGER
+  last_seen_session TEXT
+  UNIQUE (canonical, ordinal)
+}
+entity instance <<keep>> {
+  **instance_id** INTEGER
+  --
+  canonical, label TEXT
+  importance TEXT
+  appearance TEXT
+  created_at TEXT
+  observation_count INTEGER
+  last_relation TEXT
+  last_relation_certain INTEGER
+  //last_anchor_id// → anchor
+  //last_room_id// → room
+  last_seen_at TEXT
+  last_confidence, last_height REAL
+  last_run_id INTEGER (soft)
+  last_session_id TEXT
+  last_evidence_id INTEGER (soft)
+}
+entity state_run <<compact>> {
+  **run_id** INTEGER
+  --
+  //instance_id// → instance
+  //session_id// → session
+  relation TEXT
+  relation_certain INTEGER
+  //anchor_id// → anchor
+  //room_id// → room
+  start_at, end_at TEXT
+  observation_count INTEGER
+  confidence REAL
+  height_above_floor REAL
+  center_x, center_y, center_z REAL
+  evidence_id INTEGER (soft)
+}
+entity evidence <<compact>> {
+  **evidence_id** INTEGER
+  --
+  //session_id// → session
+  //instance_id// → instance
+  path TEXT
+  captured_at TEXT
+  frame_id INTEGER
+  width, height, bytes INTEGER
+}
+
+session ||--o{ state_run
+session ||--o{ evidence
+instance ||--o{ state_run
+instance ||--o{ evidence
+room |o--o{ anchor
+room |o--o{ state_run
+anchor |o--o{ state_run
+room |o--o{ session : last_wearer
+anchor |o--o{ instance
+room |o--o{ instance : last_room
+
+legend bottom right
+  |<#DFF0E3> | never compacted |
+  |<#FCE8D0> | compacted after 3 days (last-known runs protected) |
+  (soft) soft reference: id column with no FK constraint
+endlegend
+@enduml
