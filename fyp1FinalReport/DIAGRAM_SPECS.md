@@ -61,7 +61,8 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 | One message | Each figure answers one question; detail that does not serve it goes in the text |
 | Crossings | No line through a box; line-over-line crossings kept to the unavoidable minimum |
 | Printed text | At least 8 pt at final printed size. A 13 pt PlantUML font at 300 dpi prints at 9 pt when the PNG is ≤ 2560 px wide and ≤ 2210 px tall (normal slot) or ≤ 3400 px tall (`\aegisfigtall`); at 8 pt the limits are 2880 px wide, 2490 px / 3830 px tall |
-| Placement | Use `\aegisfigtall` for F5.13–F5.16 (sequence diagrams), F5.20 (NLQ flow) and F7.3 (relations flow). Every other figure uses `\aegisfig` |
+| Placement | Use `\aegisfigtall` for F2.1, F3.1, F4.1, F5.1–F5.4, F5.7a, F5.7b, F5.9, F5.10, F5.12, F5.13–F5.16, F5.20 and F7.3. Every other figure uses `\aegisfig`. Hand-placed matplotlib figures are drawn at their printed size (6 in wide), so their font sizes are the printed sizes |
+| Hand-placed figures | Where Graphviz cannot keep a clear layout (use case boundary, layered bands, deployment nodes, DFDs, wireframes) the figure is drawn by coordinates with `ThesisFigs/src/boxdraw.py`; edit the coordinates in the figure's script and re-run it |
 | Layout engine | PlantUML 1.2024.7 with Graphviz (`dot`). Class and state diagrams use Graphviz layout; do not add `!pragma layout smetana` |
 | Colour | Module palette of §0.3 only; colour means module, never decoration; every coloured figure has a legend |
 | Shared style | PlantUML sources include `ThesisFigs/src/_aegis_style.iuml` (palette, fonts, 300 dpi) and, for class diagrams, `_aegis_class.iuml` |
@@ -79,26 +80,27 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 | ID | File | Chapter § | Type | Status vs mid | Tool |
 |---|---|---|---|---|---|
 | F1.1 | `fig-1.1.png` | 1.3 | Conceptual loop | KEEP | — (reuse existing PNG) |
-| F1.2 | `ch1-system-context.png` | 1.6 | System context | REDRAW | draw.io |
-| F1.3 | `ch1-modules.png` | 1.7 | Module block diagram | REDRAW | draw.io |
-| F2.1 | `ch2-pipeline.png` | 2.5 | Pipeline (write/read path) | REDRAW | draw.io |
+| F1.2 | `ch1-system-context.png` | 1.6 | System context | REDRAW | PlantUML |
+| F1.3 | `ch1-modules.png` | 1.7 | Module block diagram | REDRAW | PlantUML |
+| F2.1 | `ch2-pipeline.png` | 2.5 | Pipeline (write/read path) | REDRAW | PlantUML |
 | F2.2 | `fig-2.2.png` | 2.5 | Gap positioning chart | KEEP | — (reuse existing PNG) |
-| F2.3 | `ch2-detector-ab.png` | 2.9 (new) | Grouped bar chart | NEW | matplotlib |
-| F3.1 | `ch3-gantt-plan-vs-actual.png` | 3.9 | Gantt (plan vs actual) | REDRAW (was not a Gantt) | Mermaid (gantt) |
+| F2.3 | `ch2-detector-ab.png` | 2.9 (new) | Grouped bar chart | NEW | matplotlib (src/charts.py) |
+| F3.1 | `ch3-gantt-plan-vs-actual.png` | 3.9 | Gantt (plan vs actual) | REDRAW (was not a Gantt) | matplotlib (src/fig_gantt.py); actual bars only until planned dates are supplied |
 | F3.2 | `iterationcycle.png` | 3.5 | Cycle | KEEP | — (reuse existing PNG) |
-| F4.1 | `ch4-use-case.png` | 4.2 | UML use case | REDRAW | draw.io |
-| F5.1 | `ch5-layered-architecture.png` | 5.1 | Layered architecture | REDRAW | draw.io |
-| F5.2 | `ch5-components.png` | 5.2 | UML component | REDRAW | draw.io |
-| F5.3 | `ch5-deployment.png` | 5.2 | UML deployment | REDRAW | draw.io |
-| F5.4 | `ch5-design-evolution.png` | 5.5 | Before/after architecture | NEW | draw.io |
+| F4.1 | `ch4-use-case.png` | 4.2 | UML use case | REDRAW | matplotlib, hand-placed (src/use_case.py) |
+| F5.1 | `ch5-layered-architecture.png` | 5.1 | Layered architecture | REDRAW | matplotlib, hand-placed (src/fig_layers.py) |
+| F5.2 | `ch5-components.png` | 5.2 | UML component | REDRAW | matplotlib, hand-placed (src/fig_components.py) |
+| F5.3 | `ch5-deployment.png` | 5.2 | UML deployment | REDRAW | matplotlib, hand-placed (src/fig_deployment.py) |
+| F5.4 | `ch5-design-evolution.png` | 5.5 | Before/after architecture | NEW | matplotlib, hand-placed (src/fig_evolution_tests.py) |
 | F5.5 | `ch5-domain-model.png` | 5.6 | UML conceptual class (domain model) | REDRAW | PlantUML (class) |
 | F5.6 | `ch5-scene-graph-v2.png` | 5.7 | JSON document model | REDRAW | PlantUML (class notation, one box per top-level key) |
-| F5.7 | `ch5-erd-home-store.png` | 5.7 | Crow's-foot ERD | NEW | Mermaid (erDiagram) |
-| F5.8 | `ch5-live-session-artifacts.png` | 5.7 | Artifact/file layout | NEW | draw.io |
-| F5.9 | `ch5-patient-app-flow.png` | 5.8 | Screen-flow / wireframe map | REDRAW | draw.io + screenshots |
-| F5.10 | `ch5-caregiver-app-flow.png` | 5.8 | Screen-flow / wireframe map | NEW | draw.io + screenshots |
-| F5.11 | `ch5-dfd-level0.png` | 5.9 | DFD level 0 | NEW | draw.io |
-| F5.12 | `ch5-dfd-level1.png` | 5.9 | DFD level 1 | REDRAW | draw.io |
+| F5.7a | `ch5-erd-core.png` | 5.7 | Crow's-foot ERD (core entities) | NEW | PlantUML (IE notation) |
+| F5.7b | `ch5-erd-events.png` | 5.7 | Crow's-foot ERD (events, visits, activities, retention) | NEW | PlantUML (IE notation) |
+| F5.8 | `ch5-live-session-artifacts.png` | 5.7 | Artifact/file layout | NEW | matplotlib, hand-placed (src/fig_artifacts.py) |
+| F5.9 | `ch5-patient-app-flow.png` | 5.8 | Screen-flow / wireframe map | REDRAW | matplotlib wireframes (src/fig_screens.py); screenshots optional |
+| F5.10 | `ch5-caregiver-app-flow.png` | 5.8 | Screen-flow / wireframe map | NEW | matplotlib wireframes (src/fig_screens.py); screenshots optional |
+| F5.11 | `ch5-dfd-level0.png` | 5.9 | DFD level 0 | NEW | matplotlib, hand-placed (src/fig_dfd.py) |
+| F5.12 | `ch5-dfd-level1.png` | 5.9 | DFD level 1 | REDRAW | matplotlib, hand-placed (src/fig_dfd.py) |
 | F5.13 | `ch5-seq-pipeline.png` | 5.9 | UML sequence | REDRAW | PlantUML (sequence) |
 | F5.14 | `ch5-seq-query.png` | 5.9 | UML sequence | REDRAW (merges two mid figures) | PlantUML (sequence) |
 | F5.15 | `ch5-seq-caregiver.png` | 5.9 | UML sequence | REDRAW | PlantUML (sequence) |
@@ -126,15 +128,15 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 | F7.7 | `ch7-shot-caregiver-app.png` | 7.8 | Screenshots | NEW | Screenshot |
 | F7.8 | `ch7-shot-rerun.png` | 7.8 | Screenshot | NEW | Screenshot |
 | F7.9 | `ch7-shot-terminal.png` | 7.8 | Screenshot | NEW | Screenshot |
-| F8.1 | `ch8-test-levels.png` | 8.2 | Test pyramid | REDRAW | draw.io |
+| F8.1 | `ch8-test-levels.png` | 8.2 | Test pyramid | REDRAW | matplotlib (src/fig_evolution_tests.py) |
 | F8.2 | `ch8-detection-chart.png` | 8.5 | Grouped bar chart | NEW (or reuse F2.3) | matplotlib |
-| F8.3 | `ch8-compaction-ratio.png` | 8.6 | Bar chart | NEW | matplotlib |
-| F8.4 | `ch8-storage-projection.png` | 8.6 | Line chart | NEW | matplotlib |
-| F8.5 | `ch8-e2e-timing.png` | 8.7 | Horizontal bar | NEW | matplotlib |
+| F8.3 | `ch8-compaction-ratio.png` | 8.6 | Bar chart | NEW | matplotlib (src/charts.py) |
+| F8.4 | `ch8-storage-projection.png` | 8.6 | Line chart | NEW | matplotlib (src/charts.py) |
+| F8.5 | `ch8-e2e-timing.png` | 8.7 | Horizontal bar | NEW | matplotlib (src/charts.py) |
 | F8.6 | `ch8-egolife.png` | 8.8 | Bar/line chart | NEW (data from Faizan) | matplotlib |
-| F9.1 | `ch9-commit-timeline.png` | 9.6 | Stacked weekly bar chart | REDRAW | matplotlib |
-| F9.2 | `ch9-branch-graph.png` | 9.5 | Git branch graph | NEW | Mermaid (gitGraph) |
-| F10.1 | `ch10-fyp2-gantt.png` | 10.7 | Gantt | NEW | Mermaid (gantt) |
+| F9.1 | `ch9-commit-timeline.png` | 9.6 | Stacked weekly bar chart | REDRAW | matplotlib (src/charts.py, counted from git) |
+| F9.2 | `ch9-branch-graph.png` | 9.5 | Git branch graph | NEW | matplotlib (src/charts.py) |
+| F10.1 | `ch10-fyp2-gantt.png` | 10.7 | Gantt | NEW | matplotlib (src/fig_gantt.py); dates and owners TBD |
 
 ---
 
