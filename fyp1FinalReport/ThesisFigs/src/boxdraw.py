@@ -121,3 +121,25 @@ def left(b):
 
 def right(b):
     return (b[0] + b[2], b[1] + b[3] / 2)
+
+
+def node(c: Canvas, x, y, w, h, title, style="N", d=0.07, dashed=False):
+    """UML deployment node: a box with a 3D top/right face and a title strip."""
+    import matplotlib.patches as mp
+
+    fill, edge = STYLE[style]
+    ls = DASH if dashed else "-"
+    c.ax.add_patch(mp.Polygon([(x, y + h), (x + d, y + h + d), (x + w + d, y + h + d), (x + w, y + h)],
+                              closed=True, facecolor=fill, edgecolor=edge, lw=1.0, linestyle=ls, zorder=1))
+    c.ax.add_patch(mp.Polygon([(x + w, y), (x + w + d, y + d), (x + w + d, y + h + d), (x + w, y + h)],
+                              closed=True, facecolor=fill, edgecolor=edge, lw=1.0, linestyle=ls, zorder=1))
+    c.ax.add_patch(mp.Rectangle((x, y), w, h, facecolor=BAND.get(style, "#FFFFFF") if style != "P" else "white",
+                                edgecolor=edge, lw=1.1, linestyle=ls, zorder=1))
+    lines = title.split("\n")
+    for i, ln in enumerate(lines):
+        c.ax.text(x + w / 2, y + h - 0.12 - i * c.fs / 72 * 1.22, ln, ha="center", va="center",
+                  fontsize=c.fs - (0.8 if ln.startswith("«") else 0),
+                  fontweight="normal" if ln.startswith("«") else "bold",
+                  style="italic" if ln.startswith("«") else "normal",
+                  color=MUTED if dashed else INK, zorder=2)
+    return (x, y, w, h)
