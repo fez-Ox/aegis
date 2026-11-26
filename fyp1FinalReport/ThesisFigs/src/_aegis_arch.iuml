@@ -1,0 +1,22 @@
+' Shared settings for architecture-style diagrams (context, blocks, components,
+' deployment, DFD). Colour presets: $A capture, $B memory, $C query, $D apps,
+' $N neutral/external, $R risk, $P planned (dashed). Use: rectangle "x" as X $A
+!$A = "#DCE9F7;line:2F6DB5"
+!$B = "#DFF0E3;line:2E8B57"
+!$C = "#FCE8D0;line:D9822B"
+!$D = "#E9DFF2;line:7B4BA8"
+!$N = "#F1F3F5;line:6B7785"
+!$R = "#F8D7DA;line:C0392B"
+!$P = "#FFFFFF;line:6B7785;line.dashed"
+skinparam RectangleBorderThickness 1.4
+skinparam ComponentBorderThickness 1.4
+skinparam NodeBorderThickness 1.4
+skinparam DatabaseBorderThickness 1.4
+skinparam RectangleFontSize 13
+skinparam PackageBorderColor $NEUTRAL_BORDER
+skinparam PackageFontStyle bold
+skinparam ArrowFontSize 12
+skinparam ArrowFontColor $INK
+skinparam nodesep 40
+skinparam ranksep 60
+skinparam wrapWidth 260

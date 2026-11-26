@@ -1,0 +1,41 @@
+@startuml ch1-system-context
+' F1.2 System context of Aegis as built at the end of FYP-1.
+' Verified against: CONTEXT.md §2; src/aegis/remote/modal_app.py (L4 GPU, volumes
+' aegis-poc-data and aegis-model-cache mounted at /data and /models);
+' src/aegis/core/config.py and perception/detector.py (model ids);
+' src/aegis/geometry/vggt_runner.py (FALLBACK_REPO); apps/*/pubspec.yaml (speech_to_text)
+!include _aegis_style.iuml
+!include _aegis_arch.iuml
+
+rectangle "**Phone camera**\nIP Webcam app;\nfirst-person RGB,\nMJPEG over Wi-Fi" as Cam $N
+rectangle "**Indoor environment**\nincludes bystanders" as Env #FFFFFF;line:6B7785;line.dotted
+
+rectangle "**Primary user**\nperson with cognitive\nimpairment; uses\nPatient App" as User $N
+rectangle "**Android speech**\n**recogniser**\non the patient's phone;\nspeech-to-text" as STT $N
+
+rectangle "**Aegis**\negocentric spatio-temporal\nmemory system\n\npipeline + memory +\nquery API" as Aegis #FFFFFF;line:2E8B57;line.bold
+
+rectangle "**Caregiver**\nuses Caregiver App" as CG $N
+rectangle "**Identity / consent**\n**service**\n(planned, FYP-2)" as IdP $P
+rectangle "**Modal cloud**\nL4 GPU, CPU workers,\naegis-poc-data volume" as Modal $N
+rectangle "**Hugging Face Hub**\nmodel weights: VGGT-Ω,\nSAM 2, SAM3, DINOv3" as HF $N
+
+Env -[dotted]right-> Cam : light from scene
+Cam -down-> Aegis : MJPEG video frames
+User -down-> STT : speech
+STT -up-> User : transcribed\ntext
+User -right-> Aegis : spoken or typed\nquestion;\nobject-tile tap
+Aegis -left-> User : short answer,\nplace, time,\nevidence photo,\nor 'not sure'
+CG -left-> Aegis : questions;\nroom names;\nenrolled items;\npause/resume
+Aegis -right-> CG : answers with\ncandidates,\ntimeline, rooms,\ncapture status
+Aegis -down-> Modal : frames + config
+Modal -up-> Aegis : poses, 3D boxes,\nscene graph
+HF -right-> Modal : pretrained weights\n(cached at /models)
+IdP .up.> CG : credentials, grants\n(planned)
+
+legend bottom right
+  Grey box: external entity   Green box: the system
+  Solid arrow: data flow   Dotted: physical influence
+  Dashed: planned
+endlegend
+@enduml

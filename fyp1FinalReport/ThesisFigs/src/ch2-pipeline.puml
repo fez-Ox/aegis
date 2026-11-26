@@ -1,0 +1,48 @@
+@startuml ch2-pipeline
+' F2.1 Aegis pipeline: write path (continuous) and read path (on demand).
+' Verified against: CONTEXT.md §2; config/demo.yaml (detector_backend: sam3),
+' config/live.yaml (detector_backend: yoloe); src/aegis/geometry/gravity.py (RANSAC floor);
+' src/aegis/memory/compaction.py (3-day detail); src/aegis/nlq/engine.py
+' (TEMPORAL/ACTIVITY abstain); src/aegis/remote/api.py (/query, /ask)
+!include _aegis_style.iuml
+!include _aegis_arch.iuml
+skinparam nodesep 28
+skinparam ranksep 55
+
+package "WRITE PATH (continuous)" as W #FFFFFF {
+  rectangle "**Egocentric capture**\nFR1/FR2\nphone MJPEG →\naegis-ingest →\nkeyframes" as Cap $A
+  rectangle "**3D reconstruction**\nVGGT-Ω: poses,\npointmaps;\ngravity frame\n(RANSAC floor)" as Rec $B
+  rectangle "**Perception**\nSAM3 (default) / YOLOE\nSAM 2 masks\nDINOv3 re-ID\n3D oriented boxes" as Per $B
+  rectangle "**Memory build**\nFR3: relations,\nstate runs, events,\nrooms" as Mem $B
+  rectangle "**Home store +**\n**compaction**\nFR4: SQLite per home;\n3-day detail →\nverified summaries" as Home $B
+}
+
+database "**Spatio-temporal memory**\nscene graph (session)\n+ home store (persistent)" as Store $B
+
+package "READ PATH (on demand)" as R #FFFFFF {
+  rectangle "**Query input**\nFR6/FR7\ntext, voice\n(on-device STT),\nobject tile" as In $D
+  rectangle "**Query engine**\nFR5\n/query ranked candidates\n/ask NLQ\nabstention" as QE $C
+  rectangle "**LLM/VLM planner**\noptional, off by default\n(planned)" as LLM $P
+  rectangle "**Patient access**\nPatient App" as PA $D
+  rectangle "**Caregiver access**\nCaregiver App" as CA $D
+}
+
+Cap -right-> Rec : keyframes
+Rec -right-> Per : poses, pointmaps,\ngravity
+Per -down-> Mem : 3D boxes
+Mem -left-> Home : scene graph v2
+Mem -down-> Store : scene graph
+Home -down-> Store : store rows
+
+In -right-> QE : question text
+Store -down-> QE : retrieve\nlatest states
+QE -right-> PA : answer +\nevidence
+QE -right-> CA : answer +\nevidence
+PA -[hidden]down- CA
+QE .down.> LLM : temporal / activity questions\n(planned; currently abstain)
+
+legend bottom right
+  Read path target p95 ≤ 5 s (SC4; not yet measured).
+  Dashed: planned.
+endlegend
+@enduml

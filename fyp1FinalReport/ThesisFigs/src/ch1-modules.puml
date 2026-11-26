@@ -1,0 +1,31 @@
+@startuml ch1-modules
+' F1.3 Module overview. Leads are taken from DIAGRAM_SPECS F1.3 and must be confirmed
+' against the final Chapter 3 responsibilities table before submission.
+' Verified against: src/aegis/ingestion (aegis-ingest, keyframes, gaps, pause, segments),
+' src/aegis/memory (gravity via geometry, relations, runs, rooms, store, compaction),
+' src/aegis/nlq and memory/reasoning.py (closed vocabulary, ranking, abstention),
+' apps/ and src/aegis/remote/api.py
+!include _aegis_style.iuml
+!include _aegis_arch.iuml
+skinparam nodesep 35
+skinparam ranksep 45
+
+rectangle "**M-A Capture &**\n**Ingestion**\nFR1, FR2\n\naegis-ingest, keyframes,\ngaps, pause, segments\n\nLead: Shahmeer" as MA $A
+rectangle "**M-B Spatio-Temporal**\n**Memory**\nFR3, FR4\n\ngravity, relations,\nstate runs, rooms,\nhome store, compaction\n\nLead: Faizan" as MB $B
+database "**Memory**\nr4d_scene_graph.json\n(per session)\n+ memory.db (per home)" as Store $B
+rectangle "**M-C Query**\n**Engine**\nFR5, FR6\n\nNLQ closed vocabulary,\nranking, abstention\n\nLead: Ali Sher" as MC $C
+rectangle "**M-D Interfaces &**\n**Caregiver Access**\nFR7, FR8\n\nPatient App,\nCaregiver App,\nAPI routes\n\nLead: Shahmeer" as MD $D
+
+MA -right-> MB : keyframes +\ntimestamps
+MB -[hidden]right- MC
+MC -right-> MD : answers
+
+MC <-- MD : questions
+MB -down-> Store : writes
+MC <-down- Store : reads
+
+legend bottom left
+  Leads are responsibility assignments;
+  Iteration 2 work by member is in Ch 9.
+endlegend
+@enduml
