@@ -17,8 +17,9 @@ Where a value is **unknown**, the spec says so and gives the command or person t
 
 | Item | Rule |
 |---|---|
-| Tool | Draw.io (preferred: editable, matches the mid style), PlantUML for sequence/state/class, matplotlib for charts. Keep the source next to the PNG in `fyp1FinalReport/ThesisFigs/src/<file>.drawio` / `.puml` / `.py` |
+| Tool | The **Tool** column of the figure index (§1) is binding. **draw.io** for structural diagrams (context, modules, pipeline, architecture, component, deployment, DFD, use case, screen flows, test pyramid): most polished and editable, matches the mid style. **PlantUML** for behaviour and code diagrams (sequence, state, activity/flowchart, class): exact UML notation, regenerated from text. **Mermaid** for Gantt charts, the git branch graph and the ERD. **matplotlib** for every result chart, reading the real numbers from a data file. No Canva or AI-generated images in the report body. Keep the source next to the PNG in `fyp1FinalReport/ThesisFigs/src/<file>.drawio` / `.puml` / `.mmd` / `.py` |
 | Format | **PNG only.** `\aegisfig` loads `ThesisFigs/<name>.png` and shows a "Missing figure" box for anything else |
+| Rendering | draw.io: File → Export → PNG, zoom 300%, border 20, transparent off (or `drawio -x -f png -s 3`). PlantUML: `java -jar plantuml.jar -tpng -Sdpi=300 <file>.puml`. Mermaid: `npx -y @mermaid-js/mermaid-cli -i <file>.mmd -o <file>.png -s 3 -b white`. matplotlib: `savefig(dpi=300, facecolor="white")` |
 | Resolution | ≥ 2400 px on the long side (the report scales to text width; the mid figures were 2400–5200 px) |
 | Background | **Opaque white.** Several mid figures had transparent backgrounds that turn black in dark PDF viewers (errata D17) |
 | Embedded titles | **None.** No "Figure 5.x", "(a)", "(b) Frame 1" inside the image (errata A10). Captions come from LaTeX only |
@@ -59,59 +60,59 @@ State this convention once in the first paragraph of Chapter 5. Repeat the legen
 
 ## 1. Figure index
 
-| ID | File | Chapter § | Type | Status vs mid |
-|---|---|---|---|---|
-| F1.1 | `fig-1.1.png` | 1.3 | Conceptual loop | KEEP |
-| F1.2 | `ch1-system-context.png` | 1.6 | System context | REDRAW |
-| F1.3 | `ch1-modules.png` | 1.7 | Module block diagram | REDRAW |
-| F2.1 | `ch2-pipeline.png` | 2.5 | Pipeline (write/read path) | REDRAW |
-| F2.2 | `fig-2.2.png` | 2.5 | Gap positioning chart | KEEP |
-| F2.3 | `ch2-detector-ab.png` | 2.9 (new) | Grouped bar chart | NEW |
-| F3.1 | `ch3-gantt-plan-vs-actual.png` | 3.9 | Gantt (plan vs actual) | REDRAW (was not a Gantt) |
-| F3.2 | `iterationcycle.png` | 3.5 | Cycle | KEEP |
-| F4.1 | `ch4-use-case.png` | 4.2 | UML use case | REDRAW |
-| F5.1 | `ch5-layered-architecture.png` | 5.1 | Layered architecture | REDRAW |
-| F5.2 | `ch5-components.png` | 5.2 | UML component | REDRAW |
-| F5.3 | `ch5-deployment.png` | 5.2 | UML deployment | REDRAW |
-| F5.4 | `ch5-design-evolution.png` | 5.5 | Before/after architecture | NEW |
-| F5.5 | `ch5-domain-model.png` | 5.6 | UML conceptual class (domain model) | REDRAW |
-| F5.6 | `ch5-scene-graph-v2.png` | 5.7 | JSON document model | REDRAW |
-| F5.7 | `ch5-erd-home-store.png` | 5.7 | Crow's-foot ERD | NEW |
-| F5.8 | `ch5-live-session-artifacts.png` | 5.7 | Artifact/file layout | NEW |
-| F5.9 | `ch5-patient-app-flow.png` | 5.8 | Screen-flow / wireframe map | REDRAW |
-| F5.10 | `ch5-caregiver-app-flow.png` | 5.8 | Screen-flow / wireframe map | NEW |
-| F5.11 | `ch5-dfd-level0.png` | 5.9 | DFD level 0 | NEW |
-| F5.12 | `ch5-dfd-level1.png` | 5.9 | DFD level 1 | REDRAW |
-| F5.13 | `ch5-seq-pipeline.png` | 5.9 | UML sequence | REDRAW |
-| F5.14 | `ch5-seq-query.png` | 5.9 | UML sequence | REDRAW (merges two mid figures) |
-| F5.15 | `ch5-seq-caregiver.png` | 5.9 | UML sequence | REDRAW |
-| F5.16 | `ch5-seq-home-ingest.png` | 5.9 | UML sequence | NEW |
-| F5.17 | `ch5-state-live-session.png` | 5.9 | UML state machine | NEW |
-| F5.18 | `ch5-state-object.png` | 5.9 | UML state machine | NEW |
-| F5.19 | `ch5-activity-compaction.png` | 5.9 | UML activity | NEW |
-| F5.20 | `ch5-activity-nlq.png` | 5.9 | UML activity | NEW |
-| F6.1 | `ch6-class-core-models.png` | 6.3 | UML class (Iteration 1) | FIX (rename + notation) |
-| F6.2 | `ch6-class-live-api.png` | 6.3 | UML class (Iteration 1) | FIX |
-| F6.3 | `batchvideosamplingflowchart.png` | 6.3 | Flowchart | KEEP |
-| F6.4 | `chapter6-screenshot-evidence.jpeg` | 6.8 | Screenshot | KEEP |
-| F7.1 | `ch7-class-memory.png` | 7.3 | UML class (real code) | NEW |
-| F7.2 | `ch7-class-query-api-apps.png` | 7.3 | UML class (real code) | NEW |
-| F7.3 | `ch7-flow-relations.png` | 7.3 | Flowchart / activity | NEW |
-| F7.4 | `ch7-flow-matching.png` | 7.3 | Flowchart / activity | NEW |
-| F7.5 | `ch7-flow-keyframe.png` | 7.3 | Flowchart | NEW |
-| F7.6 | `ch7-shot-patient-app.png` | 7.8 | Screenshots | NEW |
-| F7.7 | `ch7-shot-caregiver-app.png` | 7.8 | Screenshots | NEW |
-| F7.8 | `ch7-shot-rerun.png` | 7.8 | Screenshot | NEW |
-| F7.9 | `ch7-shot-terminal.png` | 7.8 | Screenshot | NEW |
-| F8.1 | `ch8-test-levels.png` | 8.2 | Test pyramid | REDRAW |
-| F8.2 | `ch8-detection-chart.png` | 8.5 | Grouped bar chart | NEW (or reuse F2.3) |
-| F8.3 | `ch8-compaction-ratio.png` | 8.6 | Bar chart | NEW |
-| F8.4 | `ch8-storage-projection.png` | 8.6 | Line chart | NEW |
-| F8.5 | `ch8-e2e-timing.png` | 8.7 | Horizontal bar | NEW |
-| F8.6 | `ch8-egolife.png` | 8.8 | Bar/line chart | NEW (data from Faizan) |
-| F9.1 | `ch9-commit-timeline.png` | 9.6 | Stacked weekly bar chart | REDRAW |
-| F9.2 | `ch9-branch-graph.png` | 9.5 | Git branch graph | NEW |
-| F10.1 | `ch10-fyp2-gantt.png` | 10.7 | Gantt | NEW |
+| ID | File | Chapter § | Type | Status vs mid | Tool |
+|---|---|---|---|---|---|
+| F1.1 | `fig-1.1.png` | 1.3 | Conceptual loop | KEEP | — (reuse existing PNG) |
+| F1.2 | `ch1-system-context.png` | 1.6 | System context | REDRAW | draw.io |
+| F1.3 | `ch1-modules.png` | 1.7 | Module block diagram | REDRAW | draw.io |
+| F2.1 | `ch2-pipeline.png` | 2.5 | Pipeline (write/read path) | REDRAW | draw.io |
+| F2.2 | `fig-2.2.png` | 2.5 | Gap positioning chart | KEEP | — (reuse existing PNG) |
+| F2.3 | `ch2-detector-ab.png` | 2.9 (new) | Grouped bar chart | NEW | matplotlib |
+| F3.1 | `ch3-gantt-plan-vs-actual.png` | 3.9 | Gantt (plan vs actual) | REDRAW (was not a Gantt) | Mermaid (gantt) |
+| F3.2 | `iterationcycle.png` | 3.5 | Cycle | KEEP | — (reuse existing PNG) |
+| F4.1 | `ch4-use-case.png` | 4.2 | UML use case | REDRAW | draw.io |
+| F5.1 | `ch5-layered-architecture.png` | 5.1 | Layered architecture | REDRAW | draw.io |
+| F5.2 | `ch5-components.png` | 5.2 | UML component | REDRAW | draw.io |
+| F5.3 | `ch5-deployment.png` | 5.2 | UML deployment | REDRAW | draw.io |
+| F5.4 | `ch5-design-evolution.png` | 5.5 | Before/after architecture | NEW | draw.io |
+| F5.5 | `ch5-domain-model.png` | 5.6 | UML conceptual class (domain model) | REDRAW | PlantUML (class) |
+| F5.6 | `ch5-scene-graph-v2.png` | 5.7 | JSON document model | REDRAW | PlantUML (json) |
+| F5.7 | `ch5-erd-home-store.png` | 5.7 | Crow's-foot ERD | NEW | Mermaid (erDiagram) |
+| F5.8 | `ch5-live-session-artifacts.png` | 5.7 | Artifact/file layout | NEW | draw.io |
+| F5.9 | `ch5-patient-app-flow.png` | 5.8 | Screen-flow / wireframe map | REDRAW | draw.io + screenshots |
+| F5.10 | `ch5-caregiver-app-flow.png` | 5.8 | Screen-flow / wireframe map | NEW | draw.io + screenshots |
+| F5.11 | `ch5-dfd-level0.png` | 5.9 | DFD level 0 | NEW | draw.io |
+| F5.12 | `ch5-dfd-level1.png` | 5.9 | DFD level 1 | REDRAW | draw.io |
+| F5.13 | `ch5-seq-pipeline.png` | 5.9 | UML sequence | REDRAW | PlantUML (sequence) |
+| F5.14 | `ch5-seq-query.png` | 5.9 | UML sequence | REDRAW (merges two mid figures) | PlantUML (sequence) |
+| F5.15 | `ch5-seq-caregiver.png` | 5.9 | UML sequence | REDRAW | PlantUML (sequence) |
+| F5.16 | `ch5-seq-home-ingest.png` | 5.9 | UML sequence | NEW | PlantUML (sequence) |
+| F5.17 | `ch5-state-live-session.png` | 5.9 | UML state machine | NEW | PlantUML (state) |
+| F5.18 | `ch5-state-object.png` | 5.9 | UML state machine | NEW | PlantUML (state) |
+| F5.19 | `ch5-activity-compaction.png` | 5.9 | UML activity | NEW | PlantUML (activity) |
+| F5.20 | `ch5-activity-nlq.png` | 5.9 | UML activity | NEW | PlantUML (activity) |
+| F6.1 | `ch6-class-core-models.png` | 6.3 | UML class (Iteration 1) | FIX (rename + notation) | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
+| F6.2 | `ch6-class-live-api.png` | 6.3 | UML class (Iteration 1) | FIX | PlantUML (class; redraw from tag `v0.2.0-mid2`) |
+| F6.3 | `batchvideosamplingflowchart.png` | 6.3 | Flowchart | KEEP | — (reuse existing PNG) |
+| F6.4 | `chapter6-screenshot-evidence.jpeg` | 6.8 | Screenshot | KEEP | — (reuse existing PNG) |
+| F7.1 | `ch7-class-memory.png` | 7.3 | UML class (real code) | NEW | PlantUML (class) |
+| F7.2 | `ch7-class-query-api-apps.png` | 7.3 | UML class (real code) | NEW | PlantUML (class) |
+| F7.3 | `ch7-flow-relations.png` | 7.3 | Flowchart / activity | NEW | PlantUML (activity) |
+| F7.4 | `ch7-flow-matching.png` | 7.3 | Flowchart / activity | NEW | PlantUML (activity) |
+| F7.5 | `ch7-flow-keyframe.png` | 7.3 | Flowchart | NEW | PlantUML (activity) |
+| F7.6 | `ch7-shot-patient-app.png` | 7.8 | Screenshots | NEW | Screenshot |
+| F7.7 | `ch7-shot-caregiver-app.png` | 7.8 | Screenshots | NEW | Screenshot |
+| F7.8 | `ch7-shot-rerun.png` | 7.8 | Screenshot | NEW | Screenshot |
+| F7.9 | `ch7-shot-terminal.png` | 7.8 | Screenshot | NEW | Screenshot |
+| F8.1 | `ch8-test-levels.png` | 8.2 | Test pyramid | REDRAW | draw.io |
+| F8.2 | `ch8-detection-chart.png` | 8.5 | Grouped bar chart | NEW (or reuse F2.3) | matplotlib |
+| F8.3 | `ch8-compaction-ratio.png` | 8.6 | Bar chart | NEW | matplotlib |
+| F8.4 | `ch8-storage-projection.png` | 8.6 | Line chart | NEW | matplotlib |
+| F8.5 | `ch8-e2e-timing.png` | 8.7 | Horizontal bar | NEW | matplotlib |
+| F8.6 | `ch8-egolife.png` | 8.8 | Bar/line chart | NEW (data from Faizan) | matplotlib |
+| F9.1 | `ch9-commit-timeline.png` | 9.6 | Stacked weekly bar chart | REDRAW | matplotlib |
+| F9.2 | `ch9-branch-graph.png` | 9.5 | Git branch graph | NEW | Mermaid (gitGraph) |
+| F10.1 | `ch10-fyp2-gantt.png` | 10.7 | Gantt | NEW | Mermaid (gantt) |
 
 ---
 
