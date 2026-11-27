@@ -1,0 +1,571 @@
+\chapter{Software Requirements}
+\label{chap:requirements}
+%=====================================================================
+
+\section{User Interactions / Use Cases}
+Table~\ref{tab:usecases} lists the use cases with one canonical name and one
+FR mapping each, and their status at the end of FYP-1.
+
+\begin{table}[H]
+\centering\footnotesize
+\caption{Use case inventory with status.}
+\label{tab:usecases}
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}l Y L{2.8cm} L{3.0cm} L{2.2cm}@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Use case} & \textbf{Primary actor} & \textbf{FRs} & \textbf{Status}\\
+\midrule
+UC-01 & Capture and ingest egocentric video & Primary user (system acts) & FR1, FR2 & Partial\\
+UC-02 & Submit a query by speech or text & Primary user, caregiver & FR6, FR7.1 & Implemented\\
+UC-03 & Find the last known location of an object & Primary user & FR3.2, FR5.1, FR5.4--FR5.7, FR7.2 & Implemented\\
+UC-04 & Review the history of an object & Caregiver, primary user & FR3, FR4.3, FR7.4 & Partial\\
+UC-05 & Recall earlier activity & Primary user & FR3.3, FR4, FR5.2, FR5.3 & Planned\\
+UC-06 & View evidence for an answer & Primary user, caregiver & FR5.4, FR7.2 & Implemented\\
+UC-07 & Grant, scope and revoke caregiver access & Primary user & FR8.1, FR8.4, FR8.5 & Planned\\
+UC-08 & Caregiver queries episodic history & Caregiver & FR5, FR8.2 & Partial\\
+UC-09 & Caregiver verifies an object state & Caregiver & FR3.2, FR5.1, FR8.2 & Partial\\
+UC-10 & Caregiver reviews an activity summary & Caregiver & FR3.3, FR4.2, FR8.3 & Partial\\
+UC-11 & Pause capture or delete history & Primary user & FR1.3, NFR-S5 & Partial\\
+UC-12 & Maintain memory by compaction & System clock & FR4.1--FR4.5 & Implemented\\
+UC-13 & Caregiver calibrates and names rooms & Caregiver & FR3.6, FR3.7, FR8.6 & Implemented (no auth)\\
+UC-14 & Caregiver enrols a personal item (\tbd{new; adoption pending}) & Caregiver & FR8.7 & Implemented (no auth)\\
+UC-15 & Primary user contacts caregiver (\tbd{new; adoption pending}) & Primary user & FR7.5 & Implemented\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Use Case Diagram}
+Figure~\ref{fig:usediagram} shows all thirteen adopted use cases, both human
+actors and the system clock that triggers compaction. Use cases used by both
+actors sit in the centre column; those used by one actor sit on that actor's
+side, so no association line crosses another use case. UC-03 includes query
+submission (UC-02) and evidence display (UC-06), and the abstention case extends
+UC-03 when the item is unknown or never observed. Planned use cases are dashed.
+UC-14 and UC-15 are omitted until the team adopts them.
+
+\aegisfigtall{ch4-use-case}
+  {Use case diagram of Aegis at the end of FYP-1. Solid: implemented
+   (``partial'' where marked); dashed «planned»: not built.}
+  {fig:usediagram}
+
+
+
+\section{Detailed Use Cases}
+The six most critical use cases are detailed below. The remainder follow the
+same template and are placed in Appendix~B.
+
+\subsection{UC-01: Capture and Ingest Egocentric Video}
+\uctable{UC-01 detail.}
+{Primary user (the system acts continuously)}
+{Camera is worn and powered; user has given consent; capture is not paused.}
+{User starts a session, or the system auto-starts when the camera is worn.}
+{1.~Camera streams first-person video. 2.~System receives frames. 3.~System
+selects keyframes. 4.~Keyframes and timestamps are passed to the memory engine.
+5.~System confirms ingestion status.}
+{A1: Camera disconnects $\rightarrow$ system records a gap marker and resumes
+on reconnect. A2: Frames are blurred or dark $\rightarrow$ frames are discarded
+and counted.}
+{Keyframes with timestamps are available to the memory engine; gaps are
+recorded.}
+{FR1.1--FR1.3, FR2.1--FR2.4}
+
+\subsection{UC-03: Find the Last Known Location of an Object}
+\uctable{UC-03 detail.}
+{Primary user}
+{Memory contains at least one observation; user is authenticated on the device.}
+{User taps an object tile, types a question, or speaks.}
+{1.~The user taps an object tile, types a question, or speaks (on-device
+speech-to-text). 2.~The app calls \texttt{GET /api/v1/query?item=\ldots}.
+3.~The server ranks same-class candidates (recency, interaction, displacement,
+personal item, cues) and composes a short answer with place, room and time.
+4.~If no candidate is found, the app calls \texttt{GET /api/v1/ask}; the NLQ
+engine either answers or declines. 5.~The app shows the answer with a
+resolution badge and up to three candidate photos.}
+{A1: Object never observed $\rightarrow$ ``I haven't seen your keys. I
+remember: \ldots''. A2: Unknown word $\rightarrow$ ``I don't know that word.
+Try: \ldots''. A3: Several similar objects $\rightarrow$ ``ambiguous'' badge
+with up to three photos. A4: Server unreachable $\rightarrow$ ``Can't reach
+Aegis memory\ldots'' (never a made-up answer). A5: Room-constrained query with
+no match $\rightarrow$ ``I couldn't find your keys in the kitchen.''}
+{Answer and evidence are displayed.}
+{FR3.2, FR5.1, FR5.4--FR5.7, FR7.2}
+
+\subsection{UC-13: Caregiver Calibrates and Names Rooms}
+\uctable{UC-13 detail.}
+{Caregiver (Caregiver App \emph{Interior} tab; unauthenticated)}
+{A scene graph with estimated rooms exists; the caller supplies the dataset/home identifier.}
+{Caregiver reviews the room list and submits a preferred room name.}
+{1.~Client requests \texttt{GET /api/v1/rooms}. 2.~Caregiver identifies a room. 3.~Client posts its ID and label to \texttt{POST /api/v1/rooms/rename}. 4.~The API updates room labels in the graph and per-home \texttt{home\_map.json} registry for cross-session identity. 4a.~In the home store, labels are unique per home (at most 40 characters); a duplicate label is rejected (\texttt{DuplicateRoomLabelError}).}
+{A1: Unknown room ID or invalid label $\rightarrow$ request is rejected. A2: Registry file is corrupt $\rightarrow$ a safe empty registry fallback is used.}
+{Room naming persists across process restarts; authentication/authorization is not implemented.}
+{FR3.6, FR3.7, FR8.6}
+
+\subsection{UC-05: Recall Earlier Activity}
+\uctable{UC-05 detail.}
+{Primary user}
+{Memory covers the time window asked about.}
+{User asks ``Did I have breakfast this morning?''}
+{1.~Agent parses the time reference (``this morning''). 2.~Agent retrieves
+events from that window (detailed or summarised, depending on age). 3.~Agent
+answers with the matching events and times. 4.~Interface displays the
+supporting evidence.}
+{A1: No matching event $\rightarrow$ system states that no such activity was
+observed and notes that capture may have been off. A2: Window falls in
+compressed history $\rightarrow$ answer comes from summaries and is labelled
+as summarised.}
+{Answer shown with its evidence level (detailed or summarised).}
+{FR3.3, FR4.1--FR4.3, FR5.2, FR5.3}
+
+\subsection{UC-07: Grant, Scope, and Revoke Caregiver Access}
+\uctable{UC-07 detail.}
+{Primary user (or authorised representative)}
+{Primary user's account exists.}
+{User chooses to add, change, or remove a caregiver.}
+{1.~User invites a caregiver by email address. 2.~Caregiver accepts and
+authenticates. 3.~User selects the scope (for example history queries and
+summaries). 4.~System records the grant with a timestamp.}
+{A1: User revokes access $\rightarrow$ subsequent requests are denied; an active session may remain until expiry.
+A2: Caregiver fails authentication $\rightarrow$ access is denied and logged.}
+{Caregiver can act only within the granted scope; all grants and accesses are
+in the audit log.}
+{FR8.1--FR8.5}
+
+\subsection{UC-09: Caregiver Verifies an Object State}
+\uctable{UC-09 detail.}
+{Caregiver}
+{Caregiver is authorised for object queries.}
+{Caregiver asks ``Is the stove knob where it should be?'' or ``Where did she
+leave her pills?'' }
+{1.~Caregiver submits a query via the portal. 2.~Agent retrieves the object's
+latest state. 3.~Portal displays the answer, time, and evidence.}
+{A1: No recent observation $\rightarrow$ portal states that the data is stale
+and shows the last observation time.}
+{Access is logged.}
+{FR3.2, FR5.1, FR8.2, FR8.3}
+
+\subsection{UC-14: Caregiver Enrols a Personal Item \tbd{(new; adoption pending)}}
+\uctable{UC-14 detail.}
+{Caregiver}
+{The object has been observed at least once.}
+{The caregiver opens \emph{Enroll}.}
+{1.~Enter the alias (``dad's cup''), the object class and the usual room.
+2.~The app resolves the instance (\texttt{instanceIdFor} via \texttt{/query}).
+3.~\texttt{POST /api/v1/enroll}. 4.~The store records the personal item; later
+queries rank it first.}
+{A1: Item not found $\rightarrow$ enrolment refused. A2: Alias too long ($>$ 60
+characters) $\rightarrow$ rejected.}
+{The alias resolves to the instance.}
+{FR8.7, FR5.1}
+
+\section{Functional Requirements}
+\label{sec:frs}
+Requirements use the keyword \emph{shall}. Priority: H = needed for the FYP-1/2
+demonstration, M = important, L = desirable. Each requirement has a stable ID
+for
+traceability; shaded rows are the top-level requirements from the proposal.
+The status column uses I = Implemented, P = Partial, Pl = Planned; the evidence
+file and test for each row are in Table~\ref{tab:trace}. Rows marked
+``new were added in Iteration~2 (Table~\ref{tab:changelog}).
+
+\subsection{Module 1: Capture and Ingestion (FR1, FR2)}
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.2cm}L{9.6cm}L{0.8cm}L{3.0cm}@{}}
+\caption{Capture and ingestion requirements.}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\rowcolor{rowfill}FR1 & The system shall continuously capture first-person visual
+observations of the user's physical environment. & H & --\\
+FR1.1 & The system shall accept a live first-person video stream from the capture
+device at a minimum of 1 frame per second. & H & I: \texttt{ingest\_live} (2 fps)\\
+FR1.2 & The system shall timestamp every captured frame. & H & I: frame \texttt{capture\_timestamp}\\
+FR1.3 & The system shall let the user pause and resume capture, and shall record
+paused periods as gaps. & M & I: pause file, \path{/capture/pause}\\
+\rowcolor{rowfill}FR2 & The system shall reliably ingest and route captured
+visual streams into the memory-processing pipeline. & H & --\\
+FR2.1 & The system shall select keyframes from the stream using a defined
+criterion (for example sharpness and visual change). & H & I: \texttt{KeyframeSelector}\\
+FR2.2 & The system shall route each selected keyframe with its timestamp to the
+memory engine. & H & I: promotion, segment runner\\
+FR2.3 & The system shall detect and record ingestion gaps (disconnects, dropped
+frames). & M & I: gap records\\
+FR2.4 & The system shall buffer frames during short pipeline stalls without
+crashing and shall resume automatically. & M & I: \texttt{FrameBuffer(30)}\\
+\end{longtable}
+\end{ltab}
+
+\subsection{Module 2: Spatio-Temporal Memory (FR3, FR4)}
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.2cm}L{9.6cm}L{0.8cm}L{3.0cm}@{}}
+\caption{Spatio-temporal memory requirements.}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\rowcolor{rowfill}FR3 & The system shall dynamically construct and maintain a
+persistent spatio-temporal memory representation that tracks object locations,
+environmental layout, and user activities over time. & H & --\\
+FR3.1 & The system shall detect objects in keyframes and assign persistent
+identities across observations. & H & I: association, DINOv3 re-ID\\
+FR3.2 & The system shall store each object's location relative to stable anchors
+in the environment, with timestamp and confidence. & H & I: relations, state runs\\
+FR3.3 & The system shall group observations into timestamped activity events. & H & I: \texttt{activities.py}\\
+FR3.4 & The system shall estimate room regions by clustering wearer keyframe positions on the floor plane and typing regions from nearby room-defining landmarks; neutral Room \#N labels are used when evidence is insufficient. & H & I (unmeasured)\\
+FR3.5 & The system shall keep the memory across application restarts. & H & I: \texttt{store.py}\\
+FR3.6 & The system shall match estimated rooms to stable per-home room identities across sessions using landmark overlap and floor-plane proximity. & H & P: unstable across scale (TC12)\\
+FR3.7 & The system shall allow a caregiver to rename an estimated room and persist the calibration in the per-home registry. & H & I: \texttt{rename\_home\_room}\\
+\rowcolor{rowfill}FR4 & The system shall progressively condense historical
+observations into compact, high-level summaries while retaining fine-grained
+spatial and contextual detail for recent events. & H & --\\
+FR4.1 & The system shall keep full-detail records for a configurable recent
+window (default 3 days). & H & I: \texttt{hot\_days = 3}\\
+FR4.2 & The system shall condense records older than the recent window into
+summaries that retain object identity, last known location, room identity when
+available, and event type. & H & I: \texttt{compact}, \texttt{\_verify}\\
+FR4.3 & The system shall mark any answer derived from summarised data as
+\emph{summarised}. & M & P: timeline \texttt{tier}; not in \path{/ask}\\
+FR4.4 & The system shall bound storage growth so that memory size grows
+sub-linearly with recording time. & H & P: short clips only\\
+FR3.8 & (new) The system shall classify each object's relation to the nearest anchor (inside, on\_surface, under, above, next\_to, on\_floor, near, in\_room, carried) in a gravity-aligned frame and mark uncertain relations. & H & I: \texttt{relations.py}\\
+FR3.9 & (new) The system shall match rooms, anchors and objects of a new session to the home's stable identities and record objects moved while unobserved. & H & I: \texttt{matching.py}, \texttt{ingest.py}\\
+FR4.5 & (new) The system shall verify each summary against its source rows before deleting them and shall keep a day's detail if verification fails. & H & I: \texttt{\_verify}\\
+\end{longtable}
+\end{ltab}
+
+\subsection{Module 3: Query Engine (FR5, FR6)}
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.2cm}L{9.6cm}L{0.8cm}L{3.0cm}@{}}
+\caption{Query engine requirements.}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\rowcolor{rowfill}FR5 & The system shall interpret natural-language spatial and
+temporal queries and generate context-grounded responses from the stored
+episodic memory. & H & --\\
+FR5.1 & The system shall answer ``where'' queries about objects using stored
+locations. & H & I: \path{/query}, NLQ\\
+FR5.2 & The system shall answer ``when'' and ``what happened'' queries using
+stored events and summaries. & H & Pl: P1.1\\
+FR5.3 & The system shall resolve relative time expressions (for example ``this
+morning'', ``yesterday'') against the current time. & M & P: cues used for ranking\\
+FR5.4 & Every answer shall include at least one reference to stored evidence, or
+an explicit statement that none exists. & H & P: not audited (P1.4)\\
+FR5.5 & The system shall abstain and say it is unsure when evidence is missing or
+confidence is below a configured threshold. & H & P: no threshold (P1.2)\\
+FR5.6 & The system shall parse room constraints (for example, ``keys in the kitchen'' or ``room 2'') and filter candidate memories by room. & H & I: room filter\\
+FR5.7 & The system shall include a room clause in grounded explanations when known, except when the anchor label already identifies the room. & M & I: room clause\\
+\rowcolor{rowfill}FR6 & The system shall support multiple input modalities
+(such as speech and text) to enable accessible query formulation and
+interaction. & H & --\\
+FR6.1 & The system shall, when speech support is available, accept spoken queries and transcribe them when speech support is available; typed interaction remains fully supported. & M & I: on-device STT; accuracy unmeasured\\
+FR6.2 & The system shall accept typed queries. & H & I: both apps, CLI\\
+FR6.3 & The system shall let the user confirm or correct a transcription before
+answering when transcription confidence is low. & L & Pl: P1.6\\
+FR5.8 & (new) When several same-class objects match, the system shall return up to three ranked candidates with photos and mark the answer as ambiguous. & M & I: \texttt{rank\_candidates}\\
+\end{longtable}
+\end{ltab}
+
+\subsection{Module 4: Interface and Caregiver Access (FR7, FR8)}
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.2cm}L{9.6cm}L{0.8cm}L{3.0cm}@{}}
+\caption{Interface and caregiver access requirements.}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\rowcolor{rowfill}FR7 & The system shall provide an interaction interface for
+submitting memory queries, presenting retrieved evidence, and displaying past
+events. & H & --\\
+FR7.1 & The interface shall provide a way to submit a query by speech or text. & H & I: both apps\\
+FR7.2 & The interface shall show each answer together with its supporting
+evidence (image or description, time, location). & H & I: \texttt{AnswerDrawer}, crops\\
+FR7.3 & The interface shall display answers in short, plain language, with
+adjustable text size. & M & P: \tbd{text size to check}\\
+FR7.4 & The interface shall provide a browsable timeline of past events. & M & P: Caregiver \emph{Track} tab\\
+\rowcolor{rowfill}FR8 & The system shall support authorised caregiver access to
+query episodic history, verify object states, and review activity summaries. & H & --\\
+FR8.1 & The system shall authenticate every caregiver before granting access. & H & Pl: P1.7\\
+FR8.2 & The system shall allow caregivers to query history and verify object
+states within their granted scope. & H & P: no scope enforcement\\
+FR8.3 & The system shall let caregivers review daily activity summaries. & M & P: \path{/activities}; no screen\\
+FR8.4 & The primary user shall be able to grant, restrict, and revoke caregiver
+access. Revocation blocks access on the next request; an already active session
+may continue until it expires. & H & Pl: P1.7\\
+FR8.5 & The system shall log all caregiver accesses and make the log visible to
+the primary user. & M & Pl: P1.7\\
+FR8.6 & The system shall expose room listing and room-renaming operations for caregiver calibration; the prototype endpoint is unauthenticated and does not satisfy authorization requirements. & M & I (no auth)\\
+FR7.5 & (new) The patient app shall let the user call or message the caregiver. & M & I: \texttt{call\_view.dart}\\
+FR8.7 & (new) The caregiver shall be able to enrol a personal item with an alias. & M & I (no auth): \path{/enroll}\\
+\end{longtable}
+\end{ltab}
+
+\section{Non-Functional Requirements}
+The prototype thresholds are defined in Section~\ref{sec:success}; they are not production safety specifications.
+
+\subsection{Reliability}
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.6cm}L{8.6cm}L{0.7cm}L{3.8cm}@{}}
+\caption{Reliability requirements.}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+NFR-R1 & The ingestion pipeline shall run for at least 1 continuous hour
+without crash or stall in test conditions. & H & Unmeasured: 1-hour soak not run (P2.1)\\
+NFR-R2 & After an unexpected shutdown, the memory shall recover to a consistent
+state with no loss of data older than 1 minute. & H & Partial: crash resume, transactional store; loss bound not measured\\
+NFR-R3 & The system shall define an object observation as “fresh” for 6 hours and report when no observation falls within that period. & M & Planned: freshness (P1.3)\\
+\end{longtable}
+\end{ltab}
+
+\subsection{Usability}
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.6cm}L{8.6cm}L{0.7cm}L{3.8cm}@{}}
+\caption{Usability requirements.}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+NFR-U1 & A first-time user shall be able to ask a spoken or typed query and read the
+answer without instruction in under 60 seconds. & H & Unmeasured; made modality-neutral\\
+NFR-U2 & Answers shall be at most 2 short sentences plus one piece of
+evidence. & H & Implemented: template answers\\
+NFR-U3 & Text shall provide small, medium and large sizes on Android/browser and meet WCAG AA contrast guidelines. & M & \tbd{Not audited}\\
+NFR-U4 & Text-alone interaction is fully required. Speech-alone interaction is best-effort for this phase and is not blocking. & H & Implemented\\
+\end{longtable}
+\end{ltab}
+
+\subsection{Performance}
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.6cm}L{8.6cm}L{0.7cm}L{3.8cm}@{}}
+\caption{Performance requirements.}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+NFR-P1 & 95th-percentile end-to-end query latency (query received $\rightarrow$
+answer displayed) shall not exceed 5 seconds on the laptop target setup. & H & Unmeasured (P2.8)\\
+NFR-P2 & Keyframe ingestion shall be evaluated for 10 minutes with no more than 30 seconds of unprocessed backlog. & M & Partial: backlog accounting; not run for 10 min\\
+NFR-P3 & Structured spatial memory shall remain queryable for a three-day recent window; older spatial observations shall be converted into text summaries, with storage growth measured after the retention policy is applied. & H & Implemented; short clips only\\
+NFR-P4 & Spatial and temporal retrieval accuracy shall be measured against the dataset/subset selected in FYP-2; the 70\%/60\% thresholds in Table~\ref{tab:success} remain proposed prototype targets. & H & Unmeasured\\
+\end{longtable}
+\end{ltab}
+
+\subsection{Security}
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.6cm}L{8.6cm}L{0.7cm}L{3.8cm}@{}}
+\caption{Security requirements.}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Requirement} & \textbf{Pri.} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+NFR-S1 & Data shall use TLS in transit and AES-256 at rest. & H & Partial: HTTPS on Modal only; no encryption at rest\\
+NFR-S2 & The caregiver role shall be limited to activity summaries and object-state verification within the granted scope, with no raw-video access. & H & Not met: no roles; raw video route open\\
+NFR-S3 & Username/password authentication shall be required for caregiver access; logs shall retain username, timestamp and result for 30 days. & H & Planned\\
+NFR-S4 & Raw frames shall be retained for 24 hours and then removed.
+ & M & Partial: local frames deleted; crops kept (decision \#9)\\
+NFR-S5 & The primary user shall be able to request full, immediate and irreversible deletion of stored history. & H & Partial: \texttt{delete\_session\_rows}; full deletion P1.8\\
+\end{longtable}
+\end{ltab}
+
+\clearpage
+\section{Acceptance Criteria}
+\label{sec:ac}
+Each check is objective and can be run as a test (detailed test cases appear in
+Chapter~\ref{chap:testing} and Appendix~\ref{app:tests}). AC-03 is re-mapped to
+FR2.3/FR2.4, because a 10-second disconnect does not test the one-hour NFR-R1;
+AC-33 now tests NFR-R1, and AC-32 covers FR5.7, which had no check. The two new
+columns record the result at the end of FYP-1 and its evidence.
+
+\begin{ltab}
+\begin{longtable}{@{}>{\bfseries}L{1.1cm}L{1.6cm}L{3.9cm}L{3.6cm}L{1.6cm}L{2.7cm}@{}}
+\caption{Acceptance criteria.}\label{tab:ac}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Req.} & \textbf{Acceptance check} & \textbf{Pass condition} & \textbf{Result} & \textbf{Evidence}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Req.} & \textbf{Acceptance check} & \textbf{Pass condition} & \textbf{Result} & \textbf{Evidence}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+AC-01 & FR1.1, FR1.2 & Stream a 5-minute test video through the capture
+path. & All frames timestamped; frame rate $\geq$ 1 fps. & Not run & P2.1\\
+AC-02 & FR2.1, FR2.2 & Ingest a scripted sequence with known scene changes. &
+Keyframes selected at $\geq$ 80\% of 5 known changes; every keyframe reaches
+the memory engine with its timestamp. & Not run & P2.1\\
+AC-03 & FR2.3, FR2.4 & Disconnect the source for 10 seconds mid-stream. & Gap
+is recorded; pipeline resumes within 15 seconds without restart. & Partial & \texttt{test\_live\_ingestion}; physical test P2.1\\
+AC-04 & FR3.1, FR3.2 & Place 5 known objects at known anchors in a
+recorded sequence. & Correct anchor and location recorded for $\geq$ 70\% of objects; no more than 20\% duplicate identities. & Not run & P2.2\\
+AC-05 & FR3.3 & Run a scripted activity sequence (for example make tea, then
+leave the kitchen). & Events grouped with correct order and time, matching
+ground truth in $\geq$ 70\% of events. & Not run & P2.2\\
+AC-06 & FR3.5 & Restart the application after ingestion. & Memory contents
+identical before and after restart. & \textbf{Pass} & \texttt{test\_restart\_equivalence}\\
+AC-07 & FR4.2, FR4.4, NFR-P3 & Apply the three-day spatial retention policy to a longer recorded history. &
+Older spatial observations are converted into text summaries that retain identity,
+last location and event type; storage growth is recorded. & \textbf{Pass} (synthetic) & \texttt{test\_compaction}\\
+AC-08 & FR4.1, SC3 & Run the selected evaluation queries before and after spatial-to-text conversion. &
+Accuracy drop is reported against the proposed $\leq$15-point target; no result is claimed before a dataset is selected. & Partial & memory audit probes\\
+AC-09 & FR5.1, NFR-P4 & Ask 10 ``where'' queries with known answers. &
+$\geq$ 70\% answered correctly. & Not run & \texttt{demo05} NOT\_READY\\
+AC-10 & FR5.2, FR5.3, NFR-P4 & Ask 10 ``when / what'' queries including
+relative time expressions. & $\geq$ 60\% answered correctly. & Not run & temporal not built\\
+AC-11 & FR5.4 & Review all answers from AC-09 and AC-10. & 100\% of
+non-abstaining answers cite stored evidence. & Not run & P1.4\\
+AC-12 & FR5.5, SC6 & Ask 5 queries about objects never observed. & At least 4/5 (80\%)
+yield an explicit ``not seen / not sure'' response; no fabricated locations. & \textbf{Pass} & \texttt{test\_nlq}, \texttt{test\_api}\\
+AC-13 & FR6.1, FR6.2 & Submit the same 10 queries by speech and by text. &
+Both modalities return equivalent answers; speech transcription accuracy
+$\geq$ 80\% on test speakers. & Not run & --\\
+AC-14 & FR7.2, NFR-U2 & Inspect answer screens for 5 queries. & Each
+shows answer, time, and evidence; answer text $\leq$ 2 short sentences. & Partial & answer screens; no formal check\\
+AC-15 & NFR-U1 & A new volunteer submits one spoken query without instruction. &
+Completed in $\leq$ 60\,s. & Not run & usability study\\
+AC-16 & FR8.1, NFR-S3 & Attempt caregiver access with 5 invalid credentials. &
+Access denied in 100\% of attempts; username, timestamp and result are logged. & Not run & P1.7\\
+AC-17 & FR8.4 & Revoke a caregiver's access during an active session. & New requests are denied after revocation; an existing session may continue until expiry. & Not run & P1.7\\
+AC-18 & FR8.5 & Perform 5 caregiver actions. & All appear in the primary
+user's access log. & Not run & P1.7\\
+AC-19 & NFR-P1, SC4 & Time 5 end-to-end queries. & 95th-percentile latency
+$\leq$ 5\,s. & Not run & P2.8\\
+AC-20 & NFR-S1, NFR-S5 & Inspect stored data and trigger deletion. & AES-256 at rest and TLS in transit are used; deletion is verified by post-delete database inspection. & Fail & no encryption at rest\\
+AC-21 & FR1.3 & Pause capture for 30 seconds, then resume. & No frames stored
+during the pause; the gap is recorded; capture resumes without restart. & Partial & \texttt{test\_capture\_control}\\
+AC-22 & FR3.4, FR3.6, FR5.6 & On annotated room trajectories, compare estimated room footprints and labels; score every keyframe position, room-change event, and room-constrained query. & Report room-region precision/recall; proposed targets: keyframe room segmentation accuracy $\geq$ 0.90, room-change event F1 $\geq$ 0.70, correct-room query rate $\geq$ 0.90. Targets are proposed and not yet measured. & Not run & P2.3\\
+AC-23 & FR4.3 & Query facts that now live only in compacted history. & 100\% of
+such answers carry the ``summarised'' label. & Partial & timeline only\\
+AC-24 & FR7.1, FR7.3, NFR-U3, NFR-U4 & Complete a query by speech only and by
+text only; change text size; measure contrast. & Both flows complete; at least
+3 text sizes; contrast ratio $\geq$ 4.5:1. & Partial & text size not measured\\
+AC-25 & FR7.4 & Open the timeline for the actual 1-hour/10-minute test-session log. & Events listed in chronological order and matching the ground-truth session log. & Partial & Track tab\\
+AC-26 & FR8.2, FR8.3, NFR-S2 & Give a caregiver summary and object-state verification scope; try 3 in-scope and 2 out-of-scope requests. & In-scope requests succeed; raw-video/out-of-scope requests are rejected. & Not run & no scopes\\
+AC-27 & NFR-R2 & Kill the process during ingestion, then restart. & Memory is
+consistent; no loss of data older than 1 minute. & Partial & capture resume tested\\
+AC-28 & NFR-R3 & Query an object not seen for longer than 6 hours. & Answer
+states when it was last seen and does not present it as current. & Not run & P1.3\\
+AC-29 & FR2.4, NFR-P2 & Pause the memory engine for 10 seconds while streaming. & All frames during the pause are buffered and the backlog recovers within 15 seconds. & Partial & \texttt{test\_live\_buffer}\\
+AC-30 & NFR-S4 & Inspect storage after processing a session. & Raw frames older than 24 hours are absent by directory inspection. & Partial & see NFR-S4\\
+AC-31 & FR3.7, FR8.6 & Rename an estimated room, restart the service, and rebuild/load the same home's graph; also submit an unknown room ID and corrupt the registry fixture. & The room label survives restart and matching; invalid IDs are rejected; corrupt registry safely falls back. This tests persistence, not authorization; the rename endpoint currently has no authentication. & \textbf{Pass} & \texttt{test\_api}, \texttt{test\_home\_registry}\\
+AC-32 & FR5.7 & (new) Ask a room-constrained query. & The explanation names the room. & \textbf{Pass} & \texttt{test\_reasoning}\\
+AC-33 & NFR-R1 & (new) Stream for 60 minutes. & No crash, no stall $>$ 30\,s. & Not run & P2.1\\
+AC-34 & FR3.9 & (new) Ingest a second session of the same home. & Room, anchor and instance IDs are reused. & \textbf{Pass} & \texttt{test\_ingest}, \texttt{test\_matching}\\
+AC-35 & FR4.5 & (new) Compact a day whose summary fails verification. & Its rows are kept and the log records \texttt{failed}. & \textbf{Pass} & \texttt{test\_compaction}\\
+\end{longtable}
+\end{ltab}
+
+\section{Requirements Traceability}
+Table~\ref{tab:trace} traces each requirement group to its use cases,
+acceptance checks, implementing files, test files and status. Every H or M
+requirement maps to at least one test file or says ``no test yet''.
+
+\begin{ltab}
+\scriptsize
+\begin{longtable}{@{}>{\bfseries}L{0.9cm}L{1.6cm}L{1.9cm}L{3.3cm}L{3.5cm}L{2.6cm}@{}}
+\caption{Requirements traceability matrix.}\label{tab:trace}\\
+\toprule
+\rowcolor{hdrfill}\textbf{Req.} & \textbf{UC(s)} & \textbf{AC(s)} & \textbf{Module / file} & \textbf{Test file(s)} & \textbf{Status}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{Req.} & \textbf{UC(s)} & \textbf{AC(s)} & \textbf{Module / file} & \textbf{Test file(s)} & \textbf{Status}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+FR1 & UC-01, UC-11 & AC-01, AC-21 & M-A: \path{ingestion/live_pipeline.py}, \texttt{contracts.py} & \texttt{test\_live\_ingestion}, \texttt{test\_live\_contracts}, \texttt{test\_capture\_control} & Implemented; 1-hour soak not run\\
+FR2 & UC-01 & AC-02, AC-03, AC-29 & M-A: \texttt{keyframe.py}, \texttt{buffer.py}, \texttt{live\_handoff.py}, \texttt{segment\_runner.py} & \texttt{test\_live\_keyframe}, \texttt{test\_live\_buffer}, \texttt{test\_live\_handoff}, \texttt{test\_live\_segments} & Implemented\\
+FR3 & UC-03, UC-04, UC-09, UC-13 & AC-04--06, AC-22, AC-31, AC-34 & M-B: \texttt{relations.py}, \texttt{runs.py}, \texttt{scene\_graph.py}, \texttt{rooms.py}, \texttt{store.py}, \texttt{matching.py} & \texttt{test\_relations}, \texttt{test\_runs}, \texttt{test\_scene\_graph}, \texttt{test\_rooms}, \texttt{test\_store}, \texttt{test\_matching}, \texttt{test\_ingest} & Implemented; room metrics unmeasured; FR3.6 partial\\
+FR4 & UC-04, UC-10, UC-12 & AC-07, AC-08, AC-23, AC-35 & M-B: \texttt{compaction.py}, \texttt{summaries.py} & \texttt{test\_compaction} & Implemented; FR4.3--4.4 partial\\
+FR5 & UC-03, UC-05, UC-08, UC-09 & AC-09--12, AC-32 & M-C: \path{nlq/engine.py}, \path{memory/reasoning.py}, \path{remote/api.py} & \texttt{test\_nlq}, \texttt{test\_reasoning}, \texttt{test\_ranking}, \texttt{test\_api} & Partial: temporal (FR5.2) planned\\
+FR6 & UC-02 & AC-13 & M-C/M-D: \texttt{voice\_service.dart}, \path{nlq/cli.py} & Flutter widget tests (voice flow); no speech-accuracy test & Implemented (on-device); FR6.3 planned\\
+FR7 & UC-02, UC-03, UC-06, UC-15 & AC-14, AC-15, AC-24, AC-25 & M-D: \texttt{apps/Patient App}, \texttt{apps/Caregiver App} & Flutter \texttt{widget\_test.dart} (14 + 11) & Implemented; usability unmeasured\\
+FR8 & UC-07--10, UC-13, UC-14 & AC-16--18, AC-26, AC-31 & M-D: \path{remote/api.py}, \path{memory/personal.py} & \texttt{test\_api}, \texttt{test\_home\_registry}; no access-control test & Partial: no authentication\\
+NFR-R & UC-01 & AC-03, AC-27, AC-28, AC-33 & All & \texttt{test\_live\_ingestion}, \texttt{test\_restart\_equivalence} & Partial\\
+NFR-U & UC-02, UC-03 & AC-14, AC-15, AC-24 & M-D & Flutter widget tests & Partial; usability study not run\\
+NFR-P & -- & AC-07, AC-09, AC-10, AC-19, AC-29 & All & \texttt{test\_compaction}; no latency test & Partial; p95 unmeasured\\
+NFR-S & UC-07, UC-11 & AC-16, AC-20, AC-26, AC-30 & M-D, M-B & no security test yet & Planned\\
+\end{longtable}
+\end{ltab}
+
+\textbf{Use-case coverage} (generated from Table~\ref{tab:usecases}).
+UC-01 $\rightarrow$ FR1, FR2; UC-02 $\rightarrow$ FR6, FR7.1; UC-03
+$\rightarrow$ FR3.2, FR5.1, FR5.4--FR5.7, FR7.2; UC-04 $\rightarrow$ FR3,
+FR4.3, FR7.4; UC-05 $\rightarrow$ FR3.3, FR4, FR5.2, FR5.3; UC-06
+$\rightarrow$ FR5.4, FR7.2; UC-07 $\rightarrow$ FR8.1, FR8.4, FR8.5; UC-08
+$\rightarrow$ FR5, FR8.2; UC-09 $\rightarrow$ FR3.2, FR5.1, FR8.2; UC-10
+$\rightarrow$ FR3.3, FR4.2, FR8.3; UC-11 $\rightarrow$ FR1.3, NFR-S5; UC-12
+$\rightarrow$ FR4.1--FR4.5; UC-13 $\rightarrow$ FR3.6, FR3.7, FR8.6; UC-14
+$\rightarrow$ FR8.7; UC-15 $\rightarrow$ FR7.5.
+
+\section{Requirements Change Log}
+\label{sec:changelog}
+Table~\ref{tab:changelog} records every requirement added, modified or deferred
+since the mid report.
+
+\begin{table}[H]\centering\footnotesize
+\caption{Requirements change log.}\label{tab:changelog}
+\begin{tabularx}{\textwidth}{@{}L{2.6cm} L{2.6cm} Y l l@{}}\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Change} & \textbf{Reason} & \textbf{Date} & \textbf{Approved by}\\\midrule
+FR3.8 & Added & Relations became explicit in the gravity frame & 15 Nov 2026 & \tbd{[supervisor]}\\
+FR3.9 & Added & The persistent home store needs cross-session identity & 15 Nov 2026 & \tbd{[ ]}\\
+FR4.5 & Added & Compaction must never lose the last-known state silently & 15 Nov 2026 & \tbd{[ ]}\\
+FR5.8 & Added & Class-level ambiguity (tiered protocol) & 22 Nov 2026 & \tbd{[ ]}\\
+FR6.1 & Modified (``should'' $\rightarrow$ ``shall when available'') & Consistency with the keyword rule; speech now implemented & \tbd{[ ]} & \tbd{[ ]}\\
+FR7.5, FR8.7, UC-14, UC-15 & Added & Features built in the new apps & 23 Nov 2026 & \tbd{[ ]}\\
+NFR-U1, AC-15 & Modified (speech or text) & Removes the conflict with NFR-U4 & \tbd{[ ]} & \tbd{[ ]}\\
+AC-03 & Re-mapped to FR2.3/FR2.4 & It did not test NFR-R1 & \tbd{[ ]} & \tbd{[ ]}\\
+AC-32--35 & Added & Coverage gaps (FR5.7, NFR-R1, new FRs) & \tbd{[ ]} & \tbd{[ ]}\\
+FR5.2 & Deferred to Iteration 3 & Deviation D2 & \tbd{[ ]} & \tbd{[ ]}\\
+\bottomrule\end{tabularx}\end{table}

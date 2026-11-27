@@ -1,0 +1,106 @@
+\chapter{Testing and Validation}
+\label{chap:testing}
+
+\section{Testing Strategy}
+Testing has four levels (Figure~\ref{fig:test-levels}). Unit and integration
+tests run in CI on every push and gate merges; evaluation scripts run on real or
+synthetic data and produce reports; system runs exercise the deployed pipeline;
+acceptance is judged against the checks of Table~\ref{tab:ac}. A result is
+called \emph{measured} only when a script produced it from data; otherwise it is
+\emph{unmeasured}.
+
+\aegisfig{ch8-test-levels}
+  {Test levels with the number of tests or runs at each level at the end of FYP-1.}
+  {fig:test-levels}
+
+\section{Test Levels and Results}
+\textbf{Unit and integration.} \texttt{uv run pytest} collects 451 tests in 53
+files; all pass. Line coverage is 79\% of 10{,}759 statements, above the 75\% CI
+floor. Ruff lint and format checks pass. The Flutter apps have 14 (Patient) and
+11 (Caregiver) widget tests. Appendix~\ref{app:tests} lists the tests by file.
+
+\textbf{Detection.} The detector benchmark is reported in
+Table~\ref{tab:detector-ab}: SAM~3 reached F1~0.721 against YOLOE's 0.097 on
+the same labelled frames, and found 34 of 42 shoes and all 19 hands. SAM~3 still
+produces 3.3 false positives per image, so the memory relies on debouncing (two
+agreeing observations) to suppress them.
+
+\section{Compaction and Storage Audit}
+\label{sec:compaction-audit}
+The memory audit (\path{evaluation/memory_audit.py}) compares the schema-1
+per-frame graph with the schema-2 state-run graph for the same session and
+checks that every last-known state survives. Figure~\ref{fig:compaction-ratio}
+shows the result: \texttt{demo04} shrank 7.2$\times$ (178.3 to 24.8\,KiB) and
+\texttt{demo03} 5.7$\times$ (528.5 to 92.0\,KiB), with 100\% retention of
+last-known states. Projected to continuous use (Figure~\ref{fig:storage-projection}),
+\texttt{demo04} grows at 2.11\,MiB/h instead of 13.51\,MiB/h, i.e.\ 50.7\,MiB
+instead of 324.2\,MiB per 24 hours, before compaction of old days. The projection
+is linear from short clips and is not a long-run measurement (P2.8).
+
+\aegisfig{ch8-compaction-ratio}{Graph size before and after state runs, and retention.}{fig:compaction-ratio}
+\aegisfig{ch8-storage-projection}{Projected storage growth for 24 hours.}{fig:storage-projection}
+
+\section{End-to-End System Run}
+\label{sec:e2e}
+On 20~November \path{scripts/run_e2e.py} ran the full pipeline on the
+\texttt{walk01-2} capture (79 frames) with CPU containers. VGGT took 831\,s,
+detection and lifting 27\,s, and deployment of the API 8\,s
+(Figure~\ref{fig:e2e-timing}); the API then answered queries from the volume.
+The run proves the stages connect; it is not a latency measurement, because a GPU
+run would be much faster and only one run was made.
+
+\aegisfig{ch8-e2e-timing}{Stage timings of the end-to-end run (CPU, 79 frames).}{fig:e2e-timing}
+
+At the measured L4 rate a 5-minute segment costs 0.086 GPU-hours, about
+\$0.069.
+
+\section{EgoLife Multi-Day Study}
+\label{sec:egolife}
+Because Ego4D could not be used (NO\_GO: 0 of 100 sampled clips were usable, and
+the prerequisites would take about 10.8 weeks), memory persistence was tested on
+EgoLife, a seven-day egocentric recording. 74 segments were processed for
+\$8.71. Two results matter. First, 12 of 12 tracked instances were still in the
+store 1--4 days after they were last seen, so the store does not forget across
+days. Second, using the full history never answered better than an ablation that
+used only the last 24 hours, so on this data long history did not help
+answering. A defect found here is listed in Table~\ref{tab:defects} (D-4).
+\tbd{Per-day table (segments, objects, rooms, queries correct) and the F8.6
+figure to be added from the team's EgoLife run notes.}
+
+\section{Acceptance Testing}
+Of the 35 acceptance checks (Table~\ref{tab:ac}), 7 pass, 13 pass partly, 1
+fails (AC-20, no encryption at rest) and 14 have not been run. Every check that
+has not been run is listed with its FYP-2 task (P-numbers in
+Chapter~\ref{chap:fyp2}).
+
+\section{Edge and Failure Cases}
+Tested edge cases include: unknown items and unknown words (specific abstention
+codes); several same-class objects (ambiguous, up to three photos); an object
+never observed; a server timeout in the apps; a stream disconnect and reconnect;
+a storage stall with a full buffer; a crash and resume from
+\texttt{session\_state.json}; a corrupt \texttt{home\_map.json}; a duplicate room
+label; an unchanged graph re-ingested (skipped by SHA-256); a failed summary
+verification (detail kept); and a gravity fit with low confidence (relation
+marked uncertain).
+
+\section{Defects and Corrective Actions}
+\begin{table}[H]\centering\footnotesize
+\caption{Defects found in Iteration~2 and their fixes.}\label{tab:defects}
+\begin{tabularx}{\textwidth}{@{}l Y Y l@{}}\toprule
+\rowcolor{hdrfill}\textbf{\#} & \textbf{Defect} & \textbf{Correction} & \textbf{Commit}\\\midrule
+D-1 & YOLOE missed most personal objects (F1 0.097) & SAM~3 made the default & \tbd{[ ]}\\
+D-2 & Per-frame timeline grew with video length & State runs, schema 2 & \texttt{0bfc257}\\
+D-3 & Display transform (SCALE, \texttt{to\_zup}) hid real geometry & Raw coordinates + gravity frame & \tbd{[ ]}\\
+D-4 & EgoLife DAY7: rooms 44 $\rightarrow$ 40 and anchors 859 $\rightarrow$ 818 after re-ingest (duplicate identities) & Matching fix & \texttt{61dda40}\\
+D-5 & Apps showed a mock answer when offline & Mock removed; ``Can't reach Aegis memory'' & \texttt{180b897}\\
+D-6 & Room linking unstable across scene scale (TC12) & Open: scale-relative linking (Iteration~3) & --\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Measured and Unmeasured Results}
+\textbf{Measured:} test count and coverage; detector F1; compaction ratio and
+retention; storage projection (from short clips); end-to-end stage times (one
+CPU run); EgoLife persistence and the 24-hour ablation; GPU cost per segment.
+\textbf{Unmeasured:} spatial and temporal retrieval accuracy (NFR-P4, AC-09/10;
+\texttt{demo05} is NOT\_READY), the four room metrics, query latency p95
+(NFR-P1), the one-hour soak (NFR-R1), speech accuracy, and usability. These are
+not reported as results anywhere in this report.

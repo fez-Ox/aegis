@@ -1,0 +1,381 @@
+\chapter{System Design}
+\label{chap:design}
+%=====================================================================
+In the diagrams of this chapter, solid elements are implemented on the
+\texttt{develop} branch and covered by tests, elements tagged ``partial'' are
+implemented slices, dashed elements are planned, and red marks a known security
+gap. All diagrams were drawn from the code at commit \texttt{ce49dcc}
+\tbd{(update to the tagged submission commit)}; each figure's source file in
+\path{ThesisFigs/src/} names the code it was checked against.
+
+\section{System Architecture}
+\label{sec:architecture}
+Aegis is organised in five layers (Figure~\ref{fig:layers}). Layers talk only to
+their neighbours, through files on the Modal volume or through HTTPS JSON.
+
+\aegisfigtall{ch5-layered-architecture}
+  {Layered architecture of Aegis at the end of FYP-1. Colour marks the layer;
+   dashed boxes are planned; red marks a security gap.}
+  {fig:layers}
+
+\textbf{Capture and ingestion} runs on the laptop. \texttt{aegis-ingest} reads
+the phone's MJPEG stream, samples it at 2\,fps, keeps only sharp, well-exposed
+frames that differ from the last kept frame, and writes JPEG frames with an
+index of frame and gap records. A finished or growing capture is cut into
+segments of at most 120 frames and uploaded to a Modal volume. Batch videos
+follow the same path through \texttt{ingest\_video}.
+
+\textbf{3D processing and perception} runs on Modal. A CPU worker normalises
+the frames; an L4 GPU worker runs VGGT-$\Omega$ to recover camera poses and
+per-pixel 3D points, and a RANSAC floor fit finds ``up''; a second GPU worker
+detects objects with SAM~3 (or YOLOE), refines masks with SAM~2, tracks
+identities with DINOv3 embeddings, and lifts each detection into a
+gravity-aligned oriented box. With \texttt{AEGIS\_GPU=cpu} the same stages run
+on CPU containers.
+
+\textbf{Memory} turns boxes into rooms, anchors and objects, classifies each
+object's relation to its anchor, debounces observations into state runs and
+derives events, producing one session graph. A session can then be merged into
+a per-home SQLite store that keeps stable identities, groups activities, keeps
+evidence crops and compacts history older than three days.
+
+\textbf{Query service} is a FastAPI application deployed on Modal. It answers
+ranked object queries (\path{/query}) and natural-language questions
+(\path{/ask}) from the session graph or the home store. It currently allows
+any origin and has no authentication on writes.
+
+\textbf{Presentation} is the Patient and Caregiver apps, the \texttt{aegis-ask}
+terminal client, and an offline Rerun viewer.
+
+\section{Architectural Components}
+\label{sec:components}
+Figure~\ref{fig:components} shows one component per Python package plus the
+three clients, grouped by where they run. Dashed arrows are package imports
+(«use»), taken from the code. The only network interface is the HTTP API,
+drawn as a ball (provided by \texttt{remote.api}) and a socket (required by
+each client). Table~\ref{tab:components} lists what each component provides and
+requires.
+
+\aegisfig{ch5-components}
+  {UML component diagram: Python packages, Modal apps and clients. Dashed
+   arrows are imports; the ball and socket is the HTTP API.}
+  {fig:components}
+
+\begin{table}[H]\centering\footnotesize
+\caption{Component responsibilities.}\label{tab:components}
+\begin{tabularx}{\textwidth}{@{}L{2.0cm} L{3.4cm} Y L{2.8cm}@{}}\toprule
+\rowcolor{hdrfill}\textbf{Component} & \textbf{Package path} & \textbf{Provides} & \textbf{Requires}\\\midrule
+core & \path{src/aegis/core/} & \texttt{RuntimeConfig}, \texttt{Vocabulary}, \texttt{DatasetPaths}, models & --\\
+ingestion & \path{src/aegis/ingestion/} & \texttt{FrameSource}, \texttt{ingest\_live}, \texttt{promote\_live\_segments} & core\\
+geometry & \path{src/aegis/geometry/} & \texttt{run\_vggt\_reconstruction}, \texttt{GravityFrame}, \texttt{lift\_detection\_to\_3d} & core\\
+perception & \path{src/aegis/perception/} & \texttt{detect\_and\_track\_objects} & core\\
+memory & \path{src/aegis/memory/} & \texttt{MemoryRepository}, \texttt{HomeStore}, \texttt{ingest\_session}, \texttt{compact} & core, geometry\\
+nlq & \path{src/aegis/nlq/} & \texttt{AnswerEngine.ask}, \texttt{DictionaryIndex} & memory (graph view)\\
+remote.workers & \path{remote/workers.py}, \texttt{modal\_app.py} & \texttt{run\_preprocess}, \texttt{run\_vggt}, \texttt{run\_detect\_and\_lift}, \texttt{run\_rerun} & ingestion, geometry, perception, memory, visualization\\
+remote.api & \path{remote/api.py}, \texttt{serve.py} & HTTP API \path{/api/v1} & memory, nlq\\
+visualization & \path{visualization/rerun_scene.py} & \texttt{run\_rerun} & graph and geometry artifacts\\
+evaluation & \path{src/aegis/evaluation/} & readiness and score reports & memory, artifacts\\
+Patient App & \texttt{apps/Patient App/} & -- & HTTP API\\
+Caregiver App & \texttt{apps/Caregiver App/} & -- & HTTP API\\
+\texttt{aegis-ask} & \path{src/aegis/nlq/cli.py} & -- & HTTP API or local graph\\
+\bottomrule\end{tabularx}\end{table}
+
+The prototype is deployed across six kinds of node (Figure~\ref{fig:deployment}).
+The wearer's phone only streams video. The laptop runs capture, launches the
+pipeline and, when artifacts are downloaded, holds the persistent home store.
+Modal runs CPU and GPU containers for processing and a separate CPU web
+endpoint, \texttt{aegis-memory-api}, that serves the API from the data volume,
+so normal operation needs no download to the laptop. The patient's and
+caregiver's phones reach that endpoint over HTTPS. GitHub Actions runs linting,
+the test suite with a 75\% coverage floor and Flutter checks on every push to
+\texttt{main} and \texttt{develop}, and publishes the patient APK. Model
+weights are downloaded once from Hugging Face and cached on a model volume.
+
+\aegisfigtall{ch5-deployment}
+  {UML deployment diagram: devices, Modal execution environments, volumes and
+   communication paths. Red: security gaps; dashed: planned or development only.}
+  {fig:deployment}
+
+\section{Interfaces and Dependencies}
+\label{sec:interfaces}
+Table~\ref{tab:api} is the HTTP API contract (\path{src/aegis/remote/api.py},
+base path \path{/api/v1}, \texttt{API\_VERSION = 0.2.1}). There are 26 route
+handlers; six are simulator presets.
+
+\begin{table}[H]\centering\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{HTTP API contract.}\label{tab:api}
+\begin{tabularx}{\textwidth}{@{}L{0.9cm} L{3.2cm} L{2.2cm} Y L{2.0cm} L{1.6cm}@{}}\toprule
+\rowcolor{hdrfill}\textbf{Method} & \textbf{Path} & \textbf{Inputs} & \textbf{Response} & \textbf{Mutates} & \textbf{Auth}\\\midrule
+GET & \path{/health} & \texttt{dataset\_id?}, \texttt{home\_id?} & \texttt{HealthResponse} (anchors, rooms, events, frames, \texttt{compaction\_ok}) & no & none\\
+GET & \path{/scene_graph} & \texttt{dataset\_id?}, \texttt{home\_id?} & full graph JSON & no & none\\
+GET & \path{/datasets} & -- & datasets and tracked objects & no & none\\
+POST & \path{/dataset/select} & \texttt{dataset\_id} & active dataset & \textbf{yes} & none\\
+GET & \path{/anchors} & \texttt{dataset\_id?}, \texttt{home\_id?} & \texttt{AnchorModel[]} & no & none\\
+GET & \path{/rooms} & \texttt{dataset\_id?}, \texttt{home\_id?} & \texttt{RoomModel[]} & no & none\\
+POST & \path{/rooms/rename} & \texttt{room\_id}, \texttt{label} & renamed room & \textbf{yes} (graph, store, \texttt{home\_map.json}) & none\\
+POST & \path{/enroll} & \texttt{EnrollRequest} & personal items & \textbf{yes} (store) & none\\
+GET, POST & \path{/ask} & \texttt{text} ($\leq$ 300 chars) & \texttt{AskResponse} & no & none\\
+GET & \path{/query} & \texttt{item} & \texttt{MemoryQueryResponse} ($\leq$ 3 candidates) & no & none\\
+GET & \path{/timeline} & \texttt{start?}, \texttt{end?} & \texttt{TimelineEventModel[]} (with \texttt{tier}) & no & none\\
+GET & \path{/activities} & \texttt{home\_id}, \texttt{start?}, \texttt{end?} & \texttt{ActivityModel[]} & no & none\\
+GET & \texttt{/crops/\{instance\_id\}} & -- & JPEG & no & none\\
+GET & \texttt{/video/\{dataset\_id\}} & -- & MP4 & no & \textcolor{red}{none; raw video}\\
+GET & \path{/capture/status} & -- & \texttt{CaptureStatusModel} & no & none\\
+POST & \path{/capture/pause}, \path{/resume} & -- & \texttt{CaptureStatusModel} & \textbf{yes} (pause file) & none\\
+POST, GET & \path{/simulate_transition}, \path{/reset}, \path{/simulate/*} (6) & -- & simulator responses & \textbf{yes} & gated, off by default\\
+\bottomrule\end{tabularx}\end{table}
+
+Table~\ref{tab:artifacts} lists the file contracts between layers
+(\path{docs/artifact_contracts.md}). All timestamps are UTC ISO strings
+(\path{core/timeutil.py}).
+
+\begin{table}[H]\centering\footnotesize
+\caption{Artifact contracts.}\label{tab:artifacts}
+\begin{tabularx}{\textwidth}{@{}L{4.2cm} l Y@{}}\toprule
+\rowcolor{hdrfill}\textbf{Artifact} & \textbf{Schema} & \textbf{Producer $\rightarrow$ consumer}\\\midrule
+\texttt{captures/<id>/index.jsonl} (frame and gap records) & 2 & \texttt{ingest\_live} $\rightarrow$ promotion\\
+\texttt{session.json}, \texttt{session\_state.json} & 2 & live writer $\rightarrow$ status, crash resume\\
+\texttt{metadata.json} & 2 & preprocess / promotion $\rightarrow$ reconstruction\\
+\texttt{poses.json}, \path{pointmaps/*.npz}, \texttt{gravity.json} & -- & \texttt{run\_vggt} $\rightarrow$ perception\\
+\texttt{detected\_objects\_3d.json} & 2 & perception $\rightarrow$ memory build\\
+\texttt{r4d\_scene\_graph.json}, \texttt{r4d\_timeline.json} & 2 & memory build $\rightarrow$ API, home store, Rerun\\
+\texttt{events.json}, \texttt{spatial\_memory\_graph.json} & -- & memory build $\rightarrow$ evaluation\\
+\texttt{memory.db} & store 1 & \texttt{ingest\_session} $\rightarrow$ API (\texttt{home\_id})\\
+\texttt{home\_map.json} & -- & room rename $\rightarrow$ room matching\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Architecture Decisions and Rationale}
+\label{sec:adr}
+Table~\ref{tab:adr} records the main architecture decisions, the alternatives
+considered, why each was chosen and the evidence.
+
+\begin{table}[H]\centering\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Architecture decision record.}\label{tab:adr}
+\begin{tabularx}{\textwidth}{@{}l L{3.0cm} L{2.6cm} Y L{2.6cm}@{}}\toprule
+\rowcolor{hdrfill}\textbf{\#} & \textbf{Decision} & \textbf{Alternatives} & \textbf{Rationale} & \textbf{Evidence}\\\midrule
+AD1 & Raw VGGT-$\Omega$ coordinates; gravity stored beside them & Rotate or scale the scene; the mid-era SCALE/\texttt{to\_zup} transform (removed) & No hidden transform; every derived height is reproducible & \path{geometry/gravity.py}; \texttt{test\_gravity} (12)\\
+AD2 & Rooms from wearer trajectory and sparse landmarks & Dense point-cloud segmentation & Cheap; works on RGB-only video & \path{memory/rooms.py}; Hydra, HOV-SG\\
+AD3 & Debounced state runs instead of a per-frame timeline & Store every observation & Graph size independent of video length; 5.7--7.2$\times$ smaller & \path{memory/runs.py}; Section~\ref{sec:compaction-audit}\\
+AD4 & Per-home SQLite store & Growing JSON; a database server & Single file, transactional, no service to run & \path{memory/store.py}\\
+AD5 & Three-day detail, verified template summaries, roll-up & Keep everything; LLM summaries & Bounded storage; no model can hallucinate a summary; failure keeps detail & \path{memory/compaction.py}\\
+AD6 & SAM~3 default detector & YOLOE, YOLO-World & Only model that found small personal objects and hands & Section~\ref{sec:experiments}\\
+AD7 & DINOv3 re-identification & HSV histograms & Appearance survives viewpoint and lighting change & \path{perception/detector.py}\\
+AD8 & Closed-vocabulary rule engine; LLM only as an optional parser & A VLM or LLM writes answers & Never states an unobserved location & \path{nlq/engine.py}\\
+AD9 & Artifacts stay on the Modal volume; API served there & Download to the laptop and serve locally & No large transfers; phones reach HTTPS & \path{remote/serve.py}\\
+AD10 & Thin apps that never mutate memory (except caregiver rename and enrol) & On-device processing & Simple, battery-friendly; one source of truth & \texttt{CONTEXT.md} invariant 7\\
+AD11 & Ranked top-3 candidates with photos & A single answer & Honest about ambiguity & \texttt{reasoning.rank\_candidates}\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Design Evolution}
+\label{sec:evolution}
+Figure~\ref{fig:evolution} compares the design at the mid report (commit
+\texttt{2298112}, 17~October) with the FYP-1 final design. Each changed element
+is numbered, and Table~\ref{tab:evolution} gives the reason for each change.
+
+\aegisfigtall{ch5-design-evolution}
+  {Design evolution from the mid report to the FYP-1 final design. Orange
+   borders mark changed elements; the numbers match Table~\ref{tab:evolution}.}
+  {fig:evolution}
+
+\begin{table}[H]\centering\footnotesize
+\caption{Design changes since the mid report and their reasons.}\label{tab:evolution}
+\begin{tabularx}{\textwidth}{@{}l Y Y@{}}\toprule
+\rowcolor{hdrfill}\textbf{\#} & \textbf{Change} & \textbf{Why}\\\midrule
+1 & YOLOE / YOLO-World $\rightarrow$ SAM~3 (demo) / YOLOE (live) + SAM~2 + DINOv3 re-ID & Detector benchmark (Section~\ref{sec:experiments})\\
+2 & Raw VGGT coordinates $\rightarrow$ + gravity frame & Relations need ``up''\\
+3 & Per-frame timeline (schema 1) $\rightarrow$ state runs and latest states (schema 2) & Storage growth\\
+4 & Three relations $\rightarrow$ nine relations in the gravity frame & ``Inside / under'' questions\\
+5 & JSON graph only $\rightarrow$ + SQLite home store and cross-session matching & Multi-session memory and restarts\\
+6 & Compaction planned $\rightarrow$ compaction and roll-up implemented & Proposal action 1\\
+7 & \texttt{QueryReasoningEngine} only $\rightarrow$ + \texttt{rank\_candidates} and the \path{/ask} NLQ engine & Ambiguity and natural language\\
+8 & Local FastAPI $\rightarrow$ Modal-deployed \texttt{aegis-memory-api} & Phone access without a laptop\\
+9 & Single \path{apps/mobile} $\rightarrow$ Patient App + Caregiver App; live sampler joined to the pipeline & Panel action 4; the live-to-memory gap closed\\
+\bottomrule\end{tabularx}\end{table}
+
+Several elements were also \emph{removed}: the SCALE=5.0/\texttt{to\_zup}
+display transform of the mid prototype; the Depth-Anything depth model and dead
+DROID code (\texttt{c4236df}); the client-side mock answer (\texttt{180b897});
+the legacy \path{apps/mobile} app; and the separate \texttt{NL Querying/}
+folder, now archived after its consolidation into \path{src/aegis/nlq}.
+
+\section{Domain Model}
+\label{sec:domain}
+The domain model (Figure~\ref{fig:domain}) separates what persists from what is
+derived. A \textbf{Home} owns \textbf{Rooms} and \textbf{Sessions}.
+Furniture-sized \textbf{Anchors} sit in rooms. Each personal
+\textbf{ObjectInstance} has a history of \textbf{StateRuns}, each a stable
+relation to an anchor over a time interval, and \textbf{Events} record the
+change between two runs. \textbf{Activities} group the wearer's stay in a room
+with the events that happened there; \textbf{RoomVisits} record each stay.
+\textbf{Evidence} is a photo crop of a run, and \textbf{Summaries} replace
+detail older than three days. Rooms, anchors, sessions and each object's
+last-known state are never compacted, so ``where is X now?'' survives any
+amount of history. Caregiver access (caregiver, access grant and audit entry)
+is planned and drawn dashed. The enumerated relation and event types are
+listed in Section~\ref{sec:relations-algo}.
+
+\aegisfig{ch5-domain-model}
+  {Conceptual domain model (attributes only). The dashed box is planned
+   caregiver access (FR8).}
+  {fig:domain}
+
+\section{Data Design}
+\label{sec:data}
+\textbf{Session graph.} Each processed session produces one
+\texttt{r4d\_scene\_graph.json} (schema version 2). Figure~\ref{fig:scenegraph}
+shows its top-level keys. The file holds no per-keyframe data: an object
+standing still for an hour is one state run, so the file does not grow with
+video length. Arrows are id references inside the document, not database
+foreign keys.
+
+\aegisfig{ch5-scene-graph-v2}
+  {Session scene graph (schema 2): one box per top-level key; arrows are id
+   references.}
+  {fig:scenegraph}
+
+\textbf{Home store.} The persistent memory of one home is a single SQLite file,
+\texttt{<store\_root>/<home\_id>/memory.db} (\texttt{SCHEMA\_VERSION = 1}),
+with twelve tables. Figure~\ref{fig:erd-core} shows the core entities and
+Figure~\ref{fig:erd-events} the event, visit, activity and retention tables.
+Every column is copied from \path{memory/store.py}. Primary keys are bold and
+foreign keys are italic; some id columns are soft references with no
+foreign-key constraint, marked ``(soft)'', so that compaction can delete
+detail rows without cascading. Colour shows the retention class: green tables
+(\texttt{room}, \texttt{session}, \texttt{anchor}, \texttt{instance},
+\texttt{meta}) are never compacted; orange tables (\texttt{state\_run} except
+protected last-known runs, \texttt{event}, \texttt{room\_visit},
+\texttt{activity}, \texttt{evidence}) are compacted after three days; blue
+tables (\texttt{summary}, \texttt{compaction\_log}) are written by compaction.
+\texttt{meta} holds the schema version and the personal-items JSON.
+
+\aegisfigtall{ch5-erd-core}
+  {Crow's-foot ERD of the home store, core entities.}
+  {fig:erd-core}
+
+\aegisfigtall{ch5-erd-events}
+  {Crow's-foot ERD of the home store, events, visits, activities and
+   retention tables. White boxes are shown in full in Figure~\ref{fig:erd-core}.}
+  {fig:erd-events}
+
+\textbf{Live capture contracts.} Figure~\ref{fig:artifacts} shows the files a
+live capture writes and how promotion turns them into datasets. Each line of
+\texttt{index.jsonl} is a frame record or a gap record; every field shown is
+validated by \path{ingestion/contracts.py}. Promotion cuts the capture into
+segments of at most 120 frames, splitting at long gaps, and each segment is
+uploaded to the Modal volume.
+
+\aegisfig{ch5-live-session-artifacts}
+  {Live capture folder, the promoted segment dataset and the Modal volume.}
+  {fig:artifacts}
+
+\section{User Interface Design}
+\label{sec:ui}
+The panel asked for a product-like design suited to older users (proposal
+action 4). The Patient App (Figure~\ref{fig:patient-flow}) opens on large
+object tiles built only from objects that memory actually holds, a single large
+microphone button and a call button. Answers appear in a bottom sheet with one
+plain sentence, a labelled certainty badge (``Found it'', ``Best guess'', ``I'm
+not sure --- which one?'', ``I'm not sure'') and up to three real photos, never
+a bare probability. Both apps use 44-point touch targets and a warm
+espresso/ochre theme.
+
+\aegisfigtall{ch5-patient-app-flow}
+  {Patient App screen flow. Labels are copied from the Flutter code;
+   transitions name the API call they make.}
+  {fig:patient-flow}
+
+The Caregiver App (Figure~\ref{fig:caregiver-flow}) adds search history, a
+tracking timeline, room naming, server and capture status, and personal-item
+enrolment. Room rename and enrolment are writes without authentication; this is
+shown in red and is planned work (FR8.1).
+
+\aegisfigtall{ch5-caregiver-app-flow}
+  {Caregiver App screen flow, with the four tabs, search history and the enrol
+   dialog.}
+  {fig:caregiver-flow}
+
+\section{Process and Behaviour Design}
+\label{sec:behaviour}
+\textbf{Data flow.} Figure~\ref{fig:dfd0} shows Aegis as a single process with
+its five external entities; there are no data stores at level~0.
+Figure~\ref{fig:dfd1} decomposes it into seven processes and six data stores
+(Gane--Sarson notation). Capture (1.0) writes the live folder (D1); promotion
+(2.0) uploads segments to the Modal volume (D2); reconstruction and perception
+(3.0) and the session-memory build (4.0) read and write D2, and 4.0 also writes
+evidence crops (D5). Ingest and compaction (5.0) turns a downloaded graph into
+home-store rows (D3) and the room registry (D4). Answering (6.0) reads D2, D3
+and D5; management (7.0) writes caregiver room names, personal items and the
+pause flag.
+
+\aegisfig{ch5-dfd-level0}{Data flow diagram, level~0.}{fig:dfd0}
+\aegisfigtall{ch5-dfd-level1}{Data flow diagram, level~1.}{fig:dfd1}
+
+\textbf{Pipeline run.} Figure~\ref{fig:seq-pipeline} shows one run of
+\texttt{run\_pipeline.py} on a live capture. For each segment the script
+promotes and uploads the frames, then calls three Modal functions in turn; each
+writes its outputs back to the volume. Only with \texttt{--download} are the
+outputs fetched and ingested into the home store. Normally the artifacts stay on
+the volume and the API serves them there.
+
+\aegisfigtall{ch5-seq-pipeline}{Sequence diagram: pipeline run on Modal.}{fig:seq-pipeline}
+
+\textbf{Patient query.} Figure~\ref{fig:seq-query} follows one question. Speech
+is transcribed on the phone, so no audio leaves it. The app calls
+\path{/query} first; the server ranks candidates from the latest object
+states. If nothing is found it falls back to \path{/ask}, where the NLQ engine
+answers or abstains with a reason. If no reply arrives within 8\,s the app shows
+``Can't reach Aegis memory''; it never shows a guessed answer.
+
+\aegisfigtall{ch5-seq-query}{Sequence diagram: patient asks where an object is.}{fig:seq-query}
+
+\textbf{Caregiver operations.} Figure~\ref{fig:seq-caregiver} shows room
+renaming, personal-item enrolment and capture pause and resume. All of these
+writes are currently unauthenticated.
+
+\aegisfigtall{ch5-seq-caregiver}{Sequence diagram: caregiver operations.}{fig:seq-caregiver}
+
+\textbf{Home ingest.} Figure~\ref{fig:seq-ingest} shows how a session graph is
+merged into the home store. An unchanged graph (same SHA-256) is skipped. A new
+graph is matched room by room, then anchor by anchor, then object by object
+(Section~\ref{sec:matching-algo}); state runs are inserted or extended inside
+one transaction, events are written, and the room registry is exported. Old
+days are then compacted.
+
+\aegisfigtall{ch5-seq-home-ingest}{Sequence diagram: home-store ingest and compaction.}{fig:seq-ingest}
+
+\textbf{Live capture session.} Figure~\ref{fig:state-live} is the state machine
+of a capture. Sampling keeps frames that pass the keyframe test; a pause,
+a storage stall and a lost stream each lead to their own state and back, and
+every return records a gap. A session ends at the time limit or after 30\,s
+without frames. Pressing Ctrl+C stops it from any state, and
+\texttt{session\_state.json} is saved after every frame so a crashed capture can
+resume.
+
+\aegisfig{ch5-state-live-session}{State machine: live capture session.}{fig:state-live}
+
+\textbf{Object instance.} Figure~\ref{fig:state-object} shows the states of one
+object. A new state starts only after two consecutive frames agree (or one
+final frame with confidence $\geq$ 0.5). Pickup and placement move between
+\emph{Placed} and \emph{Carried}. Leaving view emits no event; the last-known
+state is kept (object permanence). In the next session the object is either
+found in the same place, extending its run, or elsewhere, which records
+\texttt{moved\_while\_unobserved}.
+
+\aegisfig{ch5-state-object}{State machine: object instance.}{fig:state-object}
+
+\textbf{Compaction.} Figure~\ref{fig:compaction} shows the daily compaction
+loop. Each local day older than three days is summarised by templates, and the
+summary is verified against its source rows before any row is deleted. If
+verification fails, the day keeps all its detail and the failure is logged.
+Protected last-known runs are never deleted.
+
+\aegisfig{ch5-activity-compaction}{Activity diagram: daily compaction with verification.}{fig:compaction}
+
+\textbf{NLQ answer engine.} Figure~\ref{fig:nlq} shows how \path{/ask} decides.
+Each check that fails returns a specific abstention reason code; only a
+question about a known, observed item reaches an answer, which is composed from
+a template and the most recent state (an object in view first).
+
+\aegisfigtall{ch5-activity-nlq}{Activity diagram: NLQ answer engine.}{fig:nlq}

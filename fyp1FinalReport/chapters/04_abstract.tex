@@ -1,0 +1,36 @@
+\frontchapter{Abstract}
+People with subjective cognitive decline, mild cognitive impairment, or
+dementia often lose track of where they placed objects and whether they
+completed daily tasks, which erodes independence and burdens caregivers. Among
+the systems reviewed in this report, none combines a persistent, spatially
+grounded memory of first-person experience with progressive temporal
+compression and evidence-based natural-language querying for both the person
+and a delegated caregiver. This report presents \textbf{Aegis}, an egocentric
+spatio-temporal vision system that turns a wearable first-person video stream
+into a multi-resolution memory of objects, layout, and activities: recent
+history is kept in fine detail, older history is condensed into summaries.
+Users and caregivers ask spatial and temporal questions by speech or text and
+receive answers grounded in stored evidence, with an explicit ``not sure''
+response when evidence is weak.
+
+The project follows an iterative, vertical-slice approach. Iteration~1 (to the
+mid-evaluation) delivered the batch reconstruction, perception and scene-graph
+slice. Iteration~2 turned it into one end-to-end pipeline: live phone capture
+with criterion-based keyframes, gap and pause records and crash-safe resume; a
+gravity-aligned spatial model with nine object--anchor relations; debounced
+object state runs; a persistent per-home SQLite memory with cross-session
+matching of rooms, anchors and objects; verified three-day-then-summary
+compaction; a rule-based, closed-vocabulary query engine served from Modal over
+HTTPS; and patient and caregiver Flutter applications with on-device speech
+input. The automated suite has 451 passing tests (79\% line coverage).
+Component measurements show an open-vocabulary detection F1 of 0.721 on a
+ten-frame, five-environment hand-labelled benchmark, and a 5.7--7.2$\times$
+smaller memory with 100\% semantic retention on two short clips. A seven-day
+public egocentric study (EgoLife) found that individual objects remained in
+memory for one to four days, but class-level queries did not yet benefit from
+the longer history. Temporal questions, calibrated confidence, caregiver
+authentication, latency and usability remain unmeasured or planned for FYP-2.
+
+\medskip\noindent\textbf{Keywords:} egocentric vision, spatio-temporal memory,
+scene graph, natural-language querying, assistive technology, cognitive
+impairment, memory abstraction, caregiver access.

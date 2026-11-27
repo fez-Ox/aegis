@@ -1,0 +1,106 @@
+\chapter{Project Management and Development Evidence}
+\label{chap:pm}
+
+\section{Work Completed and Remaining}
+Completed work is listed in Table~\ref{tab:i2-features} (Iteration~2) and
+Section~\ref{sec:iter1-outcome} (Iteration~1). Remaining work is the FYP-2 plan
+of Chapter~\ref{chap:fyp2}.
+
+\section{Contribution of Each Team Member}
+Table~\ref{tab:contributions} uses Git author identities on all branches
+(non-merge commits). Commit counts are a repository metric, not a measure of
+effort or quality: one commit may be one line or a whole module, and on
+23~November 122 of Ali Sher's commits each added a single app file.
+
+\begin{table}[H]\centering\footnotesize
+\caption{Contribution evidence from Git history.}\label{tab:contributions}
+\begin{tabularx}{\textwidth}{@{}L{2.6cm} L{3.2cm} l Y@{}}\toprule
+\rowcolor{hdrfill}\textbf{Member} & \textbf{Git identity} & \textbf{Commits} & \textbf{Main areas evidenced}\\\midrule
+Shahmeer Amir & \texttt{shah-paradox} & 47 & Live capture contracts, keyframes, gaps and buffer; the M1/M2 pass (gravity, relations, state runs, store, rooms, compaction, segment runner); Part~II plan; report and diagrams\\
+Faizan ur Rehman Khan & \texttt{pez-Ox}, \texttt{Faizan Ur Rehman Khan} & 57 + 1 & Batch pipeline and R4DSG baseline; CI/CD and API; in-hand memory and Rerun; room hierarchy and registry; evaluation suite; demo harness; EgoLife study; tiered query protocol; SAM~3 benchmark\\
+Ali Sher & \texttt{Ali Sher}, \texttt{Ali-Sher12} & 218 & Flutter redesign and search history; NLQ engine and \path{/ask}; Modal-served API; end-to-end runner; Patient and Caregiver Apps; enrolment; DINOv3 re-ID\\
+\bottomrule\end{tabularx}\end{table}
+\tbd{Each member to confirm their row and lead modules.}
+
+\section{Milestones and Commit Evidence}
+Figure~\ref{fig:commit-timeline} shows commits per week and member;
+Figure~\ref{fig:branch-graph} shows the branches and the two tags. Work was
+concentrated in two bursts: the mid-evaluation (weeks 40--42) and Iteration~2
+(weeks 45--48).
+
+\aegisfig{ch9-commit-timeline}{Commits per ISO week and author (non-merge).}{fig:commit-timeline}
+\aegisfig{ch9-branch-graph}{Branches, merges and tags.}{fig:branch-graph}
+
+\section{Repository and Version Control}
+The repository uses a \texttt{src} layout (\path{src/aegis/}), YAML
+configuration in \path{configs/}, tests in \path{tests/}, the apps in
+\path{apps/}, and conventional commit messages. Work happens on feature
+branches merged into \texttt{develop}; \texttt{main} receives tagged releases
+(\texttt{v0.1.0-mid1}, \texttt{v0.2.0-mid2}). CI runs Ruff, pytest with the
+coverage floor and Flutter checks. Appendix~\ref{app:repository} gives the
+layout.
+
+\section{Tools and Tool-Assisted Development}
+\label{sec:tools}
+VGGT-$\Omega$, SAM~2, SAM~3, DINOv3, YOLOE, FastAPI, Flutter, Modal, OpenCV and
+Rerun are external components. AI assistants were used for coding help, for
+drafting parts of this report in LaTeX and for diagram markup (PlantUML and
+matplotlib scripts). The team reviewed all generated material and is responsible
+for the architecture, algorithms, requirements, tests and claims.
+\tbd{Per-member disclosure of which assistant was used for what, to be completed
+by each member.}
+
+\section{External Components and Dependencies}
+\begin{table}[H]\centering\footnotesize
+\caption{External dependencies.}\label{tab:external-dependencies}
+\begin{tabularx}{\textwidth}{@{}L{4.6cm} Y l@{}}\toprule
+\rowcolor{hdrfill}\textbf{Dependency} & \textbf{Use} & \textbf{Status}\\\midrule
+Python 3.12, uv, NumPy, OpenCV, PyYAML & Runtime and video processing & Used\\
+FastAPI, Uvicorn, httpx & API and tests & Used\\
+SQLite (standard library) & Home store & Used\\
+Modal, CUDA images, L4 GPU & Remote workers and API hosting & Used\\
+VGGT-$\Omega$ & Poses and 3D points & Used\\
+SAM~3, YOLOE, SAM~2 & Detection and masks & Used\\
+DINOv3 & Re-identification & Used\\
+Flutter/Dart, \texttt{speech\_to\_text} & Apps and on-device speech & Used\\
+Rerun & Offline 3D viewer & Optional\\
+Hugging Face Hub & Model weights (gated VGGT-$\Omega$, mirror fallback) & Used\\
+Identity provider, encryption library & Authentication and encryption at rest & Planned\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Risks and Mitigation}
+Likelihood (L) and impact (I) are scored 1--3; the score is L$\times$I.
+\begin{table}[H]\centering\footnotesize
+\caption{Scored risk register.}\label{tab:risk-register}
+\begin{tabularx}{\textwidth}{@{}l Y l l l Y@{}}\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Risk} & \textbf{L} & \textbf{I} & \textbf{Score} & \textbf{Mitigation / status}\\\midrule
+TC1 & Identity errors under clutter and occlusion & \tbd{2} & \tbd{3} & \tbd{6} & DINOv3 re-ID, debouncing; matching fix 61dda40\\
+TC2 & Compaction loses useful detail & \tbd{1} & \tbd{3} & \tbd{3} & Verification before delete; last-known protected\\
+TC3 & Motion blur and lighting & \tbd{2} & \tbd{2} & \tbd{4} & Keyframe gate\\
+TC4 & GPU cost and latency & \tbd{2} & \tbd{2} & \tbd{4} & L4 \$0.069 per 5-min segment; CPU fallback\\
+TC5 & Hallucinated answers & \tbd{1} & \tbd{3} & \tbd{3} & Closed-vocabulary rule engine; abstention codes\\
+TC6 & High interaction load for older users & \tbd{2} & \tbd{2} & \tbd{4} & Object tiles, large targets; usability study planned\\
+TC7 & Privacy and consent & \tbd{3} & \tbd{3} & \tbd{9} & Open: auth, encryption (Iteration~4)\\
+TC8 & Limited validation & \tbd{3} & \tbd{2} & \tbd{6} & Measured/unmeasured separation; \texttt{demo05}\\
+TC9 & Evaluation dataset & \tbd{2} & \tbd{2} & \tbd{4} & Ego4D NO\_GO; EgoLife used\\
+TC10 & RGB-only spatial uncertainty & \tbd{2} & \tbd{2} & \tbd{4} & Gravity frame; no metric claims\\
+TC11 & Room errors and cross-session identity & \tbd{2} & \tbd{2} & \tbd{4} & Registry, matching; metrics planned\\
+TC12 & Room linking unstable across scale & \tbd{3} & \tbd{2} & \tbd{6} & Scale-relative linking (Iteration~3)\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Security and Privacy Considerations}
+\label{sec:security}
+The current prototype is not safe for real patient data. The API has no
+authentication or authorisation; CORS allows any origin, method and header; the
+writes \path{/rooms/rename}, \path{/enroll}, \path{/dataset/select} and
+\path{/capture/pause} are open; and \texttt{GET /video/\{dataset\_id\}} serves
+raw video to anyone with the URL. The home store, \texttt{home\_map.json} and
+evidence crops are stored unencrypted. HTTPS is provided only by the Modal
+endpoint. Speech is transcribed on the phone, so no audio leaves it. All testing
+used team-recorded or public data. Iteration~4 addresses these gaps (P1.7, P1.8).
+
+\section{Current Limitations}
+Spatial and temporal accuracy, latency and usability are unmeasured; temporal
+answers are not built; confidence is not calibrated; room linking is unstable
+across scale; storage growth is projected from short clips; and no clinical
+claim is made.

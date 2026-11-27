@@ -1,0 +1,122 @@
+\documentclass[openany]{fast-nuces-bs}
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+\usepackage{sectsty}
+\usepackage{tikz-uml}
+\usepackage{titlesec}
+\usepackage{graphicx}
+\usepackage[table]{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{microtype}
+\usepackage{url}
+\usepackage{setspace}
+\usepackage{needspace}
+\usepackage{etoolbox}
+
+\department{FAST School of Computing}
+\faculty{Computer Science}
+\degreeyear{2026}
+\degreemonth{December}
+\degreename{Computer Science}
+\campuscity{Islamabad}
+\authorone{Shahmeer Amir}{23I-0626}
+\authortwo{Faizan ur Rehman Khan}{23I-3021}
+\authorthree{Ali Sher}{23I-0683}
+\supervisor{Ms. Marium Hida}
+\sessionduration{2023-2027}
+\deanname{Dr. Dean Computing}
+\directorname{Dr. Director of the Campus}
+\hodname{Dr. Head of Computer Science Department}
+\fypcoordinatorname{Name of FYP Coordinator}
+\title{Aegis: A Spatio-Temporal Memory System for Assistive Care}
+
+\onehalfspacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 1pt}
+\renewcommand{\arraystretch}{1.2}
+\setlist{itemsep=3pt,topsep=2pt,parsep=0pt}
+\setlist[itemize]{leftmargin=*}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcommand{\frontchapter}[1]{\chapter*{#1}\addcontentsline{toc}{chapter}{#1}\markboth{#1}{}}
+\newcommand{\aegisfig}[4][\textwidth]{%
+  \needspace{0.58\textheight}%
+  \begin{figure}[H]\centering
+  \IfFileExists{ThesisFigs/#2.png}{\includegraphics[width=#1,height=0.55\textheight,keepaspectratio]{ThesisFigs/#2.png}}{\fbox{\parbox[c][5cm][c]{0.85\textwidth}{\centering Missing figure: ThesisFigs/#2.png}}}
+  \caption{#3}\label{#4}\end{figure}}
+% Tall slot for figures that need most of a page (DIAGRAM_SPECS.md §0.4).
+\newcommand{\aegisfigtall}[4][\textwidth]{%
+  \needspace{0.88\textheight}%
+  \begin{figure}[H]\centering
+  \IfFileExists{ThesisFigs/#2.png}{\includegraphics[width=#1,height=0.85\textheight,keepaspectratio]{ThesisFigs/#2.png}}{\fbox{\parbox[c][5cm][c]{0.85\textwidth}{\centering Missing figure: ThesisFigs/#2.png}}}
+  \caption{#3}\label{#4}\end{figure}}
+% Red marks every item the team must still supply or confirm.
+\newcommand{\tbd}[1]{\textcolor{red}{#1}}
+% allow line breaks in long code identifiers (after _ and /) and loosen spacing
+\let\aegisus\textunderscore
+\DeclareRobustCommand{\_}{\aegisus\penalty50\hskip0pt\relax}
+\setlength{\emergencystretch}{3em}
+\newcommand{\captionof}[2]{\refstepcounter{#1}\addcontentsline{lot}{table}{#2}\textbf{Table \thetable. #2}\par}
+\newcommand{\uctable}[8]{%
+  \begin{singlespace}\small\captionof{table}{#1}\vspace{2pt}
+  \noindent\begin{tabularx}{\textwidth}{@{}>{\bfseries}L{3cm}Y@{}}\toprule
+  \rowcolor{gray!15}\textbf{Field}&\textbf{Description}\\\midrule
+  Primary actor&#2\\ Preconditions&#3\\ Trigger&#4\\ Main flow&#5\\ Alternate flows&#6\\ Postconditions&#7\\ Related FRs&#8\\\bottomrule
+  \end{tabularx}\end{singlespace}\par\vspace{8pt}}
+\newenvironment{ltab}{\par\penalty0\relax\ifdim\dimexpr\pagegoal-\pagetotal\relax<12\baselineskip\relax\newpage\fi\small\setlength{\tabcolsep}{1pt}\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}\setlength{\LTcapwidth}{\textwidth}}{\par\vspace{0.5\baselineskip}}
+\newcommand{\signatureblock}{%
+  \par\vspace{1.2cm}\noindent
+  \begin{tabularx}{\textwidth}{@{}L{6.4cm}Y@{}}
+  \textbf{Shahmeer Amir} (23I-0626) & Signature: \hrulefill\\[1.1cm]
+  \textbf{Faizan ur Rehman Khan} (23I-3021) & Signature: \hrulefill\\[1.1cm]
+  \textbf{Ali Sher} (23I-0683) & Signature: \hrulefill\\
+  \end{tabularx}}
+\setlength{\headheight}{14pt}
+% Keep headings with the visual/table material that immediately follows them.
+\pretocmd{\section}{\par\nointerlineskip\hrule height0pt\relax\needspace{0.30\textheight}}{}{}
+\pretocmd{\subsection}{\par\nointerlineskip\hrule height0pt\relax\needspace{0.40\textheight}}{}{}
+\AtBeginEnvironment{table}{\needspace{0.30\textheight}}
+\definecolor{ink}{HTML}{1F2933}
+\definecolor{slate}{HTML}{52606D}
+\definecolor{hdrfill}{HTML}{E4E7EB}
+\definecolor{rowfill}{HTML}{F5F6F8}
+
+\begin{document}
+\cleardoublepage
+\pagenumbering{roman}
+\input{chapters/01_students_submission}
+\input{chapters/02_anti_plagiarism}
+\input{chapters/03_authors_declaration}
+\input{chapters/04_abstract}
+\input{chapters/05_acknowledgments}
+\input{chapters/06_executive_summary}
+\input{chapters/07_abbreviations}
+\cleardoublepage
+\pagenumbering{arabic}
+\input{chapters/chapter1_introduction}
+\input{chapters/chapter2_research}
+\input{chapters/chapter3_iteration_plan}
+\input{chapters/chapter4_requirements}
+\input{chapters/chapter5_design}
+\input{chapters/chapter6_iteration1}
+\input{chapters/chapter7_iteration2}
+\input{chapters/chapter8_testing}
+\input{chapters/chapter9_development_evidence}
+\input{chapters/chapter10_fyp2_plan}
+\input{chapters/chapter11_conclusion}
+\appendix
+\input{chapters/appendix_action_register}
+\input{chapters/appendix_requirements}
+\input{chapters/appendix_test_cases}
+\input{chapters/appendix_repository}
+\input{chapters/appendix_meetings}
+\input{chapters/appendix_evaluation}
+\bibliographystyle{IEEEtran}
+\bibliography{references/references}
+\end{document}

@@ -1,0 +1,20 @@
+\chapter{Conclusion}
+\label{chap:conclusion}
+Aegis set out to answer ``where did I leave it?'' for a person with memory
+impairment from first-person video. At the end of FYP-1 the whole path exists: a
+phone streams video, a laptop keeps sharp, new frames and uploads segments,
+Modal reconstructs them in 3D and detects objects, the memory records where each
+object is relative to furniture and rooms in a bounded, persistent per-home
+store, and two apps let the patient and caregiver ask by tapping, typing or
+speaking, with a photo as evidence. 451 tests pass with 79\% coverage.
+
+Three results stand out. SAM~3 made small personal objects detectable (F1 0.721
+against 0.097). State runs made memory bounded (5.7--7.2$\times$ smaller with no
+loss of last-known states). And the store kept every tracked object across days
+on EgoLife.
+
+The report is equally clear about what is not done. Temporal answers,
+calibrated confidence, authentication and encryption are not built; accuracy,
+latency and usability are not measured; and the prototype is not safe for
+patient data. FYP-2 (Chapter~\ref{chap:fyp2}) closes these gaps and measures
+the results before any claim is made.

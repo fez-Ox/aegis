@@ -1,0 +1,366 @@
+\chapter{Introduction and Project Vision}
+\label{chap:intro}
+%=====================================================================
+
+\section{Project Overview}
+Aegis is an egocentric spatio-temporal vision system that helps people with
+cognitive impairment recall where objects are and what they did earlier in the
+day, inside indoor environments such as the home. A wearable first-person
+camera continuously observes the user's surroundings. Aegis converts these
+observations into a persistent spatio-temporal memory: a structured record of
+objects, their locations relative to stable parts of the environment, the
+layout of the space, and the activities that took place, all indexed by time.
+
+To remain usable over weeks and months, the memory is \emph{multi-resolution}.
+Recent events are stored in fine spatial and contextual detail, while older
+events are progressively condensed into compact, higher-level temporal
+summaries. The user, or an authorised caregiver, asks questions in natural
+language by speech or text (``Where did I leave my glasses?'', ``Did I take my
+tablets this morning?''). Aegis grounds the answer in the stored memory and
+shows the supporting evidence.
+
+Aegis is an assistive tool. It does not replace human care and is not a
+certified medical device (see Section~\ref{sec:ethics}).
+
+\section{Problem Statement}
+People with subjective cognitive decline, mild cognitive impairment, or
+dementia routinely lose track of where they put objects and whether they have
+done daily tasks. To the best of our knowledge, none of the systems reviewed in
+Chapter~\ref{chap:research} maintains a long-term, spatially grounded, queryable record of
+first-person experience that stays computationally manageable as history
+accumulates and that also gives caregivers verifiable access without constant
+supervision. As a result, users search manually, repeat searches, or ask a
+caregiver who often was not present and must reconstruct events from memory.
+
+\noindent\textbf{Formal problem statement.} Given a continuous, unconstrained
+egocentric video stream from an indoor environment, construct and maintain a
+persistent spatio-temporal memory that (a) preserves recent spatial detail,
+(b) compresses older history without destroying information users are likely
+to need, and (c) answers natural-language spatial and temporal queries with
+evidence-grounded responses at low latency, for both a primary user with
+cognitive impairment and a delegated caregiver.
+
+\section{Problem Context and Motivation}
+The problem unfolds as a repeating loop (Figure~\ref{fig:recall-loop}): an
+object is misplaced or an activity is forgotten and no record exists; the
+person searches manually, in a disorganised and often repeated way; the person
+asks a caregiver, who reconstructs the answer from memory, often without having
+been present; the caregiver searches as well, duplicating effort, and
+resolution comes by luck or escalation.
+
+\aegisfig{fig-1.1}
+  {The current ``no record'' recall loop, and where Aegis breaks it.}
+  {fig:recall-loop}
+
+Each step of the loop carries a cost: manual searching consumes time and
+effort; asking a caregiver interrupts them and may still fail, because the
+caregiver often was not present; duplicated searching multiplies the work for
+both parties. Everyday memory lapses of this kind are common among older adults
+\cite{mogle2023,marchant2011}, and dementia places a disproportionate burden on
+family and other unpaid caregivers \cite{kasper2015}. Aegis breaks the loop at
+its first step: by keeping a persistent, queryable record, the manual search
+and the caregiver's reconstruction are replaced by a direct answer with
+evidence.
+
+\subsection*{Scale and significance of the problem}
+\begin{itemize}
+\item \textbf{Ageing population.} The World Health Organization projects about
+2.1 billion people aged 60 and over worldwide by 2050 \cite{who2024}. In the
+United States the share of seniors is projected to rise from 16\% to 22\%
+\cite{statista2022}.
+\item \textbf{Memory decline is widespread.} Subjective cognitive decline, mild
+cognitive impairment, and dementia affect a substantial share of older adults
+\cite{alz2023}. Daily memory lapses, including losing objects, are common and can be
+disruptive \cite{mogle2023,marchant2011}.
+\item \textbf{Ageing in place.} Independent living is widely preferred, and some
+people with early-stage Alzheimer's disease live alone and voice concerns about
+coping without support \cite{harris2006}.
+\item \textbf{Caregiver burden.} Informal caregiving imposes substantial economic costs, with opportunity-cost estimates for elder care in the United States around \$522 billion per year \cite{chari2015}.
+\end{itemize}
+
+Several of these figures come from United States sources. The motivation is
+therefore to give the person a way to recall independently, reducing how often
+they must depend on someone else, while giving caregivers evidence-based
+answers instead of guesses. 
+
+\section{Project Vision}
+Aegis aims to be a quiet, dependable ``external episodic memory'': a system
+where a person with cognitive impairment can ask a plain question and receive a
+short, correct, evidence-backed answer without learning an interface, and one
+that a caregiver can trust for oversight without watching the person
+continuously. The long-term vision is a system that scales from days to months
+of use on modest hardware, degrades gracefully (saying ``I'm not sure'' rather
+than guessing), and respects the dignity and privacy of the person it serves.
+
+\section{Project Objectives}
+Table~\ref{tab:objectives} lists the project objectives with their proposed
+measures. The targets below are deliberately lenient minimum-viable thresholds for a first working prototype. They are not production safety specifications and may be raised in later iterations.
+
+\begin{table}[H]
+\centering\footnotesize
+\caption{Project objectives, measures and status at the end of FYP-1.}
+\label{tab:objectives}
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}l L{3.2cm} Y Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Objective} & \textbf{Measure (proposed target)} & \textbf{Status at FYP-1 end}\\
+\midrule
+O1 & Continuously capture and ingest egocentric video into the processing pipeline. & Uninterrupted ingestion for at least 1 hour without crash or stall. & \textbf{Partial}: live capture with reconnect, gaps, pause and resume implemented and tested (\path{ingestion/live_pipeline.py}, 64 ingestion tests); 1-hour soak not run (P2.1).\\
+O2 & Build a spatio-temporal memory of room regions, object locations, layout and activities. & Room segmentation accuracy $\geq$ 0.90; room-grounded correct-room rate $\geq$ 0.90 (Chapter~\ref{chap:testing}). & \textbf{Partial}: rooms, anchors, relations, state runs and activities implemented; room metrics \textbf{Unmeasured} (P2.3).\\
+O3 & Progressively compress older history while retaining recent detail. & Sub-linear memory growth; accuracy drop on compressed history $\leq$ 15 points. & \textbf{Partial}: compaction implemented and verified; 5.7--7.2$\times$ on short clips; accuracy drop after compaction \textbf{Unmeasured}.\\
+O4 & Answer natural-language spatial and temporal queries with grounded responses. & Spatial accuracy $\geq$ 70\% and temporal accuracy $\geq$ 60\%; every answer cites at least one evidence item. & \textbf{Partial}: spatial queries answered with evidence; temporal \textbf{Planned} (the engine declines); accuracy \textbf{Unmeasured} (\texttt{demo05} not annotated).\\
+O5 & Support speech and text queries through an accessible interface. & A first-time user completes a query within 60 s without help. & \textbf{Partial}: on-device speech and text in both apps; usability study not run.\\
+O6 & Provide authorised, consent-based caregiver access. & Unauthorised attempts rejected in 100\% of test cases. & \textbf{Planned}: Caregiver App exists; no authentication yet (P1.7).\\
+O7 & Evaluate system efficacy against structured ground truth. & Evaluation dataset selected and documented. & \textbf{Partial}: evaluation harness built; EgoLife used for the multi-day study; Ego4D NO-GO (0/100); held-out \texttt{demo05} NOT\_READY.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Project Scope}
+\textbf{In scope:} indoor, home-like environments; egocentric (first-person)
+visual input as the sole sensing modality; object-location and activity
+tracking in a persistent spatio-temporal memory; multi-resolution memory
+abstraction; natural-language query answering over stored memory with speech
+and text input; a user-facing assistive interface and a delegated caregiver
+application; room identity calibration for one home; evaluation of spatial and temporal retrieval accuracy against structured ground truth. Evaluation now uses a public seven-day egocentric dataset (EgoLife, participant A1\_JAKE) for multi-day persistence, alongside a frozen held-out care-style clip (\texttt{demo05}); Ego4D was assessed and is not pursued in FYP-2 unless access, data and an official scorer become available (Section~\ref{sec:egolife}). The per-home registry preserves room identity for a single home; it does not provide multi-home deployment support.
+
+\textbf{Out of scope:} outdoor navigation and wayfinding; medical diagnosis,
+disease staging, or treatment recommendations; emergency detection (falls,
+wandering) and real-time alerts; non-visual sensing (biosensors, smart-home
+sensors, RFID or BLE tags); certification as a medical device and clinical
+trials with patients; multi-user or multi-home deployments.
+
+\begin{table}[H]
+\centering\small
+\caption{Scope split across FYP-1 and FYP-2.}
+\label{tab:scope}
+\begin{tabularx}{\textwidth}{@{}L{3.6cm} Y Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{Scope item} & \textbf{FYP-1} & \textbf{FYP-2}\\
+\midrule
+Capture and ingestion (M1) & Iterations 1--2: batch, live capture, keyframes, gaps, segments & Hardening: 1-hour soak, disconnect recovery measured\\
+Spatio-temporal memory and three-day retention (M2) & Iterations 1--2: rooms, relations, state runs, home store, compaction & Room-identity fix, room metrics, long-term persistence study\\
+Query engine (M3) & Iteration 2: closed-vocabulary location queries, ranking, abstention, on-device speech & Iteration 3: temporal and activity answers, calibrated confidence, evidence references\\
+Caregiver access, security, performance (M4) & Iteration 2: Caregiver App (unauthenticated) & Iteration 4: authentication, grants, audit, encryption, latency and usability validation\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Figure~\ref{fig:context} fixes the system boundary of the FYP-1 prototype.
+The primary user and caregiver are outside the boundary and reach Aegis through
+two Android applications. The wearer's phone acts only as a camera, streaming
+MJPEG over Wi-Fi. Heavy computation runs on Modal, and model weights come from
+the Hugging Face Hub. Speech is transcribed on the user's phone by the Android
+speech service, so no audio reaches Aegis. The indoor environment is external
+and observed only through the camera; the note ``includes bystanders'' makes the
+bystander-privacy concern of Section~\ref{sec:ethics} visible at the boundary.
+Authentication and consent services are drawn dashed because they are planned
+for FYP-2. The data flows shown here seed the interface tables of
+Chapter~\ref{chap:design}.
+
+\aegisfig{ch1-system-context}
+  {System context of Aegis at the end of FYP-1: external entities and the data
+   crossing the system boundary. Dotted: physical influence; dashed: planned.}
+  {fig:context}
+
+\section{Project Modules}
+\label{sec:modules}
+The system is organised into four modules, aligned with the team's division of
+work (Table~\ref{tab:modules} and Figure~\ref{fig:modules}).
+
+\begin{table}[H]
+\centering\small
+\caption{Module decomposition.}
+\label{tab:modules}
+\begin{tabularx}{\textwidth}{@{}l L{2.6cm} Y l l@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Name} & \textbf{Responsibility} & \textbf{FRs} & \textbf{Lead}\\
+\midrule
+M-A & Capture and Ingestion & Live phone capture, keyframe selection, gap/pause records, crash resume, promotion into bounded segments, batch video normalisation. & FR1, FR2 & Shahmeer\\
+M-B & Spatio-Temporal Memory & Gravity frame, 3D lifting, relations, state runs, events, rooms, per-home store, cross-session matching, activities, evidence, compaction. & FR3, FR4 & Faizan\\
+M-C & Query Engine & Closed-vocabulary NLQ (\path{src/aegis/nlq/}), ranked candidate retrieval, abstention, answer wording; \path{/api/v1/ask}. & FR5, FR6 & Ali Sher\\
+M-D & Interfaces and Caregiver Access & Patient and Caregiver apps, API routes, deployment; authentication planned. & FR7, FR8 & Shahmeer\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\aegisfig{ch1-modules}
+  {Module overview: four modules, their functional requirements and leads,
+   and the shared memory store. \tbd{Leads to be confirmed by the team.}}
+  {fig:modules}
+
+\textbf{Module responsibilities.} M-A turns the phone's MJPEG stream into a
+disciplined feed of timestamped keyframes and owns ingestion reliability. M-B
+owns the memory: it converts reconstructed geometry and detections into rooms,
+anchors and objects, records each object's stable states and the events between
+them, merges sessions into a persistent per-home store and compacts history
+older than three days into verified summaries. M-C owns understanding: it maps
+a question to a known object using a closed vocabulary, retrieves and ranks
+candidates from memory, and composes a short answer from a template, or
+declines when evidence is missing. No language model writes answer text. M-D
+owns access: the patient and caregiver applications and the HTTP API. Leads are
+responsibility assignments; Iteration~2 work crossed module boundaries, and
+Chapter~\ref{chap:pm} records who built what.
+
+\section{Stakeholders and User Classes}
+\begin{table}[H]
+\centering\footnotesize
+\caption{Stakeholders and user classes.}
+\label{tab:stakeholders}
+\begin{tabularx}{\textwidth}{@{}L{2.2cm} Y Y Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{Class} & \textbf{Description} & \textbf{Needs} &
+\textbf{Characteristics and design implications}\\
+\midrule
+Primary user & Person with cognitive impairment (SCD, MCI, or early dementia)
+living at home. & Independent recall of object locations and daily activities. &
+May have reduced working memory, low technical confidence, possible hearing or
+vision limits. Needs short, simple, low-load answers and speech input.\\
+Secondary user: caregiver & Family member or professional carer. & Verifiable
+oversight without constant supervision. & Needs history queries, object-state
+verification, and activity summaries; must act only with the primary user's
+consent.\\
+Supervisor and evaluators & Academic stakeholders. & Evidence of rigour,
+reproducibility, and responsible tool use. & Need traceability from
+requirements to tests.\\
+Bystanders & Other people visible in the camera view (visitors, household
+members). & Privacy. & Not users, but affected; drives the privacy
+requirements.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Success Criteria}
+\label{sec:success}
+Success at the end of FYP-2 will be judged by the following measurable
+criteria. These thresholds are minimum-viable prototype targets, deliberately
+lenient for FYP-stage validation and not production safety specifications. Numeric thresholds are proposed and will be finalised with the
+supervisor once a benchmark is fixed.
+
+\begin{table}[H]
+\centering\footnotesize
+\caption{Success criteria for FYP-2 and the evidence available at the end of FYP-1.}
+\label{tab:success}
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}l Y L{2.9cm} Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Criterion} & \textbf{Threshold} & \textbf{FYP-1 evidence}\\
+\midrule
+SC1 & Spatial retrieval accuracy (``where is X?'') & $\geq$ 70\% & \textbf{Unmeasured}: held-out \texttt{demo05} annotations missing (NOT\_READY)\\
+SC2 & Temporal retrieval accuracy (``when / what did I do?'') & $\geq$ 60\% & \textbf{Unmeasured}: temporal intent not implemented\\
+SC3 & Accuracy retained after compaction & Drop $\leq$ 15 points & \textbf{Partial}: 100\% agreement on auto-generated probes (demo03/04); human queries unmeasured\\
+SC4 & End-to-end query latency & $\leq$ 5\,s at p95 & \textbf{Unmeasured} (P2.8)\\
+SC5 & Evidence grounding & 100\% of non-abstaining answers & \textbf{Partial}: \path{/ask} and \path{/query} return evidence; coverage not audited (P1.4)\\
+SC6 & Safe failure: explicit ``not sure'' instead of a fabricated answer & Verified on unanswerable queries & \textbf{Partial}: abstention unit tests (\texttt{test\_nlq.py}); EgoLife keys/wallet abstention probes; calibrated threshold planned (P1.2)\\
+SC7 & Caregiver access control & No unauthorised access & \textbf{Not met}: no authentication yet (P1.7)\\
+SC8 & Usability & 5 participants unaided & \textbf{Unmeasured}: needs ethics approval\\
+SC9 & Room-level spatial memory & Segmentation $\geq$ 0.90, room-change F1 $\geq$ 0.70, correct-room $\geq$ 0.90 & \textbf{Unmeasured} (P2.3); identity instability observed on EgoLife\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Constraints and Assumptions}
+\label{sec:constraints}
+\textbf{Constraints.}
+\begin{enumerate}[label=\textbf{C\arabic*.},leftmargin=3em]
+\item \emph{Academic timeline:} FYP-1 (design, early implementation) and FYP-2
+(completion, evaluation) within the 2023--2027 session.
+\item \emph{Compute and budget:} development on student hardware and
+three student laptops: two Lenovo T480 systems running Arch Linux and one HP laptop of approximately similar specifications running Debian/Ubuntu (laptop CPU, 8~GB RAM, about 100~GB free SSD each). The capture device is a mobile phone with an RGB-only camera. Model inference uses Modal L4 GPUs; no model is trained or fine-tuned. One five-minute segment costs about 0.086 GPU-hours (about US\$0.069: VGGT 200\,s, detection 108\,s); the 74-segment EgoLife study cost US\$8.71 metered. A CPU fallback (\texttt{AEGIS\_GPU=cpu}) runs the same stages without a GPU at much higher latency (VGGT 831\,s for 79 frames).
+\item \emph{Clinical scope:} clinical trials with patients are out of scope
+(Section~1.6); validation relies on healthy volunteers and scripted scenarios.
+
+\item \emph{Data:} EgoLife (A1\_JAKE, seven days, 12:00--13:00) is used for the multi-day study; a held-out care-style clip (\texttt{demo05}) is frozen for accuracy scoring; Ego4D was assessed as NO-GO (0/100 readiness, about 10.8 weeks of prerequisites).
+\item \emph{Home identity:} the room registry persists calibration for one
+home identified by \texttt{home\_id}; it does not constitute multi-home service
+or support. 
+\item \emph{Team size:} three members, each owning separate modules with shared
+milestones.
+\end{enumerate}
+
+\textbf{Assumptions.}
+\begin{enumerate}[label=\textbf{A\arabic*.},leftmargin=3em]
+\item The user carries a mobile phone as the first-person RGB capture device during the test session; setting up a dedicated camera is out of scope.
+\item The camera view approximates the user's attention and shows the objects
+they handle or place.
+\item Indoor lighting is adequate for object recognition most of the time.
+\item Network connectivity is available for any cloud-hosted model calls, or a
+local fallback is provided. The live prototype uses local storage and a 2 FPS sampling target.
+\item A caregiver, where involved, is nominated by the primary user (or legal
+guardian) and authorised before access begins.
+\item Objects moved while the user is not wearing the camera cannot be tracked;
+the system reports this limitation rather than guess.
+\item VGGT-$\Omega$ coordinates are used without manual axis permutation or
+scale factor. Room footprints use floor-plane geometry, but monocular
+reconstruction and inferred room boundaries are approximate and do not
+establish metric accuracy.
+\item Only an RGB camera is assumed: no depth sensor or external pose tracking.
+This follows the RGB-only wearable setting of R4DSG \cite{r4dsg2026} rather
+than the RGB-D-plus-pose input of DAAAM \cite{daaam2026}.
+\item VGGT-$\Omega$ weights are taken from \path{facebook/VGGT-Omega} when access is granted, otherwise from the public mirror \path{wincentIsMe/VGGT-Omega} (same weights and licence).
+\end{enumerate}
+
+\textbf{Feasibility.} The building blocks of Aegis exist separately in recent
+work: MemPal shows that voice-based object retrieval from a wearable camera
+helps older adults in their own homes \cite{mempal2025}; R4DSG shows that
+persistent, anchor-relative object memory can be built from RGB-only wearable
+video \cite{r4dsg2026}; and DAAAM shows that a tool-calling agent can answer
+spatio-temporal questions over a hierarchical memory \cite{daaam2026}. The
+project's novelty is their integration with progressive compaction and
+consent-based caregiver access, within a deliberately limited scope: indoor,
+single user, camera-only. Each module has one owner (Section~\ref{sec:responsibilities}), and if
+tracking proves unreliable in cluttered scenes the evaluated environment will
+be restricted to fewer anchors and objects (Section~\ref{sec:deviations}).
+
+\section{Ethical, Legal and DEI Considerations}
+\label{sec:ethics}
+\textbf{Societal, economic, environmental.} Aegis supports independence and
+dignity for the person and reduces caregiver burden. By lowering the need for
+constant supervision it may reduce long-term care costs. Lightweight
+processing and keyframe selection limit compute and energy use.
+
+\textbf{Ethics.} Aegis is designed to \emph{assist, not replace}: it supports
+human caregiving and never substitutes for it. Safe failure is a first-class
+requirement: when evidence is weak or conflicting, Aegis says it is unsure
+rather than inventing an answer, because a wrong confident answer (for example,
+a wrongly stated medication event) can cause harm. The caregiver portal exists
+for verifiable help the user has agreed to, \emph{not} for covert monitoring;
+access is consent-based, scoped, and auditable. The primary user can see what
+is stored and who has access. 
+
+\textbf{Privacy and data protection.} Continuous first-person video captures
+highly sensitive material, including bystanders and private spaces. Design
+commitments: process and store data locally where feasible; store derived
+structured memory rather than raw video where possible; apply retention limits
+through compaction; encrypt data at rest and in transit; provide a means to
+pause capture and delete history; and avoid capturing or retaining identifiable
+bystander imagery beyond what is needed.
+
+\textbf{Legal.} Aegis is not a certified medical device; outputs are advisory,
+not final decisions. Informed consent is required from the primary user (or an
+authorised representative where capacity is limited) and, as far as
+practicable, from other household members whose images may be captured.
+
+Test videos used by the team include only consenting participants; bystanders are excluded or their identifiable imagery is removed before analysis.
+
+\textbf{Data used in FYP-1.} Team recordings include only consenting team
+members. EgoLife is a public dataset of consenting volunteers and is used for
+evaluation only; its frames are processed on Modal and not redistributed.
+Object-only evidence crops (at most 320\,px) are kept so answers can show a
+photo; this exceeds the 24-hour raw-frame rule in NFR-S4 and is recorded as
+supervisor decision \#9 \tbd{(supervisor decision pending)}; it can be disabled
+with \texttt{memory.evidence.enabled}.
+
+\textbf{Current security status.} The API has no authentication, allows any
+origin (CORS \texttt{*}) and both apps permit cleartext HTTP on a LAN for
+development. This is acceptable only for a single-user prototype with test
+data and is the main FYP-2 security work (Section~\ref{sec:security}).
+
+\textbf{DEI and accessibility.} Speech and text input serve users with
+different abilities and literacy levels. The interface should use large text,
+high contrast, and simple wording suitable for older adults. Users with speech
+or hearing difficulties must be able to use text and visual output alone.
+Language support is English-only; supporting Urdu is a candidate
+extension.  Evaluation should include participants of different
+ages and, where possible, both genders, so accuracy is not tuned to one
+group's environment or appearance.
+
+%=====================================================================

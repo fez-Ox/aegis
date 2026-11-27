@@ -1,0 +1,224 @@
+\chapter{Proposal and Mid-Evaluation Feedback, and Iteration Plan}
+\label{chap:plan}
+%=====================================================================
+
+\section{Proposal Feedback Summary}
+\textbf{Accepted.}
+
+\textbf{Panel Comments:}
+
+The scope is fine for an FYP and covers various aspects of CCP, but it needs to be clearly identified along with defined acceptance criteria claims. Evaluate resource feasibility (storage, memory, compute) and state assumptions clearly if limitations are imposed. Revisit technical claims to ensure they are plausible and computationally feasible, or clearly define project constraints and limitations after discussing with your supervisor. Improve graphics, visual design, and UI/UX experience, as it currently looks basic, non-product-like, and unsuited for the intended user.
+
+\textbf{Required Modifications:}
+\begin{enumerate}
+\item Narrow scope --- define long term, persistence (How many hours/days).
+\item Define CCP clearly --- the prototype keeps three days of structured spatial memory; older spatial observations are converted into text summaries, following the retention pattern used by MemPal.
+\item Define GPU, storage and devices used during training and inference.
+\item Fix the app design.
+\end{enumerate}
+
+\section{Proposal Action Register}
+\begin{table}[H]\centering\footnotesize
+\caption{Proposal action register with evidence.}\label{tab:actions}
+\begin{tabularx}{\textwidth}{@{}l L{2.6cm} Y Y L{2.2cm}@{}}\toprule
+\rowcolor{hdrfill}\textbf{No.}&\textbf{Required modification}&\textbf{Response (FYP-1 final)}&\textbf{Evidence}&\textbf{Status}\\\midrule
+1&Narrow scope, define persistence&Three-day detail window and verified summaries implemented; week/month roll-up.&\path{memory/compaction.py}; \texttt{RetentionConfig(hot\_days=3)}; \path{tests/test_compaction.py} (14 tests)&Addressed; accuracy after compaction unmeasured\\
+2&Define the CCP&Fidelity--storage trade-off now measured.&Table~\ref{tab:complex}; Section~\ref{sec:compaction-audit}; \path{evaluation/reports/memory_control/summary.md}&Addressed\\
+3&Define GPU, storage, devices&Constraint C2 with measured cost per segment; deployment diagram.&Section~\ref{sec:constraints}; Figure~\ref{fig:deployment}; \path{docs/egolife.md}&Addressed\\
+4&Fix the app design&Two new apps (patient, caregiver), espresso/ochre theme, large tiles, voice.&\texttt{apps/Patient App/}, \texttt{apps/Caregiver App/}; Figures~\ref{fig:patient-flow} and~\ref{fig:caregiver-flow}&Partially addressed: usability study pending\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Mid-Evaluation Feedback Summary}
+\label{sec:mid-feedback}
+\tbd{[Team input required: the supervisor's and panel's mid-evaluation comments
+and marks (Form~2 / Form~3), verbatim where possible, with the date of the
+evaluation.]}
+
+\section{Mid-Evaluation Action Register}
+Table~\ref{tab:mid-actions} records each mid-evaluation item, the action
+taken and the evidence. Rows M1--M3 are the supervisor follow-ups already
+recorded in Appendix~\ref{app:meetings}; the panel's own items are still to be
+added.
+
+\begin{table}[H]\centering\footnotesize
+\caption{Mid-evaluation action register.}\label{tab:mid-actions}
+\begin{tabularx}{\textwidth}{@{}l L{3.0cm} Y L{3.0cm} l@{}}\toprule
+\rowcolor{hdrfill}\textbf{No.}&\textbf{Feedback item}&\textbf{Action taken}&\textbf{Evidence}&\textbf{Status}\\\midrule
+M1&Keep claims tied to repository and test evidence (13 Oct)&Single source of truth \texttt{CONTEXT.md}/\texttt{TODO.md}; every status in this report cites a file, commit or test.&\texttt{CONTEXT.md}, \texttt{TODO.md}&Addressed\\
+M2&Keep room metrics labelled unmeasured (20 Oct)&Still unmeasured; annotation templates and scorer ready.&\path{evaluation/templates/rooms.json}, \path{scripts/evaluate_rooms.py}&Ongoing\\
+M3&Prioritise caregiver-calibration authorisation and room-label retention tests (20 Oct)&Room-label retention: rooms are never compacted, and this is tested. Authorisation: not started.&\path{tests/test_compaction.py}; P1.7&Partial\\
+\tbd{M4\ldots}&\tbd{[Each mid-evaluation panel item]}&\tbd{[Action]}&\tbd{[Evidence]}&\tbd{[Status]}\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Iteration Strategy}
+Aegis follows an iterative, vertical-slice approach. Each iteration delivers a
+working end-to-end slice that can be demonstrated and tested, rather than
+finishing one module completely before starting the next. Risk is addressed
+early: tracking quality and compaction trade-offs (the two technical risks most
+likely to invalidate the design) were exercised in Iterations 1 and 2 rather
+than left to FYP-2.
+
+Each iteration follows the same cycle (Figure~\ref{fig:iteration-cycle}):
+select use cases $\rightarrow$ design $\rightarrow$ implement $\rightarrow$
+test $\rightarrow$ review with supervisor $\rightarrow$ record deviations and
+re-plan.
+
+\aegisfig[0.7\textwidth]{iterationcycle}{Iteration cycle: select use cases, design, implement, test, review with supervisor, record deviations and re-plan.}{fig:iteration-cycle}
+
+The proposal defined four milestones (M1 Ingestion, M2 Graph \& History, M3
+Voice Agent, M4 Portal \& Testing). Table~\ref{tab:itermap} maps them to four
+iterations and records their status.
+
+\begin{table}[H]
+\centering\footnotesize
+\caption{Iterations mapped to milestones, with status.}
+\label{tab:itermap}
+\begin{tabularx}{\textwidth}{@{}l Y L{3.0cm} L{3.2cm}@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{Iteration} & \textbf{Milestones} & \textbf{Period} & \textbf{Status}\\
+\midrule
+1 & Spatio-temporal memory engine (FR3), light FR1/FR2 & To mid-evaluation (week 9) & Complete; exit criterion not run on ground truth (Section~\ref{sec:iter1-outcome})\\
+2 & M1 live ingestion, M2 memory completion, M3 query engine and speech, first apps & To week 14 / \tbd{[submission date]} & Complete (Section~\ref{sec:iter2-outcome})\\
+3 & Temporal answers, confidence, evidence, room-identity fix, accuracy measurement & FYP-2, \tbd{[dates]} & Planned\\
+4 & Caregiver security, encryption, latency and usability validation & FYP-2, \tbd{[dates]} & Planned\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Iteration 1 Plan}
+\textbf{Objective.} Build the spatio-temporal memory engine.
+
+\begin{table}[H]
+\centering\small
+\caption{Iteration 1 plan.}
+\label{tab:iter1}
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}L{3cm}Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{Item} & \textbf{Detail}\\
+\midrule
+Selected use cases & UC-01 (Capture and ingest), UC-03 (Find where an object
+is, basic)\\
+Selected FRs & FR3 (Spatio-Temporal Memory Construction), with light work on FR1 and FR2\\
+Deliverables & Frame stream and keyframe selection; anchor database schema;
+object detection feeding the anchor store; a command-line or minimal text query
+for the last known location of an object\\
+Evidence & Repository commits and tags, short demo recording, sample database
+contents, unit and integration test results\\
+Exit criteria & A recorded test sequence of 10 object placements is
+ingested, and the last known location of each object is retrievable correctly
+for at least 70\% of them\\
+Outcome & Slice implemented; the exit criterion (10 placements, $\geq$ 70\%) was not run with ground truth and moves to Iteration~3 as P2.2 (Section~\ref{sec:iter1-outcome}).\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Iteration 2 Plan}
+The plan below is reproduced as it stood at the mid-evaluation; it is not rewritten
+to match what was delivered.
+\textbf{Objective.} Add temporal depth and natural-language access.
+
+\begin{table}[H]
+\centering\small
+\caption{Iteration 2 plan.}
+\label{tab:iter2}
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}L{3cm}Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{Item} & \textbf{Detail}\\
+\midrule
+Selected use cases & UC-04 (Review object history), UC-05 (Recall earlier
+activity), UC-02 (Submit a query by speech or text)\\
+Selected FRs & FR3 (event grouping, room hierarchy and per-home calibration), FR5 (room constraints/explanations), FR6\\
+Deliverables & Event grouping; room estimation/binding and persistent room identities; room-aware queries and API; voice
+interface and tool-calling agent remain planned; grounded answers with evidence\\
+Evidence & Demo of a spoken query answered with evidence; before and after
+query accuracy comparison on the test sequence\\
+Exit criteria & Spatial and temporal queries answered correctly on the test
+sequence at the Iteration 2 target; abstention behaviour demonstrated on at
+least 5 unanswerable queries\\
+Outcome & Delivered with one deviation: a rule-based engine plus on-device speech instead of a tool-calling voice agent; temporal answers deferred (Sections~\ref{sec:deviations} and~\ref{sec:iter2-outcome}).\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Work Breakdown and Responsibilities}
+\label{sec:responsibilities}
+\label{sec:wbs}
+Table~\ref{tab:wbs} merges the mid report's three responsibility tables into
+one. It keeps the assigned module leads and records, from the Git history, the
+Iteration~2 work each member actually led.
+
+\begin{table}[H]
+\centering\footnotesize
+\caption{Assigned leads and the Iteration~2 work actually led (Git evidence).}
+\label{tab:wbs}
+\begin{tabularx}{\textwidth}{@{}L{2.4cm} L{1.6cm} Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{Member} & \textbf{Assigned lead} & \textbf{Iteration 2 work actually led}\\
+\midrule
+Shahmeer Amir & M-A, M-D & Live capture contracts, keyframes, buffer, gaps, pause, promotion (6--7 Nov); M1/M2 implementation pass: vocabulary ontology, gravity frame, oriented boxes, relations, scene-graph rebuild with state runs, SQLite home store, room identity, activities, evidence crops, compaction, JPEG live segments, perception changes, API fixes (12--15 Nov); Part II plan (16 Nov)\\
+Faizan ur Rehman Khan & M-B & Evaluation suite (Options A/C/D, memory audit) (9--10 Nov); demo harness and calibration (17 Nov); EgoLife study, tiered query protocol and ranking (21--22 Nov); SAM~3 detector and benchmark (22 Nov)\\
+Ali Sher & M-C & NLQ engine and dictionary (8--9 Nov); consolidation into \path{src/aegis/nlq}, \path{/ask}, Modal serving, \texttt{aegis-ask} CLI (18 Nov); end-to-end runner (20 Nov); Patient and Caregiver apps, enrolment endpoint, DINOv3 re-ID (23--24 Nov)\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Responsibilities moved in Iteration~2. Shahmeer implemented most of the M-B
+memory store and Ali Sher built the M-D applications. The leads are kept as
+accountability assignments, and the table records who did the work.
+\tbd{[All three members to confirm this wording.]} Cross-cutting work
+(integration testing, benchmark construction, documentation) is shared.
+
+\section{Progress Against Plan}
+Table~\ref{tab:progress} compares each planned item with its actual status and
+the commit that evidences it. Commit dates come from \texttt{git log}.
+\tbd{Planned dates are not recorded in the repository and must be supplied by
+the team.} Figure~\ref{fig:gantt} shows the same work as a Gantt chart.
+
+\begin{table}[H]\centering\footnotesize
+\caption{Progress against plan.}\label{tab:progress}
+\begin{tabularx}{\textwidth}{@{}L{3.4cm} L{1.4cm} L{2.4cm} Y@{}}\toprule
+\rowcolor{hdrfill}\textbf{Planned item}&\textbf{Planned}&\textbf{Actual status}&\textbf{Evidence (commit, date)}\\\midrule
+M1 frame stream capture&\tbd{[ ]}&Implemented&\texttt{d82dc30} (1 Sep, batch); live sampler \texttt{3a8808d}, \texttt{353db31} (11 Oct); live contracts \texttt{c045d9e}--\texttt{713e94a} (6 Nov)\\
+M1 keyframe optimisation&\tbd{[ ]}&Implemented&batch stride \texttt{d82dc30} (1 Sep); criterion keyframes \texttt{e022c6c} (6 Nov)\\
+M1 gaps, pause, resume&\tbd{[ ]}&Implemented&\texttt{e8da287} (6 Nov)\\
+M1 live $\rightarrow$ memory connection&\tbd{[ ]}&Implemented&promotion \texttt{713e94a}, pipeline \texttt{34207d7} (6 Nov); JPEG segments \texttt{8afd235} (15 Nov)\\
+M2 anchor database&\tbd{[ ]}&Implemented&\texttt{d82dc30} (1 Sep)\\
+M2 event grouping&\tbd{[ ]}&Implemented&\texttt{fa93619} (12 Oct); activities \texttt{c349916} (15 Nov)\\
+M2 room hierarchy and registry&\tbd{[ ]}&Implemented&8 commits on 17 Oct (\texttt{4b20596}\ldots\texttt{2298112})\\
+M2 gravity frame and relations&\tbd{[ ]}&Implemented&\texttt{1a40db9}, \texttt{1ad4eeb}, \texttt{ce05662} (15 Nov)\\
+M2 persistent home store&\tbd{[ ]}&Implemented&\texttt{af2ef3b} (15 Nov)\\
+M2 three-day compaction&\tbd{[ ]}&Implemented&\texttt{5eaba35} (15 Nov)\\
+M3 natural-language queries&\tbd{[ ]}&Implemented (location only)&NLQ 8--9 Nov; \path{/ask} \texttt{3209e72} (18 Nov)\\
+M3 voice input&\tbd{[ ]}&Implemented (on-device STT)&Patient App \texttt{6464d46} (23 Nov), Caregiver App \texttt{c5d94a4}\\
+M3 tool-calling agent&\tbd{[ ]}&Deviated (D1)&--\\
+M4 patient/caregiver UI&\tbd{[ ]}&Implemented (no auth)&apps, 23--24 Nov\\
+M4 CI and reproducibility&\tbd{[ ]}&Implemented&CI with coverage floor; \path{scripts/run_e2e.py} \texttt{70f0240} (20 Nov)\\
+Evaluation&\tbd{[ ]}&Partial&\texttt{fb0b5a1} (9 Nov), EgoLife \texttt{5dbc4b6} (21 Nov), SAM~3 benchmark \texttt{2a3c603} (22 Nov)\\
+\bottomrule\end{tabularx}\end{table}
+
+\aegisfig{ch3-gantt-plan-vs-actual}{Actual work per item from Git, coloured by
+the member who led it, with the iteration bands and milestones.
+\tbd{Planned bars are added once the team supplies the planned dates.}}{fig:gantt}
+
+\section{Delays, Deviations and Recovery Plan}
+\label{sec:deviations}
+Table~\ref{tab:deviations} lists each deviation from the plan with its reason,
+impact, recovery action, owner and new date.
+
+\begin{table}[H]\centering\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Deviations and recovery plan.}\label{tab:deviations}
+\begin{tabularx}{\textwidth}{@{}l L{2.4cm} Y Y Y l l@{}}\toprule
+\rowcolor{hdrfill}\textbf{\#}&\textbf{Deviation}&\textbf{Reason}&\textbf{Impact}&\textbf{Recovery}&\textbf{Owner}&\textbf{New date}\\\midrule
+D1&Tool-calling voice agent replaced by a closed-vocabulary engine with on-device speech&A model writing answers can state a location it never observed (TC5); a template engine cannot&Safer answers; fewer question types&Optional LLM parser behind the vocabulary (P1.9)&Ali Sher&Iteration 4\\
+D2&Temporal and activity questions not answered&Store support exists (\texttt{states\_as\_of}, activities) but no answer templates yet&SC2 cannot be measured&Implement P1.1&\tbd{[ ]}&Iteration 3\\
+D3&Iteration~1 exit criterion not evidenced&No ground-truth placement recording&Iteration~1 slice unproven on data&Record and score 10 placements (P2.2)&\tbd{[ ]}&Iteration 3\\
+D4&Room metrics unmeasured&No annotated multi-room clip&SC9 open&Annotate \texttt{demo05} / multi-room clip (P2.3)&\tbd{[ ]}&Iteration 3\\
+D5&Authentication and encryption not started&Effort went to the end-to-end pipeline&SC7 not met; prototype only&P1.7, P1.8&\tbd{[ ]}&Iteration 4\\
+D6&Room identity unstable across sessions (found 22 Nov)&Absolute linking radius in scale-free units&Duplicate rooms over days&Scale-relative linking&\tbd{[ ]}&Iteration 3\\
+\bottomrule\end{tabularx}\end{table}
+
+The 17 October room hierarchy, per-home calibration, room-grounded query and API
+work, and the removal of the manual SCALE=5.0/\texttt{to\_zup} display
+transform are Iteration~2 refinements, not retroactively assigned to
+Iteration~1 (Chapter~\ref{chap:iter2}).

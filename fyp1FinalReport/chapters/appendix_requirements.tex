@@ -1,0 +1,85 @@
+\chapter{Supplementary Use-Case Specifications}
+\label{app:usecases}
+
+The principal use cases are specified in Chapter~4. This appendix provides the
+remaining use-case flows referenced by its use-case inventory. Requirements are
+specified behaviour; notes on current implementation distinguish working
+slices from planned behaviour.
+
+\section{Query and Recall Use Cases}
+\subsection{UC-02: Submit a Query by Speech or Text}
+\uctable{UC-02 detail.}
+{Primary user}
+{The application and memory service are available. Typed queries are supported; speech is transcribed on the device when available (both apps, since 23 November).}
+{The user enters or speaks a question about an object or past activity.}
+{1.~The interface accepts a typed query. 2.~The query service extracts the target and any room constraint. 3.~The service retrieves matching memory and evidence. 4.~The interface displays the grounded response.}
+{A1: Speech transcription is unavailable or uncertain $\rightarrow$ the user may enter the query as text. A2: No supporting memory exists $\rightarrow$ the service returns a not-found response rather than inventing a location.}
+{The query and its response are displayed.}
+{FR5, FR6, FR7}
+
+\subsection{UC-04: Review the History of an Object}
+\uctable{UC-04 detail.}
+{Primary user; caregiver access is a future authorized role}
+{The scene graph contains one or more observations of the requested object.}
+{The user opens the timeline or asks to review an object's earlier locations.}
+{1.~The client requests the timeline. 2.~The service returns timestamped observations/events. 3.~The user reviews the ordered history and its room/anchor context when available.}
+{A1: No history is found $\rightarrow$ the interface reports that no observation is available. A2: An object is ambiguous $\rightarrow$ the user selects the desired instance.}
+{The chronological history is shown with available location and time evidence.}
+{FR3, FR4, FR5, FR7}
+
+\subsection{UC-06: View Evidence for an Answer}
+\uctable{UC-06 detail.}
+{Primary user}
+{A query has produced an answer or an explicit not-found result.}
+{The user opens the answer details.}
+{1.~The interface displays the short answer. 2.~It shows the supporting description/image reference, timestamp, anchor and room fields when available. 3.~The user can distinguish a stored observation from a missing-evidence response.}
+{A1: Evidence is unavailable $\rightarrow$ the response identifies the missing evidence and does not present an unsupported location as fact.}
+{The answer is presented with its available provenance.}
+{FR5.4, FR7.2}
+
+\section{Caregiver and Memory-Maintenance Use Cases}
+\subsection{UC-08: Caregiver Queries Episodic History}
+\uctable{UC-08 detail.}
+{Caregiver; authentication and authorization are specified requirements but are not implemented}
+{A memory service and relevant history exist. The current API does not establish a verified caregiver identity or patient boundary.}
+{A caregiver requests an object-state answer or activity summary within the primary user's granted scope; unrestricted raw-history browsing is outside the caregiver role.}
+{1.~The caregiver requests an object-state answer or activity summary. 2.~The service checks the granted scope when authorization is implemented. 3.~It retrieves only the in-scope information and returns a concise response with evidence.}
+{A1: No matching observation exists $\rightarrow$ return an explicit not-found response. A2: The request is outside an authorized scope $\rightarrow$ deny it when access control is implemented; current authorization enforcement is absent.}
+{A grounded response is returned by the current query service; secure caregiver access remains future work.}
+{FR5, FR8}
+
+\subsection{UC-10: Caregiver Reviews an Activity Summary}
+\uctable{UC-10 detail.}
+{Caregiver}
+{A summary for the selected period exists and the caregiver has authenticated access. Summary generation and caregiver authorization are not implemented in the current prototype.}
+{The caregiver requests a daily activity summary.}
+{1.~The client requests the selected date. 2.~The system gathers timestamped events and any available room/object context. 3.~It presents a concise summary with evidence references.}
+{A1: No events are available $\rightarrow$ report that the interval has no recorded activity. A2: The interval contains only compacted data $\rightarrow$ label summary-derived content as summarized.}
+{The requested summary is displayed with its evidence level; this use case remains planned.}
+{FR3, FR4, FR8}
+
+\subsection{UC-11: Pause Capture or Delete History}
+\uctable{UC-11 detail.}
+{Primary user}
+{A capture session or stored memory exists.}
+{The user pauses capture or requests deletion of stored history.}
+{1.~The user selects pause or delete. 2.~The system stops accepting new capture while paused, or confirms the deletion request. 3.~For deletion, the system removes the selected stored history and reports completion.}
+{A1: Capture is already paused $\rightarrow$ keep it paused. A2: Deletion cannot be verified $\rightarrow$ report the failure rather than claim success.}
+{The user receives the capture/deletion state. Full deletion and production safeguards remain requirements, not demonstrated safeguards.}
+{FR1.3, NFR-S5}
+
+\subsection{UC-12: Maintain Memory by Compaction}
+\uctable{UC-12 detail.}
+{System}
+{A home store exists with days older than \texttt{hot\_days} (3).}
+{A home ingest completes (compaction runs after every ingest).}
+{1.~For each local day older than three days (seven for important events), the system builds template summaries. 2.~It verifies each summary against its source rows. 3.~Only then does it delete the detail rows, keeping every object's last-known run and evidence. 4.~Day summaries older than 30 days roll up into weeks, and weeks older than 365 days into months. 5.~Timeline answers from summaries carry \texttt{tier}.}
+{A1: Verification fails $\rightarrow$ the day keeps all detail and \texttt{compaction\_log} records \texttt{failed}.}
+{Older history is queryable as summaries; last-known states are unchanged. Implemented (\texttt{memory/compaction.py}, 14 tests); accuracy after compaction is unmeasured.}
+{FR4.1--FR4.5}
+
+\section{Use-Case Coverage}
+UC-01, UC-03, UC-05, UC-07, UC-09, UC-13 and UC-14 are detailed in Chapter~4. This appendix details UC-02,
+UC-04, UC-06, UC-08, UC-10, UC-11 and UC-12. The use-case inventory and
+requirements traceability matrix in Chapter~4 provide the complete ID-to-FR
+mapping.

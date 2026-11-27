@@ -1,0 +1,399 @@
+\chapter{Research and Existing Solutions}
+\label{chap:research}
+%=====================================================================
+
+\section{Research Method / Approach}
+The team investigated the domain in three strands:
+\begin{itemize}
+\item \textbf{Domain and need analysis:} epidemiology of cognitive decline,
+ageing in place, and caregiver burden
+\cite{who2024,statista2022,alz2023,mogle2023,marchant2011,kasper2015,harris2006,arno1999}.
+\item \textbf{Technical literature:} recent work on assistive object retrieval
+for older adults, long egocentric video question answering, and spatio-temporal
+scene memory for agents
+\cite{daaam2026,mempal2025,r4dsg2026,spatialmem2026,supermemory2026}.
+\item \textbf{Product comparison:} features of existing assistive-recall tools
+against the project's requirements.
+\end{itemize}
+Sources were selected by relevance to (a) object-location recall for people
+with cognitive impairment, (b) persistent scene or event memory from
+first-person streams, and (c) natural-language querying of that memory. Recent
+venues (IUI 2025, CVPR 2026, ACM MM 2026) were prioritised for the technical
+strand. In Iteration~2 the team added a fourth strand: its own component
+experiments. Where a choice between methods could not be settled from the
+literature, it was measured on the project's own data
+(Section~\ref{sec:experiments}).
+
+\section{Existing Solutions / Products}
+\textbf{MemPal \cite{mempal2025}} (Maniar et al., IUI 2025) is a wearable,
+voice-based memory assistant developed at the MIT Media Lab for older adults.
+A multimodal large language model turns visual context from a wearable camera
+into an automatically generated, real-time text diary of the wearer's
+activities; the user then asks spoken questions to find misplaced objects or to
+recall whether an action was completed. The authors tested it with 15 older
+adults in their own homes and report better object-finding performance with
+audio assistance than with no aid. The project page also describes a companion
+app that tracks completed actions for remote monitoring by caregivers and
+produces a summarised activity diary \cite{mempalpage}.
+
+\textbf{R4DSG \cite{r4dsg2026}} (ACM MM 2026) targets object-centric questions
+over long egocentric video, such as where an item was moved or when it last
+changed state. It argues that caption-based memories rarely preserve persistent
+object identity, and that earlier 3D scene-graph methods assume stronger
+geometry (depth, poses, or reconstructions) than free-motion wearable RGB video
+provides. Instead it converts video into compact, queryable memory entries
+indexed by time, place, persistent objects, anchor-relative change, and local
+interaction context, using RGB-only components for segmentation, temporal
+propagation, and relative 3D lifting. It is positioned as a memory substrate
+for wearable assistants; the descriptions we reviewed do not include a
+user-facing assistive application or caregiver access.
+
+\textbf{DAAAM \cite{daaam2026}} (Gorlo, Schmid and Carlone, CVPR 2026) is a
+real-time spatio-temporal memory for embodied agents. Given RGB-D video with
+camera poses, it segments and tracks scene fragments, captions selected frames
+and segments with a localised captioning model using batch processing for
+speed, and organises the results into a hierarchical 4D scene graph that a
+tool-calling agent queries. It is evaluated on spatio-temporal question
+answering (NaVQA and a longer-duration extension, OC-NaVQA). It targets robots
+and embodied agents, not people with cognitive impairment.
+
+\textbf{CrossSense} is a London-based smart-glasses system for people with
+early-stage dementia. Its AI companion, Wispy, observes the wearer's
+surroundings and gives proactive audio and visual prompts that guide everyday
+tasks such as making tea or getting dressed
+\cite{crosssense-techradar,crosssense-bigissue}. It won the Longitude Prize on
+Dementia, and a University of Sussex team tested it with 23 pairs of people
+living with dementia and their carers \cite{crosssense-bigissue}. The public
+descriptions we found emphasise real-time guidance; they do not describe a
+queryable long-term memory or caregiver query access. 
+
+\textbf{Room-level mapping methods.} Aegis borrows the online trajectory clustering and revisit-merging idea from Hydra's spatial mapping work \cite{hydra2022}; it uses an HOV-SG-inspired separation of room-level semantic typing from lower-level object memory \cite{hovsg2024}. These are design inspirations adapted to sparse RGB-derived trajectories and detected landmarks, not reproductions of either complete method.
+
+\textbf{Related egocentric-memory research.} Beyond direct competitors, the
+wider literature motivates the design. Ego4D \cite{grauman2022} established
+large-scale egocentric benchmarks, including episodic-memory tasks. EgoLife
+\cite{egolife2025} extends the problem to an egocentric life assistant with
+long-context tasks such as event recall and habit understanding, and AMEGO
+\cite{amego2024} builds an active memory of recurring locations and object
+interactions so that a very long video need not be reprocessed in full (as
+summarised in the related-work section of \cite{r4dsg2026}). SpatialMem
+\cite{spatialmem2026} organises memory hierarchically from egocentric RGB video
+as anchors, objects, and text, and answers queries by walking that structure.
+SuperMemory-VQA \cite{supermemory2026} is a benchmark of 4,853 question--answer
+pairs on long-horizon egocentric memory, including object and location memory.
+The team now uses EgoLife (participant A1\_JAKE) for its multi-day persistence
+study (Section~\ref{sec:egolife}); Ego4D was assessed and rejected for FYP-2
+(NO-GO, 0/100 readiness).
+
+\section{Comparison of Existing Solutions}
+Table~\ref{tab:comparison} compares the four systems with Aegis on
+project-relevant criteria. ``Not described'' means the sources reviewed do not
+state it, not that the system lacks it.
+
+
+\begin{table}[H]
+\centering\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Comparison of existing solutions with Aegis.}
+\label{tab:comparison}
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}L{1.9cm} Y Y Y Y Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{Criterion} & \textbf{MemPal \cite{mempal2025}} &
+\textbf{CrossSense} & \textbf{R4DSG \cite{r4dsg2026}} &
+\textbf{DAAAM \cite{daaam2026}} & \textbf{Aegis (FYP-1)}\\
+\midrule
+Target users & Older adults finding objects at home & Early-stage dementia &
+Research: wearable assistants & Research: embodied agents & Broad cognitive
+impairment, plus caregiver\\
+Sensing input & Wearable camera & Smart glasses & RGB-only wearable video &
+RGB-D with poses & Phone RGB camera (worn), MJPEG\\
+Memory form & Text activity diary & Not described & Anchor-relative 4D
+scene-graph memory entries & Hierarchical 4D scene graph & Rooms $\rightarrow$ anchors $\rightarrow$ objects; state runs and events; per-home SQLite store\\
+Temporal abstraction & Not described & Not described & Timelines of object
+state changes & Timeline of object placements & Implemented: three-day detail, verified day summaries, week/month roll-up\\
+Interface & Voice assistant & Proactive audio and visual guidance & Text video
+question answering & Tool-calling agent & Patient and caregiver apps; text, on-device speech, object tiles\\
+Caregiver support & Remote monitoring, summarised diary & Not described &
+Not described & Not described & Caregiver app with history, rooms, enrolment; consent-scoped access planned\\
+Scaling approach & Not described & Not described & Compact memory entries &
+Batch captioning of selected frames & State runs (size independent of video length) plus compaction\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Limitations and Gaps}
+From the comparison, five gaps motivate Aegis:
+\begin{enumerate}
+\item \textbf{Spatial grounding for assistive use.} MemPal's memory is a text
+activity diary \cite{mempal2025}; anchor-relative or metric object locations
+are not described. DAAAM's 4D scene graph requires RGB-D input and camera poses
+\cite{daaam2026}, which a wearable RGB camera may not supply. R4DSG shows that
+anchor-relative memory can be built from RGB-only wearable video
+\cite{r4dsg2026} but is not packaged as an assistive product.
+\item \textbf{No progressive temporal abstraction in assistive systems.}
+CrossSense is described as real-time guidance, and MemPal as a diary. R4DSG and
+DAAAM keep timelines of object changes and placements, but a tiered policy that
+condenses old history into progressively coarser summaries is not presented as
+a design goal in any reviewed system. The room layer provides a natural coarse
+spatial tier that may preserve location context through future temporal
+compaction; retention of room identity through compaction is now verified by
+construction (rooms are never compacted), but its effect on query accuracy is
+unmeasured.
+\item \textbf{Research systems are not assistive systems.} R4DSG and DAAAM show
+that object-centric, anchor-relative, and hierarchical scene memory work for
+question answering and for embodied agents, but they are not designed for
+people with cognitive impairment, nor with speech access, evidence display, or
+caregiver consent.
+\item \textbf{Caregiver access is passive or absent.} MemPal offers remote
+monitoring and a summarised diary; none of the reviewed systems describes
+delegated, consent-scoped querying of the full history by a caregiver.
+\item \textbf{No unified pipeline.} None of the reviewed systems combines
+continuous egocentric ingestion, tiered temporal decay, and multimodal
+natural-language grounding in one engineered pipeline.
+\end{enumerate}
+The gap, in one sentence: \emph{among the systems reviewed, none combines
+persistent, spatially grounded egocentric memory with progressive temporal
+abstraction and multimodal, evidence-based querying for both a person with
+cognitive impairment and their caregiver.} Figure~\ref{fig:gap}
+(Section~\ref{sec:proposed}) positions Aegis in this unoccupied space.
+
+\section{Proposed Solution}
+\label{sec:proposed}
+Aegis is a five-stage pipeline with two access paths (Figure~\ref{fig:pipeline}).
+The write path is continuous and the read path is on demand; both touch the
+shared memory store.
+
+\aegisfigtall{ch2-pipeline}
+  {The Aegis pipeline at the end of FYP-1: continuous write path, on-demand
+   read path, and the shared memory store. Dashed: planned.}
+  {fig:pipeline}
+
+\textbf{Stage walkthrough.} Capture and ingestion (FR1, FR2) turns first-person
+video into a frame stream and selects keyframes to limit cost. The
+spatio-temporal memory engine (FR3) detects and tracks objects, anchors them
+relative to stable parts of the scene, and groups observations into events.
+Multi-resolution abstraction (FR4) keeps recent history detailed and folds
+older history into compact summaries; compaction runs in the background. At
+query time the interface (FR6, FR7) accepts speech or text, the reasoning agent
+(FR5) retrieves the latest states from the memory, and a template composes
+the answer from the retrieved state; a language model is optional and off by
+default (temporal and activity questions are declined until Iteration~3). Patient and caregiver access (FR7, FR8) present the same
+memory through two permissioned views. The write and read paths are drawn
+separately because ingestion is continuous while queries are on demand;
+queries do not flow \emph{through} the compression stage but read the store it
+maintains. The design decisions behind the stages are documented in
+Section~\ref{sec:decisions}.
+
+Figure~\ref{fig:gap} places Aegis against the reviewed systems on the two axes
+that define the gap: how finely space is represented, and how far memory
+extends and is abstracted over time.
+
+\aegisfig[0.88\textwidth]{fig-2.2}
+  {Gap positioning: spatial grounding versus temporal memory. Placements are
+   the team's qualitative judgement from published descriptions
+   (Table~\ref{tab:comparison}).}
+  {fig:gap}
+
+\section{Complex Computing Problem}
+Aegis addresses a complex computing problem. The characteristics below follow
+the attribute framework used in the project's proposal submission. The concrete
+constraint is deliberate: retain structured, spatially grounded memory for three
+days, then convert older spatial observations into text summaries. This creates a
+fidelity-versus-storage trade-off rather than claiming indefinite spatial
+persistence.
+
+\begin{table}[H]
+\centering\footnotesize
+\caption{Complex computing problem attributes.}
+\label{tab:complex}
+\begin{tabularx}{\textwidth}{@{}c L{3.0cm} Y Y@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{\#} & \textbf{Attribute} & \textbf{How Aegis exhibits it} & \textbf{Evidence (FYP-1)}\\
+\midrule
+1 & Conflicting requirements & Preserving fine spatial fidelity over time
+conflicts with memory scalability. Maintaining a comprehensive event history
+conflicts with low-latency, low-cognitive-load responses. & Measured trade-off: snapshot interval 1 keeps exact geometry at 1.5--1.9$\times$ compression; interval 0 gives 5.7--7.2$\times$ with centre p95 error 0.22--0.36 scene units (Section~\ref{sec:compaction-audit}).\\
+2 & No obvious solution; requires conceptual modelling & No unified pipeline
+integrates continuous egocentric ingestion, tiered temporal decay, and
+multimodal grounding, so an original conceptual memory model is required. & --\\
+3 & In-depth knowledge based on first principles & Requires geometric vision,
+probabilistic state estimation (tracking objects under uncertainty), and
+semantic retrieval. & --\\
+4 & Infrequently encountered issues & Continuous, unconstrained first-person
+streams with dynamic state changes, rather than static datasets. & --\\
+5 & Outside standard practice & No engineering standard governs continuous
+episodic memory abstraction. & --\\
+6 & Diverse stakeholders & A primary user needing non-intrusive assistance and
+a caregiver needing verifiable oversight. & --\\
+7 & Significant consequences & Retrieval failures affect daily independence and
+caregiver intervention burden. & --\\
+8 & Interdependent sub-problems & Changes in tracking or compression
+granularity propagate into query accuracy. & Changing the detector (YOLOE $\rightarrow$ SAM~3) changed which objects exist in memory at all (0/36 $\rightarrow$ 34/42 shoes); the room-linking radius changed cross-session identity (Section~\ref{sec:egolife}).\\
+9 & Functional requirement categories identifiable & Requirement categories are
+drawn from established assistive cognition literature even though the
+architecture is novel. & --\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Why this is not routine engineering.} A concrete example: if compaction
+discards the exact shelf an object last rested on, a later query for that
+object fails even though capture and tracking worked. Compaction policy,
+tracking quality, and retrieval design therefore cannot be tuned independently.
+\section{Technical Challenges}
+\begin{ltab}\scriptsize
+\begin{longtable}{@{}>{\bfseries}L{0.9cm}L{2.3cm}L{3.7cm}L{3.7cm}L{3.7cm}@{}}
+\caption{Technical challenges, planned mitigations and what FYP-1 found.}\label{tab:challenges}\\
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Challenge} & \textbf{Why it is hard} &
+\textbf{Planned mitigation} & \textbf{What we found in FYP-1}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{ID} & \textbf{Challenge} & \textbf{Why it is hard} &
+\textbf{Planned mitigation} & \textbf{What we found in FYP-1}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+TC1 & Persistent object identity in cluttered, dynamic homes & Objects are
+occluded, moved, and look similar; identity may break or duplicate. &
+Anchor-relative tracking; re-identification across sightings; confidence scores
+on identity. & Re-ID moved from HSV histograms to DINOv3 embeddings; multi-instance identity and occlusion permanence are tested (\texttt{test\_association}, \texttt{test\_scene\_graph}); not yet measured on ground truth.\\
+TC2 & Abstraction trade-off & Compression may discard the fine detail the user
+needs. & Tiered retention; importance-aware summarisation; test accuracy
+before and after compaction. & Compaction verifies each summary against its source rows before deleting detail; a failed day keeps all rows.\\
+TC3 & Egocentric video quality & Head motion blur, narrow view, lighting
+changes. & Keyframe selection that scores sharpness and novelty. & Criterion keyframes reject dark ($<$20), bright ($>$245), blurred (Laplacian $<$15) and duplicate ($<$0.8\% change within 2\,s) frames.\\
+TC4 & Efficient VLM use & VLM calls are costly and slow at video rates. &
+Process keyframes only; cache descriptions; batch captioning, as in
+\cite{daaam2026}. & VLM removed from the answer path; GPU used only for reconstruction and detection; Modal warm-down 2\,s.\\
+TC5 & Query grounding and hallucination & Free-form questions may be vague,
+relative (``before lunch''), or unanswerable. & Retrieval-first answering;
+require evidence; explicit abstention. & Closed vocabulary and templates; the engine declines unknown items, unobserved items, temporal and activity questions.\\
+TC6 & Low-load interaction for impaired users & Long or complex answers can
+confuse. & Short answers with a single piece of visual evidence. & Answers are one sentence with up to three photos and a labelled certainty badge.\\
+TC7 & Privacy and consent & Continuous capture of private spaces and
+bystanders. & Local-first storage, minimal raw retention, access control. & Not yet addressed: no authentication or encryption (P1.7, P1.8).\\
+TC8 & Limited validation & Small-scale tests may not generalise to real
+dementia patients. & Report limitations openly; test with scripted scenarios
+and healthy volunteers. & Unchanged; honest limits reported for every measurement.\\
+TC9 & Dataset not yet selected & No reviewed dataset is guaranteed to match the indoor, caregiver-oriented setting. & Select a suitable dataset or subset in FYP-2; a relevant portion of Ego4D is the current candidate, with annotation/adaptation documented before evaluation. & EgoLife chosen for the multi-day study; Ego4D NO-GO.\\ 
+TC10 & Spatial reasoning from RGB-only wearable video & No depth sensor or
+external pose; the camera moves freely. & Use raw VGGT-$\Omega$ coordinates
+and floor-plane geometry without claiming calibrated metric accuracy. & A gravity frame from a RANSAC floor fit \cite{ransac1981} gives ``above / under / on floor'' without metric scale.\\
+TC11 & Room segmentation and cross-session identity & Trajectory clustering may
+split/merge regions after revisits; furniture moves can change landmark evidence.
+& Evaluate room assignments and transitions, test registry matching/blending,
+and report failures. & Room signatures normalised (\texttt{61dda40}); identity still unstable across sessions (TC12).\\
+TC12 & Cross-session room identity under scale-free reconstruction & \texttt{zone\_link\_radius} (1.5) is an absolute distance, but VGGT scale differs per reconstruction. & Scale-relative linking using the gravity frame's camera-height unit (Iteration~3). & On two EgoLife segments one produced four rooms and the next one room, matched to the wrong home room.\\
+\end{longtable}
+\end{ltab}
+
+\section{Research Findings and Design Decisions}
+\label{sec:decisions}
+\begin{ltab}\footnotesize
+\begin{longtable}{@{}L{7.2cm}L{7.2cm}@{}}
+\caption{Research findings and the design decisions they drive.}\label{tab:decisions}\\
+\toprule
+\rowcolor{hdrfill}\textbf{Research finding (source)} & \textbf{Design decision in Aegis}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{Research finding (source)} & \textbf{Design decision in Aegis}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+MemPal builds a text diary from a wearable camera and supports voice object
+retrieval and caregiver monitoring \cite{mempal2025,mempalpage}. & Natural-language,
+accessible querying and an activity-event memory as the interaction baseline,
+extended with anchor-relative spatial detail and delegated caregiver querying.\\
+R4DSG builds compact memory entries indexed by time, place, persistent objects,
+and anchor-relative change from RGB-only wearable video \cite{r4dsg2026}. &
+Room--anchor--object scene graph with timestamped events; raw VGGT coordinates
+are used without a manual scale or axis transform (Section~\ref{sec:constraints}).\\
+DAAAM needs RGB-D and camera poses for its metric 4D scene graph
+\cite{daaam2026}. & Aegis uses raw VGGT-$\Omega$ coordinates as its spatial
+reference and floor-plane room geometry, while treating scale and room boundaries
+as approximate rather than calibrated metric measurements.\\
+DAAAM organises memory as a hierarchical scene graph with a timeline of
+placements \cite{daaam2026}. & Hierarchical organisation of environment, areas,
+anchors, and objects, with a timeline of placements.\\
+DAAAM selects frames and segments for captioning and uses batch processing to
+make inference fast enough for online use \cite{daaam2026}. & Keyframe
+optimisation in ingestion (Milestone M1).\\
+A tool-calling agent can query a spatio-temporal memory for answers
+\cite{daaam2026}. & Planned at mid as a voice agent; replaced in Iteration~2 by a
+closed-vocabulary engine for grounding (deviation D1).\\
+R4DSG stores compact entries instead of raw graph sequences
+\cite{r4dsg2026}. & Progressive high-level summaries as the older tier of
+memory.\\
+Dementia places a disproportionate burden on unpaid caregivers
+\cite{kasper2015}, and informal care is costly \cite{arno1999,chari2015}. &
+Delegated caregiver application with history and evidence; consent-based access planned.\\
+Some people with early-stage Alzheimer's disease live alone and want to cope
+independently \cite{harris2006}. & Accessible interaction with simple patient and caregiver views.\\
+Hydra performs online spatial clustering and revisit merging \cite{hydra2022}; HOV-SG organizes open-vocabulary scene graphs hierarchically \cite{hovsg2024}. & Estimate room regions from wearer trajectory, merge revisits, type rooms from landmark votes, and keep architectural landmarks out of the object timeline.\\
+\rowcolor{rowfill}\multicolumn{2}{@{}l}{\textit{Decisions added in Iteration 2, from the team's own experiments}}\\
+YOLOE found 0/36 shoes and 0/19 hands; SAM~3 \cite{sam3} found 34/42 and 19/19 (team benchmark, Section~\ref{sec:experiments}). & SAM~3 is the default detector for recorded video; YOLOE \cite{yoloe} stays available for live use.\\
+Appearance must survive occlusion and viewpoint change between sightings. & DINOv3 \cite{dinov3} embeddings for re-identification instead of colour histograms.\\
+Per-frame timelines grow with frames $\times$ objects (team memory audit). & Store debounced \textbf{state runs} instead; graph size independent of video length.\\
+A free-form language model can produce a plausible but unsupported location (TC5). & Closed vocabulary (525 items) and template answers; an LLM only as an optional parser (P1.9).\\
+VGGT-$\Omega$ places the origin at the first camera; ``up'' is unknown. & Estimate gravity from a RANSAC floor fit \cite{ransac1981}; store it beside the raw coordinates.\\
+JSON graphs cannot merge sessions or survive restarts efficiently. & Per-home SQLite store with stable room, anchor and object identities.\\
+Class-level queries cannot distinguish two mugs (EgoLife tiers). & Ranked top-3 candidates with photos and an explicit ambiguity flag; personal-item enrolment.\\
+\end{longtable}
+\end{ltab}
+
+
+\section{Model and Method Selection Experiments}
+\label{sec:experiments}
+\textbf{Object detection.} Open-vocabulary detection decides which objects can
+ever enter memory. The team hand-labelled a small benchmark (10 frames,
+960$\times$540) from five different videos --- a shoe cabinet, a kitchen, a
+bathroom/waste area, laundry and a dish rack --- with 116 objects, drawn by
+inspecting raw frames rather than pipeline output. Detections were scored
+class-aware at IoU $\geq$ 0.30 after per-class non-maximum suppression (IoU
+0.7). Table~\ref{tab:detector-ab} and Figure~\ref{fig:detector-ab} compare five
+variants on a Modal L4 GPU.
+
+\begin{table}[H]
+\centering\small
+\caption{Detector comparison on the ten-frame benchmark (\texttt{docs/detection\_benchmark.md}).}
+\label{tab:detector-ab}
+\begin{tabularx}{\textwidth}{@{}Y r r r r r r r@{}}
+\toprule
+\rowcolor{hdrfill}\textbf{Variant} & \textbf{Prompts} & \textbf{P} & \textbf{R} & \textbf{F1} & \textbf{FP/img} & \textbf{Shoes} & \textbf{Hands}\\
+\midrule
+YOLOE-11l generic (old default) & 93 & 0.357 & 0.056 & 0.097 & 0.9 & 0/36 & 0/19\\
+YOLOE-11l compact & 18 & 0.556 & 0.056 & 0.102 & 0.4 & 0/36 & 0/19\\
+YOLO-World m compact & 18 & 0.460 & 0.191 & 0.270 & 2.0 & 11/36 & 0/19\\
+SAM~3 compact, threshold 0.5 & 18 & 0.326 & 0.798 & 0.463 & 14.7 & 27/36 & 19/19\\
+\textbf{SAM~3 compact, class thresholds, NMS 0.7 (shipped)} & 18 & \textbf{0.718} & \textbf{0.724} & \textbf{0.721} & 3.3 & 34/42 & \textbf{19/19}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\aegisfig{ch2-detector-ab}
+  {Precision, recall and F1 of five detector variants; false positives per
+   image above each group. 10 hand-labelled frames, 960$\times$540,
+   five environments, 116 objects; class-aware IoU $\geq$ 0.30; Modal L4.}
+  {fig:detector-ab}
+
+YOLOE, the previous default, found none of the 36 shoes or 19 hands.
+YOLO-World found 11 shoes but no hands. SAM~3 \cite{sam3} with an 18-class
+prompt set and category-level thresholds (shoes 0.5, hand 0.4, cooking pot 0.6,
+trash bin 0.4, food container 0.9, others 0.8) reached F1 0.721, and was
+adopted. The thresholds are category priors, not tuned per video. Every
+alternative tried (prompt-word variants, NMS sweeps, cross-class suppression,
+flip test-time augmentation) was rejected when it regressed any video or gained
+less than 0.005. The benchmark is small, so the result guides the choice of
+detector; it is not a general accuracy claim.
+
+\textbf{Memory representation and long-term persistence.} Two further
+experiments informed the memory design and are reported in full in
+Chapter~\ref{chap:testing}: the memory-compaction audit
+(Section~\ref{sec:compaction-audit}), which motivated state runs, and the
+seven-day EgoLife study (Section~\ref{sec:egolife}), which exposed technical
+challenge TC12.

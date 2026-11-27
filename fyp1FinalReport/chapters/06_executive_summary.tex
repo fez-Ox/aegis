@@ -1,0 +1,52 @@
+\frontchapter{Executive Summary}
+\textbf{Motivation.} Cognitive decline makes everyday recall unreliable:
+people misplace objects, forget whether tasks were done, and then rely on
+caregivers who often were not present. The loop of manual searching and
+caregiver reconstruction (Figure~\ref{fig:recall-loop}) wastes time and effort
+for both parties, and the population affected is growing as societies age.
+
+\textbf{Project.} Aegis is an assistive ``external episodic memory''. A
+wearable first-person camera observes the user's indoor environment; the system
+builds a persistent spatio-temporal memory of objects, layout, and activities,
+keeps recent history in fine detail, and condenses older history into
+summaries. Natural-language questions (``Where are my keys?'') are answered by
+speech or text, with supporting evidence, for the user and, through a separate
+caregiver application, for a caregiver (consent-based access is planned). Four
+modules, each with a named lead, implement the pipeline
+(Section~\ref{sec:modules}).
+
+\textbf{Research findings.} We reviewed three closely related systems --
+MemPal, R4DSG, and DAAAM -- plus CrossSense and the wider egocentric-memory
+literature (Chapter~\ref{chap:research}). They show that voice-based object
+retrieval from a wearable camera is feasible for older adults, that
+anchor-relative memory can be built from RGB-only wearable video, and that
+hierarchical spatio-temporal memory supports long-horizon questions. Among the
+systems reviewed, none combines these with progressive temporal abstraction and
+delegated caregiver querying; this is the gap Aegis targets. Since the
+mid-evaluation the team ran its own component experiments: a detector
+comparison that replaced YOLOE with SAM~3, a memory-compaction audit, and a
+seven-day EgoLife study that exposed cross-session room-identity instability
+(Section~\ref{sec:experiments}, Chapter~\ref{chap:testing}).
+
+\textbf{Requirements and plan.} Chapter~\ref{chap:requirements} specifies eight
+top-level functional requirements with 44 sub-requirements (six added since the
+mid report, \tbd{pending supervisor approval}), 16 non-functional requirements,
+35 acceptance checks with their FYP-1 results, a traceability matrix and a
+requirements change log. Chapter~\ref{chap:plan} records two completed
+iterations against plan; Iterations~3 and~4 remain for FYP-2.
+
+\textbf{Implementation and validation status.} Iteration~2 delivered live
+capture, a gravity frame, nine spatial relations, state runs, a persistent home
+store with cross-session matching, verified compaction, the NLQ engine and
+\path{/ask} endpoint on Modal, and patient and caregiver apps
+(Chapter~\ref{chap:iter2}). The suite has 451 passing tests at 79\% coverage.
+Measured results are detection F1 0.721, compaction 5.7--7.2$\times$ with 100\%
+semantic retention, one end-to-end run, and the EgoLife study. Accuracy on a
+held-out clip, latency p95, room metrics and usability remain unmeasured.
+
+\textbf{Risks and remaining work.} The three main risks are now: (1)
+cross-session room identity, because room linking uses an absolute radius in
+scale-free reconstruction units; (2) temporal and activity questions, which the
+engine currently declines; and (3) the absence of authentication and
+encryption. FYP-2 addresses these in Iterations~3 and~4
+(Chapter~\ref{chap:fyp2}).

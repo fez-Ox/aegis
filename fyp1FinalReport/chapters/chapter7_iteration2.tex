@@ -1,0 +1,159 @@
+\chapter{Iteration 2: Design and Implementation}
+\label{chap:iter2}
+\textbf{Baseline.} This chapter covers work from 13~October to the end of FYP-1
+on \texttt{develop} (commit \texttt{ce49dcc}, \tbd{update to the submission tag}).
+
+\section{Iteration Objectives}
+Iteration 2 had three objectives, taken from the Iteration~1 outcome and the
+proposal feedback: (1) join live capture to memory, (2) make the memory bounded
+and persistent across sessions (FR3.5, FR4), and (3) give the patient and
+caregiver a usable product (proposal action 4). A fourth, unplanned objective
+was to replace the detector after the benchmark of Section~\ref{sec:experiments}.
+
+\section{Selected Use Cases / Features}
+UC-01 (live), UC-03, UC-04, UC-06, UC-12 (compaction) and UC-13 (rooms) were
+selected, plus UC-02 by speech, and the new UC-14 and UC-15.
+Table~\ref{tab:i2-features} lists the features delivered.
+
+\begin{table}[H]\centering\footnotesize
+\caption{Iteration~2 features and their status.}\label{tab:i2-features}
+\begin{tabularx}{\textwidth}{@{}Y L{3.6cm} L{2.0cm} l@{}}\toprule
+\rowcolor{hdrfill}\textbf{Feature} & \textbf{Main files} & \textbf{FRs} & \textbf{Status}\\\midrule
+Live capture contracts, keyframes, gaps, buffer, crash resume & \path{ingestion/live_pipeline.py}, \texttt{keyframe.py}, \texttt{buffer.py} & FR1, FR2 & Implemented\\
+Promotion into segments and Modal runner & \texttt{live\_handoff.py}, \texttt{segment\_runner.py} & FR2.2 & Implemented\\
+Gravity frame (RANSAC floor fit) & \path{geometry/gravity.py} & FR3.8 & Implemented\\
+Nine relations in the gravity frame & \path{memory/relations.py} & FR3.8 & Implemented\\
+State runs and events (schema 2) & \path{memory/runs.py}, \texttt{scene\_graph.py} & FR3.2, FR3.3 & Implemented\\
+SQLite home store and cross-session matching & \texttt{store.py}, \texttt{matching.py}, \texttt{ingest.py} & FR3.5, FR3.9 & Implemented\\
+Rooms, activities, room registry & \texttt{rooms.py}, \texttt{activities.py}, \texttt{home\_registry.py} & FR3.4, FR3.6 & Partial\\
+Compaction with verification and roll-up & \texttt{compaction.py}, \texttt{summaries.py} & FR4 & Implemented\\
+Evidence crops & \texttt{evidence.py} & FR7.2 & Implemented\\
+SAM~3 detector, DINOv3 re-ID & \path{perception/detector.py} & FR3.1 & Implemented\\
+Ranked candidates (tiered protocol) & \texttt{reasoning.py} & FR5.8 & Implemented\\
+NLQ engine, dictionary (525 items), \path{/ask} & \path{nlq/engine.py}, \texttt{dictionary.py} & FR5.1, FR5.5 & Partial\\
+Modal-served API & \path{remote/serve.py} & -- & Implemented\\
+Patient App and Caregiver App & \texttt{apps/Patient App}, \texttt{apps/Caregiver App} & FR6, FR7, FR8.6, FR8.7 & Implemented (no auth)\\
+Evaluation suite and EgoLife study & \path{evaluation/} & NFR-P & Implemented\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Design}
+Figures~\ref{fig:i2-graph}--\ref{fig:i2-query} are the Iteration~2 class
+diagrams, drawn from the code. Only fields and methods that matter to the design
+are shown.
+
+\aegisfig{ch7-class-memory-graph}{Memory graph classes (schema 2).}{fig:i2-graph}
+\aegisfig{ch7-class-memory-runs}{Observations, state runs and events.}{fig:i2-runs}
+\aegisfig{ch7-class-memory-store}{\texttt{HomeStore} and its records.}{fig:i2-store}
+\aegisfig{ch7-class-memory-ingest}{Session ingest, matching and compaction.}{fig:i2-ingest}
+\aegisfig{ch7-class-api-apps}{API models and the two Flutter apps.}{fig:i2-apps}
+\aegisfig{ch7-class-query}{Query: ranking, NLQ engine and dictionary.}{fig:i2-query}
+
+\clearpage
+\section{Implementation}
+This section describes the four algorithms added in Iteration~2.
+
+\subsection{Relation classification}
+\label{sec:relations-algo}
+Each object box is compared with every anchor box in the gravity frame
+(Figure~\ref{fig:flow-relations}). If gravity confidence is below 0.5 the
+relation is \texttt{near} and marked uncertain. Otherwise, with a vertical
+tolerance of 0.15 and a horizontal overlap threshold of 0.5, the classifier
+decides in order: \texttt{carried} (a hand cue), \texttt{inside} (container
+anchor, box within it), \texttt{on\_surface}, \texttt{under} (anchor open
+underneath), \texttt{above}, \texttt{on\_floor} (within 6\% of the scene height
+of the floor), \texttt{next\_to}, \texttt{near}, and finally \texttt{in\_room}.
+Event types are \texttt{placed}, \texttt{picked\_up}, \texttt{moved},
+\texttt{relation\_changed}, \texttt{room\_changed} and
+\texttt{moved\_while\_unobserved}.
+
+\aegisfigtall{ch7-flow-relations}{Relation classification flowchart.}{fig:flow-relations}
+
+\subsection{State runs}
+Observations of one instance are sorted by time. A run starts only when two
+consecutive observations agree on anchor and relation (or one final observation
+with confidence $\geq$ 0.5); instances with fewer than two observations are
+dropped. Each change between runs gives one event. An object seen in the same
+place for an hour is therefore one run, not 7{,}200 timeline rows.
+
+\subsection{Cross-session matching}
+\label{sec:matching-algo}
+A new session is matched to the home in three levels
+(Figure~\ref{fig:flow-matching}). \textbf{Rooms} match by landmark-signature
+similarity (at least 0.5, a margin of 0.05 over the runner-up, at least one shared
+landmark). \textbf{Anchors} are aligned by a rigid fit whose RMS residual must
+stay below 25\% of the scene spread. \textbf{Objects} match by DINOv3 appearance
+distance below 0.35 with a 0.1 margin; an object found at a different anchor
+than its last-known state records \texttt{moved\_while\_unobserved}.
+
+\aegisfig{ch7-flow-matching}{Cross-session matching flowchart.}{fig:flow-matching}
+
+\subsection{Keyframe selection}
+The live sampler keeps a frame (Figure~\ref{fig:flow-keyframe}) only if its mean
+brightness is between 20 and 245, its Laplacian variance is at least 15 and its
+change from the last kept frame (on a 64$\times$36 thumbnail) is at least 0.008;
+a frame is forced after 2\,s without a keyframe so a still scene is still
+recorded.
+
+\aegisfig{ch7-flow-keyframe}{Keyframe selection flowchart.}{fig:flow-keyframe}
+
+\subsection{Compaction}
+Each local day (Asia/Karachi) older than three days is summarised by templates,
+verified and only then deleted; important events stay seven days. Day summaries
+older than 30 days roll up into weeks, and weeks older than 365 days into months.
+The last-known run and evidence crop of every object are kept.
+
+\section{Technical Implementation Details}
+Table~\ref{tab:params} lists the defaults in \path{core/config.py}. All are
+overridable from \path{configs/*.yaml}.
+
+\begin{table}[H]\centering\footnotesize
+\caption{Main Iteration~2 parameters.}\label{tab:params}
+\begin{tabularx}{\textwidth}{@{}L{4.6cm} l Y@{}}\toprule
+\rowcolor{hdrfill}\textbf{Parameter} & \textbf{Default} & \textbf{Effect}\\\midrule
+\texttt{live.sample\_fps} & 2.0 & Frames sampled from MJPEG\\
+\texttt{live.max\_duration\_seconds} & 600 & Session limit\\
+\texttt{live.reconnect\_timeout\_seconds} & 30 & End after this long without frames\\
+\texttt{live.buffer\_capacity} & 30 & Frames held during a stall\\
+\texttt{live.segment\_frames} & 120 & Frames per promoted segment\\
+\texttt{max\_gap\_seconds} & 30 & Gap that splits a segment\\
+\texttt{memory.anchor\_cluster\_radius} & 0.40 & Anchor clustering (VGGT units)\\
+\texttt{memory.association\_radius} & 0.45 & Same-instance radius\\
+\texttt{memory.appearance\_threshold} & 0.35 & DINOv3 distance for re-ID\\
+\texttt{memory.min\_run\_observations} & 2 & Debounce for a new run\\
+\texttt{compaction.hot\_days} / \texttt{important\_hot\_days} & 3 / 7 & Detail retention\\
+\texttt{compaction.weekly\_rollup\_after\_days} / \texttt{monthly\_\ldots} & 30 / 365 & Roll-up\\
+\texttt{evidence.max\_side}, \texttt{quality} & 320, 85 & Crop size and JPEG quality\\
+\bottomrule\end{tabularx}\end{table}
+
+Set-up and the main commands (from \texttt{README.md}):
+\begin{verbatim}
+uv sync                                  # install
+uv run pytest                            # 451 tests, coverage floor 75%
+uv run aegis-ingest --url http://<phone>:8080/video
+uv run python run_pipeline.py --live-session <id>
+modal deploy src/aegis/remote/serve.py   # aegis-memory-api
+uv run aegis-ask "where are my keys?"
+\end{verbatim}
+
+\section{Tools, Frameworks and Technologies}
+In addition to the Iteration~1 stack: SAM~3 (default detector), DINOv3
+(re-identification), SQLite, the Flutter \texttt{speech\_to\_text} plugin
+(on-device speech), and \texttt{matplotlib} and PlantUML for the report figures.
+Tools used for writing and coding are disclosed in Section~\ref{sec:tools}.
+
+\section{Demonstration Evidence}
+\tbd{Screenshots to be added by the team: Patient App home and answer sheet,
+Caregiver App Interior and Track tabs, Rerun view of walk01-2, and a terminal
+run of \texttt{run\_pipeline.py}.}
+
+\section{Iteration Outcome}
+\label{sec:iter2-outcome}
+Objectives (1)--(3) were met as implemented slices. A live capture now reaches
+memory on Modal (end-to-end run of 20~November, Section~\ref{sec:e2e}); memory is
+bounded (5.7--7.2$\times$ smaller, 100\% retention of last-known states,
+Section~\ref{sec:compaction-audit}) and persists across sessions (12/12 instances
+still found 1--4 days later on EgoLife, Section~\ref{sec:egolife}); and both apps
+are built and tested. Not met: temporal answers (FR5.2, deviation D2),
+calibrated abstention, authentication (FR8.1), encryption, the one-hour soak,
+latency p95 and any user study. Room linking proved unstable across scale
+(TC12). These items form Iteration~3 and~4 (Chapter~\ref{chap:fyp2}).

@@ -1,0 +1,52 @@
+\chapter{Remaining FYP Plan}
+\label{chap:fyp2}
+
+\section{Remaining Scope}
+FYP-2 completes the parts of FYP-1 that were not met (Section~\ref{sec:iter2-outcome})
+and measures what is still unmeasured (Section~\ref{sec:egolife} onward). It adds
+no new modules.
+
+\section{Remaining Iterations}
+\textbf{Iteration 3} finishes the query engine and evaluation data: temporal
+answers (P1.1), calibrated confidence (P1.2), freshness (P1.3), evidence
+references (P1.4), multi-instance clarification and a query log (P1.5), a speech
+confirmation step (P1.6), scale-relative room linking (the TC12 fix), annotation
+and scoring of \texttt{demo05} (P2.5) and the room metrics (P2.3).
+\textbf{Iteration 4} covers security and validation: authentication, grants,
+consent, audit and a restricted CORS policy (P1.7), encryption and full deletion
+(P1.8), an optional LLM planner (P1.9), the one-hour soak and disconnect tests
+(P2.1), placement and activity ground truth (P2.2), a controlled room (P2.4),
+latency p95 and compaction before/after (P2.8), a 7- and 30-day persistence pilot
+(P2.7), a usability study after ethics approval, and the thesis.
+
+\aegisfig{ch10-fyp2-gantt}{FYP-2 plan by iteration. Dates and owners are team input.}{fig:fyp2-gantt}
+
+\begin{table}[H]\centering\footnotesize
+\caption{FYP-2 work packages.}\label{tab:fyp2}
+\begin{tabularx}{\textwidth}{@{}l Y l l l@{}}\toprule
+\rowcolor{hdrfill}\textbf{Iter.} & \textbf{Work} & \textbf{Closes} & \textbf{Owner} & \textbf{Dates}\\\midrule
+3 & Temporal answers, confidence, freshness, evidence refs & FR5.2--5.5, AC-10, AC-11 & \tbd{[ ]} & \tbd{[ ]}\\
+3 & Clarification, query log, speech confirmation & FR5.8, FR6.3 & \tbd{[ ]} & \tbd{[ ]}\\
+3 & Scale-relative room linking; room metrics & FR3.6, AC-22 & \tbd{[ ]} & \tbd{[ ]}\\
+3 & \texttt{demo05} annotation and scoring & NFR-P4, AC-09 & \tbd{[ ]} & \tbd{[ ]}\\
+4 & Auth, grants, consent, audit, CORS & FR8.1--8.5, AC-16--18, AC-26 & \tbd{[ ]} & \tbd{[ ]}\\
+4 & Encryption and deletion & NFR-S1, NFR-S5, AC-20 & \tbd{[ ]} & \tbd{[ ]}\\
+4 & Soak, latency, compaction measurements & NFR-R1, NFR-P1, AC-19, AC-33 & \tbd{[ ]} & \tbd{[ ]}\\
+4 & Persistence pilot; usability study & NFR-U1, AC-15 & \tbd{[ ]} & \tbd{[ ]}\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Testing and Validation Plan}
+Each FYP-2 package ends with a test in CI or an evaluation script whose output is
+reported; nothing is reported as a result without one. The targets are those of
+Section~\ref{sec:success}: spatial retrieval at least 70\%, temporal at least
+60\%, p95 latency within NFR-P1, and a one-hour soak without crash.
+
+\section{Deployment Plan}
+The deployment of Figure~\ref{fig:deployment} stays. Iteration~4 adds
+authentication in front of the API, restricts CORS to the two apps, closes the
+raw-video route and encrypts the store at rest.
+
+\section{Expected Final Deliverables}
+A reproducible repository with tagged releases, the two apps, the deployed API,
+evaluation reports with the measured results above, the final presentation and
+the thesis. A clinical efficacy claim is not a deliverable.

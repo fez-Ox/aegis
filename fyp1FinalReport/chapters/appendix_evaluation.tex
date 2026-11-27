@@ -1,0 +1,20 @@
+\chapter{Evaluation Protocols and Raw Results}\label{app:evaluation}
+This appendix lists each evaluation, the script that runs it, and where its raw
+output is kept. Results are summarised in Chapter~\ref{chap:testing}.
+
+\begin{table}[H]\centering\footnotesize
+\caption{Evaluation protocols.}\label{tab:app-eval}
+\begin{tabularx}{\textwidth}{@{}L{3.0cm} L{4.6cm} Y@{}}\toprule
+\rowcolor{hdrfill}\textbf{Evaluation} & \textbf{Script / module} & \textbf{Protocol and result}\\\midrule
+Detector A/B & \path{scripts/detector_bench.py} & Same labelled frames, IoU match; SAM~3 F1 0.721 (P 0.718, R 0.724), YOLOE 0.097\\
+Memory audit & \path{evaluation/memory_audit.py} & Schema 1 vs.\ 2 size and last-known retention; 7.2$\times$ / 5.7$\times$, 100\%\\
+Store growth & \path{scripts/measure_store_growth.py} & Linear projection from clips; 13.51 $\rightarrow$ 2.11 MiB/h\\
+End-to-end & \path{scripts/run_e2e.py} & walk01-2, 79 frames, CPU; 831 s / 27 s / 8 s\\
+EgoLife & \path{scripts/egolife_eval.py}, \path{evaluation/egolife.py} & 74 segments, \$8.71; 12/12 persistence; full history vs.\ 24 h ablation\\
+Readiness (Option C) & \path{evaluation/option_c.py} & Ego4D NO\_GO (0/100); \texttt{demo05} NOT\_READY\\
+Controlled room & \path{evaluation/controlled_room.py} & Protocol only; not run (P2.4)\\
+Rooms, placements, activity order, keyframes, hand contact & \path{scripts/evaluate_*.py} & Scripts exist; ground truth missing (P2.2, P2.3)\\
+\bottomrule\end{tabularx}\end{table}
+
+\tbd{Raw result files (JSON reports) and the EgoLife per-day table to be attached
+by the team.}

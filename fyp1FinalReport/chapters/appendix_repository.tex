@@ -1,0 +1,58 @@
+\chapter{Repository and Contribution Evidence}
+\label{app:repository}
+
+The repository and contribution evidence summarized here has also been presented in the report's Chapter~9, Project Management and Development Evidence. This appendix provides the supporting repository paths and reproduction details.
+
+\section{Repository Layout}
+The project is maintained in the \texttt{aegis} repository. The main source
+modules and their roles are:
+
+\begin{table}[H]\centering\small
+\caption{Principal repository paths.}\label{tab:appendix-repository}
+\begin{tabularx}{\textwidth}{@{}L{4.8cm}Y@{}}\toprule
+\textbf{Path}&\textbf{Contents}\\\midrule
+\path{src/aegis/core/}&Runtime configuration, typed models and canonical paths.\\
+\path{src/aegis/geometry/}&VGGT-$\Omega$ reconstruction, coordinate/point utilities and 2D-to-3D lifting.\\
+\path{src/aegis/perception/}&Open-vocabulary object and room-landmark detection/segmentation.\\
+\path{src/aegis/memory/rooms.py}&Trajectory-based room regions, footprints, labels and room assignment.\\
+\path{src/aegis/memory/home_registry.py}&Per-home room identity records persisted as \texttt{home\_map.json}.\\
+\path{src/aegis/memory/scene_graph.py}&Rooms--Anchors--Objects bindings, observations and temporal events.\\
+\path{src/aegis/memory/reasoning.py}&Object/room query parsing and grounded explanations.\\
+\path{src/aegis/remote/api.py}&FastAPI query, graph, timeline, room-list and room-rename routes.\\
+\path{src/aegis/remote/workers.py}&Pipeline workers and Rerun logging, including room depictions.\\
+\bottomrule\end{tabularx}\end{table}
+
+\begin{table}[H]\centering\small
+\caption{Configuration, tests and supporting files.}\label{tab:appendix-support-paths}
+\begin{tabularx}{\textwidth}{@{}L{4.8cm}Y@{}}\toprule
+\textbf{Path}&\textbf{Contents}\\\midrule
+\path{config/}&Dataset and pipeline settings, including room-estimation parameters.\\
+\path{tests/}&Unit and fixture-backed API/integration tests.\\
+\path{docs/evaluation_plan.md}&Proposed evaluation metrics, targets and execution protocol.\\
+\path{apps/mobile/}&Flutter patient/caregiver client; no room-calibration screen is evidenced.\\
+\path{run_pipeline.py}, \path{run_server.py}&Pipeline and local service entry points.\\
+\bottomrule\end{tabularx}\end{table}
+
+\section{Reproduction Commands}
+From the repository root, the documented setup and checks are:
+\begin{verbatim}
+uv sync --dev
+uv run pytest -q
+uvx ruff check src tests run_pipeline.py run_server.py
+uvx ruff format --check src tests run_pipeline.py run_server.py
+\end{verbatim}
+For pipeline execution and visualization, see the repository README and
+\path{docs/evaluation_plan.md}. Evaluation claims require the input data,
+configuration, model versions and output artifacts to be recorded with the
+relevant commit.
+
+\section{Version-Control Attribution}
+The current \texttt{git shortlog -sne HEAD} reports 54 commits under
+\texttt{pez-Ox}, 14 under Ali Sher, 10 under \texttt{shah-paradox}, and 2 under
+alternate Faizan author identities. These are Git identity counts, not effort
+or quality measures. The eight room-feature commits dated 2026-10-17 are
+attributed to \texttt{pez-Ox}; they implement room configuration/estimation,
+graph binding, per-home calibration, room-constrained reasoning, API exposure,
+Rerun depictions and the evaluation protocol. Chapter~9 discusses cross-module
+work. Commit history supports code attribution but does not establish each
+member's percentage contribution.

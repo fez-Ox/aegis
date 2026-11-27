@@ -1,0 +1,77 @@
+\chapter{Detailed Test Cases and Results}
+\label{app:tests}
+Table~\ref{tab:app-tests} lists every Python test file with its number of test functions (parametrised tests expand to the 451 collected tests). All pass on \texttt{develop}; line coverage is 79\%. The Flutter apps add 14 (Patient App) and 11 (Caregiver App) widget tests. These are unit and integration checks; system and acceptance results are in Chapter~\ref{chap:testing}.
+
+\begin{ltab}\footnotesize
+\begin{longtable}{@{}L{4.0cm}L{6.4cm}r@{}}
+\caption{Test files by area.}\label{tab:app-tests}\\
+\toprule
+\rowcolor{hdrfill}\textbf{Area} & \textbf{File} & \textbf{Tests}\\
+\midrule
+\endfirsthead
+\toprule
+\rowcolor{hdrfill}\textbf{Area} & \textbf{File} & \textbf{Tests}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Capture and ingestion & \texttt{test\_capture\_control.py} & 2\\
+ & \texttt{test\_config.py} & 10\\
+ & \texttt{test\_live\_buffer.py} & 3\\
+ & \texttt{test\_live\_cli.py} & 8\\
+ & \texttt{test\_live\_contracts.py} & 12\\
+ & \texttt{test\_live\_handoff.py} & 8\\
+ & \texttt{test\_live\_ingestion.py} & 13\\
+ & \texttt{test\_live\_keyframe.py} & 6\\
+ & \texttt{test\_live\_segments.py} & 7\\
+ & \texttt{test\_video\_ingestion.py} & 5\\
+ & \texttt{test\_wallclock.py} & 4\\
+\midrule
+Geometry and perception & \texttt{test\_detector\_postprocess.py} & 6\\
+ & \texttt{test\_geometry.py} & 5\\
+ & \texttt{test\_gravity.py} & 11\\
+ & \texttt{test\_lifting.py} & 15\\
+ & \texttt{test\_planar.py} & 6\\
+ & \texttt{test\_vggt\_checkpoint.py} & 3\\
+\midrule
+Memory & \texttt{test\_activities.py} & 7\\
+ & \texttt{test\_anchors.py} & 4\\
+ & \texttt{test\_association.py} & 6\\
+ & \texttt{test\_compaction.py} & 14\\
+ & \texttt{test\_evaluation\_controlled\_room.py} & 3\\
+ & \texttt{test\_evidence.py} & 7\\
+ & \texttt{test\_home\_registry.py} & 4\\
+ & \texttt{test\_ingest.py} & 12\\
+ & \texttt{test\_matching.py} & 15\\
+ & \texttt{test\_relations.py} & 5\\
+ & \texttt{test\_repository.py} & 4\\
+ & \texttt{test\_restart\_equivalence.py} & 3\\
+ & \texttt{test\_room\_identity.py} & 6\\
+ & \texttt{test\_rooms.py} & 9\\
+ & \texttt{test\_runs.py} & 5\\
+ & \texttt{test\_scene\_graph.py} & 18\\
+ & \texttt{test\_store.py} & 4\\
+ & \texttt{test\_vocabulary.py} & 12\\
+\midrule
+Query and API & \texttt{test\_api.py} & 28\\
+ & \texttt{test\_modal\_compute.py} & 1\\
+ & \texttt{test\_nlq.py} & 9\\
+ & \texttt{test\_ranking.py} & 12\\
+ & \texttt{test\_reasoning.py} & 12\\
+ & \texttt{test\_serve\_app.py} & 2\\
+\midrule
+Evaluation and demo & \texttt{test\_demo\_calibrate.py} & 4\\
+ & \texttt{test\_demo\_harness.py} & 7\\
+ & \texttt{test\_egolife.py} & 30\\
+ & \texttt{test\_evaluation\_memory\_audit.py} & 4\\
+ & \texttt{test\_evaluation\_metrics.py} & 13\\
+ & \texttt{test\_evaluation\_option\_c.py} & 6\\
+ & \texttt{test\_evaluation.py} & 6\\
+ & \texttt{test\_evaluation\_query.py} & 8\\
+ & \texttt{test\_evaluation\_run.py} & 1\\
+ & \texttt{test\_mid1\_prototype.py} & 4\\
+ & \texttt{test\_rerun\_visualization.py} & 3\\
+ & \texttt{test\_run\_e2e.py} & 13\\
+
+\end{longtable}
+\end{ltab}
