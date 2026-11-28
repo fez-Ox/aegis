@@ -1,5 +1,19 @@
 # Perception/geometry backbone — research and evaluation audit
 
+## Datasets used for cross-dataset decisions
+
+- Five Aegis demo videos (distinct homes/tasks: shoe cabinet, dish rack,
+  kitchen, waste, laundry) with hand-labelled detection and room GT.
+- EgoLife (public HuggingFace dataset `lmms-lab/EgoLife`, open-source): two
+  distinct participants (A1_JAKE d1/d2 clips) and seven-day home store used
+  for matching/confidence/query evaluation; an 11-minute concatenated A2
+  session used for the long-capture stress test.
+- Ego4D was evaluated as a candidate: public benchmark with VQ2D/VQ3D and NLQ
+  tasks, but data access is gated and no official scorer is present locally,
+  so it remains future work (P2.6 NO-GO).
+
+All cross-dataset decisions use the five demos + EgoLife, never a single video.
+
 ## Research findings (web, Nov 2026)
 
 Sources consulted:
