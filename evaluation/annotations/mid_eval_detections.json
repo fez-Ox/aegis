@@ -1,0 +1,33 @@
+{
+  "_instructions": [
+    "Boxes hand-labelled by visual inspection of full-resolution 704x704 frames extracted from mid_eval_long.mp4. Labels and boxes are not derived from Aegis output."
+  ],
+  "iou_threshold": 0.3,
+  "images": [
+    {
+      "id": "mid_t60",
+      "video": "mid_eval_long",
+      "time_s": 60.0,
+      "objects": [
+        {"label": "cooking pot", "bbox": [150, 340, 330, 490]},
+        {"label": "plate", "bbox": [245, 270, 320, 330]},
+        {"label": "plate", "bbox": [55, 310, 145, 370]},
+        {"label": "laptop", "bbox": [325, 285, 410, 435]},
+        {"label": "bottle", "bbox": [255, 150, 300, 255]},
+        {"label": "hand", "bbox": [325, 420, 400, 510]}
+      ]
+    },
+    {
+      "id": "mid_t620",
+      "video": "mid_eval_long",
+      "time_s": 620.0,
+      "objects": [
+        {"label": "laptop", "bbox": [355, 350, 500, 490]},
+        {"label": "laptop", "bbox": [205, 365, 350, 460]},
+        {"label": "laptop", "bbox": [285, 25, 400, 115]},
+        {"label": "laptop", "bbox": [275, 190, 370, 260]},
+        {"label": "headphones", "bbox": [225, 450, 360, 540]}
+      ]
+    }
+  ]
+}
