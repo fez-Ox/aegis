@@ -310,6 +310,130 @@ class PointmapReader:
             return data["points"], data["conf"]
 
 
+def _similarity_3d(
+    source: np.ndarray, target: np.ndarray
+) -> tuple[np.ndarray, float, np.ndarray]:
+    """Umeyama similarity mapping source points onto target points."""
+    source_mean = source.mean(axis=0)
+    target_mean = target.mean(axis=0)
+    xs, xt = source - source_mean, target - target_mean
+    u, singular, vt = np.linalg.svd(xt.T @ xs)
+    reflection = np.eye(3)
+    if np.linalg.det(u) * np.linalg.det(vt) < 0:
+        reflection[2, 2] = -1.0
+    rotation = u @ reflection @ vt
+    variance = float((xs**2).sum())
+    scale = (
+        float((singular * np.diag(reflection)).sum() / variance) if variance else 1.0
+    )
+    translation = target_mean - scale * rotation @ source_mean
+    return rotation, scale, translation
+
+
+def _apply_similarity_points(
+    points: np.ndarray, rotation: np.ndarray, scale: float, translation: np.ndarray
+) -> np.ndarray:
+    return scale * (points @ rotation.T) + translation
+
+
+def _apply_similarity_pose(
+    matrix: np.ndarray, rotation: np.ndarray, scale: float, translation: np.ndarray
+) -> np.ndarray:
+    result = np.array(matrix, dtype=np.float64, copy=True)
+    result[:3, :3] = rotation @ result[:3, :3]
+    result[:3, 3] = scale * rotation @ result[:3, 3] + translation
+    return result
+
+
+def run_vggt_segmented(
+    image_paths: Sequence[Path],
+    keyframe_ids: Sequence[int],
+    config: Any,
+    *,
+    hf_token: str | None,
+    model: Any,
+) -> dict[str, Any]:
+    """Reconstruct overlapping windows and align them into one global frame."""
+    from aegis.geometry.vggt_runner import run_vggt_reconstruction
+
+    count = len(image_paths)
+    window = min(config.vggt.window_size, config.vggt.max_keyframes)
+    overlap = min(config.vggt.window_overlap, window - 2)
+    step = window - overlap
+    windows = [(start, min(start + window, count)) for start in range(0, count, step)]
+    if windows[-1][1] < count:
+        windows.append((count - window, count))
+
+    poses: list[np.ndarray] = []
+    pointmaps: list[np.ndarray] = []
+    confmaps: list[np.ndarray] = []
+    global_points: list[np.ndarray] = []
+    global_colors: list[np.ndarray] = []
+    positions_by_id: dict[int, np.ndarray] = {}
+
+    for index, (start, end) in enumerate(windows):
+        result = run_vggt_reconstruction(
+            list(image_paths[start:end]), config.vggt, hf_token=hf_token, model=model
+        )
+        window_poses = np.asarray(result["poses"])
+        window_points = np.asarray(result["pointmaps"])
+        window_conf = np.asarray(result["confmaps"])
+        if index == 0:
+            keep = slice(0, end)
+        else:
+            previous_end = windows[index - 1][1]
+            shared_ids = [
+                frame_id
+                for frame_id in keyframe_ids[start:previous_end]
+                if frame_id in positions_by_id
+            ]
+            if len(shared_ids) >= 2:
+                local_index = {
+                    fid: pos for pos, fid in enumerate(keyframe_ids[start:end])
+                }
+                source = np.array(
+                    [window_poses[local_index[fid], :3, 3] for fid in shared_ids]
+                )
+                target = np.array([positions_by_id[fid] for fid in shared_ids])
+                rotation, scale, translation = _similarity_3d(source, target)
+                window_poses = np.array(
+                    [
+                        _apply_similarity_pose(pose, rotation, scale, translation)
+                        for pose in window_poses
+                    ]
+                )
+                window_points = _apply_similarity_points(
+                    window_points, rotation, scale, translation
+                )
+                result["global_points"] = _apply_similarity_points(
+                    np.asarray(result["global_points"]), rotation, scale, translation
+                )
+            keep = slice(previous_end - start, end - start)
+
+        for local_id, global_id in enumerate(keyframe_ids[start:end]):
+            if keep.start <= local_id < keep.stop:
+                poses.append(window_poses[local_id])
+                pointmaps.append(window_points[local_id])
+                confmaps.append(window_conf[local_id])
+            positions_by_id[global_id] = window_poses[local_id, :3, 3]
+        if len(result["global_points"]):
+            global_points.append(np.asarray(result["global_points"]))
+            global_colors.append(np.asarray(result["global_colors"]))
+
+    return {
+        "poses": np.array(poses),
+        "pointmaps": np.array(pointmaps),
+        "confmaps": np.array(confmaps),
+        "global_points": np.concatenate(global_points)
+        if global_points
+        else np.empty((0, 3)),
+        "global_colors": np.concatenate(global_colors)
+        if global_colors
+        else np.empty((0, 3)),
+        "synthetic": False,
+    }
+
+
 def run_vggt(
     dataset_id: str, raw_config: Mapping[str, Any], *, model: Any = None
 ) -> dict[str, Any]:
@@ -327,11 +451,14 @@ def run_vggt(
     keyframe_records = frames[:: config.vggt.keyframe_stride]
     if len(keyframe_records) < 2:
         keyframe_records = frames[: min(len(frames), 2)]
-    if len(keyframe_records) > config.vggt.max_keyframes:
+    if (
+        len(keyframe_records) > config.vggt.max_keyframes
+        and not config.vggt.window_size
+    ):
         raise ValueError(
             f"{len(keyframe_records)} keyframes exceed vggt.max_keyframes="
-            f"{config.vggt.max_keyframes}; lower video.sample_fps, raise "
-            "vggt.keyframe_stride, or process the capture with --segment-frames"
+            f"{config.vggt.max_keyframes}; raise vggt.keyframe_stride or enable "
+            "vggt.window_size for overlapping-window reconstruction"
         )
     image_paths = [paths.frames / str(rec["filename"]) for rec in keyframe_records]
 
@@ -353,9 +480,18 @@ def run_vggt(
         or os.getenv("HUGGING_FACE_HUB_TOKEN")
         or os.getenv("hf_token")
     )
-    rec_result = run_vggt_reconstruction(
-        image_paths, config.vggt, hf_token=hf_token, model=model
-    )
+    if config.vggt.window_size and len(image_paths) > config.vggt.max_keyframes:
+        rec_result = run_vggt_segmented(
+            image_paths,
+            [int(rec["frame_id"]) for rec in keyframe_records],
+            config,
+            hf_token=hf_token,
+            model=model,
+        )
+    else:
+        rec_result = run_vggt_reconstruction(
+            image_paths, config.vggt, hf_token=hf_token, model=model
+        )
 
     # Save pointmaps and confidence maps (one file per keyframe)
     paths.pointmaps_npz.parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,113 @@
+storage:
+  data_volume: aegis-poc-data
+  model_cache_volume: aegis-model-cache
+  data_mount: /data
+  model_mount: /models
+video:
+  filename: video.mp4
+  sample_fps: 15
+  width: 960
+  height: 540
+camera:
+  calibration_filename: calib.txt
+  calibration_mode: provided
+  intrinsics: null
+  intrinsics_resolution: null
+  allow_approximate: false
+vggt:
+  model_id: facebook/VGGT-Omega
+  image_size: 512
+  keyframe_stride: 6
+  dtype: bfloat16
+  window_size: 60
+  window_overlap: 12
+sam2:
+  model_id: facebook/sam2-hiera-large
+  prompt_confidence_threshold: 0.35
+  multimask_output: false
+perception:
+  detector_backend: sam3
+  sam3_model: facebook/sam3
+  target_classes:
+  - storage cabinet
+  - shelf
+  - hand
+  - shoes
+  - cooking pot
+  - bowl
+  - plate
+  - basket
+  - garbage bag
+  - trash bin
+  - clothes
+  - mug
+  - bottle
+  - stove
+  - sink
+  - kitchen counter
+  - toilet
+  - food container
+  sam3_default_threshold: 0.8
+  sam3_class_thresholds:
+    shoes: 0.5
+    hand: 0.4
+    cooking pot: 0.6
+    trash bin: 0.4
+    food container: 0.9
+  confidence_threshold: 0.45
+  iou_threshold: 0.45
+  duplicate_iou: 0.7
+  min_points_in_box: 25
+  track_max_gap: 3
+  reid_max_gap: 30
+  reid_appearance_threshold: 0.35
+  track_smoothing: 0.65
+  hand_contact_iou_threshold: 0.1
+  hand_contact_max_distance: 0.35
+memory:
+  matching:
+    room_pair_bare: true
+    singleton_requires_evidence: true
+    carried_requires_appearance: true
+    appearance_threshold: 0.25
+  ranking:
+    candidate_limit: 3
+    ambiguity_margin: 0.08
+    recency_half_life_hours: 24.0
+    w_vip: 1.0
+    w_act: 0.45
+    w_disp: 0.25
+    w_rec: 0.2
+    w_cue: 0.1
+    w_visual: 0.1
+  rooms:
+    enabled: true
+    zone_link_radius: 2.5
+    landmark_min_votes: 2
+    landmark_min_confidence: 0.8
+    landmark_distinct_instances: true
+    min_zone_keyframes: 3
+  gravity:
+    enabled: true
+    min_confidence: 0.5
+    assumed_camera_height: 1.4
+    ransac_iterations: 500
+live:
+  sample_fps: 2
+  max_duration_seconds: 3600
+  reconnect_interval_seconds: 3
+  reconnect_timeout_seconds: 30
+  buffer_capacity: 30
+  checkpoint_every: 5
+  keyframe:
+    enabled: true
+    min_sharpness: 15.0
+    min_brightness: 20.0
+    max_brightness: 245.0
+    min_visual_change: 0.008
+    max_interval_seconds: 2.0
+visualization:
+  log_video: true
+  video_stride: 1
+  point_radius: 0.01
+  camera_radius: 0.04

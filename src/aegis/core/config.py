@@ -166,6 +166,11 @@ class VggtConfig:
     dtype: str = "bfloat16"
     # Hard limit per reconstruction; long captures are split into segments.
     max_keyframes: int = 120
+    # Overlapping-window reconstruction for captures longer than max_keyframes.
+    # Windows share this many keyframes; their poses are aligned to the global
+    # frame with a 3D similarity fit on the shared cameras. 0 disables it.
+    window_size: int = 0
+    window_overlap: int = 16
     # Keep per-keyframe pointmaps after the detect stage (debugging only).
     keep_pointmaps: bool = False
 
@@ -666,12 +671,25 @@ class RuntimeConfig:
             max_keyframes=int(
                 vggt_raw.get("max_keyframes", vggt_defaults.max_keyframes)
             ),
+            window_size=int(vggt_raw.get("window_size", vggt_defaults.window_size)),
+            window_overlap=int(
+                vggt_raw.get("window_overlap", vggt_defaults.window_overlap)
+            ),
             keep_pointmaps=bool(
                 vggt_raw.get("keep_pointmaps", vggt_defaults.keep_pointmaps)
             ),
         )
         if vggt.keyframe_stride <= 0 or vggt.image_size <= 0 or vggt.max_keyframes < 2:
             raise ValueError("vggt settings must be positive (max_keyframes >= 2)")
+        if vggt.window_size < 0 or vggt.window_overlap < 2:
+            raise ValueError("vggt.window_size/overlap are out of valid range")
+        if vggt.window_size and (
+            vggt.window_size <= vggt.window_overlap + 2
+            or vggt.window_size > vggt.max_keyframes
+        ):
+            raise ValueError(
+                "vggt.window_size must exceed overlap+2 and fit max_keyframes"
+            )
         if vggt.dtype not in {"bfloat16", "float16", "float32"}:
             raise ValueError("vggt.dtype must be 'bfloat16', 'float16' or 'float32'")
 

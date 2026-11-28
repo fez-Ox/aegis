@@ -152,6 +152,21 @@ COMPACT = [
     "food container",
 ]
 
+# Extended set: adds common egocentric objects observed in the long-session
+# GT that the compact set cannot detect at all (laptop, headphones, phone).
+EXTENDED = COMPACT + [
+    "laptop",
+    "desktop computer",
+    "computer monitor",
+    "headphones",
+    "cellular phone",
+    "chair",
+    "table",
+    "book",
+    "keys",
+    "glasses",
+]
+
 SHOE_WORDS = [word for word in COMPACT if word != "shoes"] + [
     "shoe",
     "sneaker",
@@ -325,6 +340,14 @@ VARIANTS: dict[str, dict[str, Any]] = {
         "backend": "sam3",
         "model": "facebook/sam3",
         "prompts": COMPACT,
+        "threshold": 0.2,
+        "batched": True,
+        "nms": 0.5,
+    },
+    "sam3_extended": {
+        "backend": "sam3",
+        "model": "facebook/sam3",
+        "prompts": EXTENDED,
         "threshold": 0.2,
         "batched": True,
         "nms": 0.5,
