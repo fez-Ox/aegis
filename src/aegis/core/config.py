@@ -379,6 +379,11 @@ class RankingConfig:
     w_rec: float = 0.20
     w_cue: float = 0.10
     w_visual: float = 0.10
+    # Place-evidence priors for "where" answers. Both are generic: a state with
+    # no anchor or a carried object cannot ground a specific place.
+    anchorless_penalty: float = 0.0
+    carried_penalty: float = 0.0
+    require_anchor_for_direct: bool = False
 
     def __post_init__(self) -> None:
         if self.candidate_limit < 1:
@@ -401,6 +406,10 @@ class RankingConfig:
             raise ValueError(
                 "memory.ranking weights must satisfy w_vip > w_act > w_disp > w_rec"
             )
+        if not 0 <= self.anchorless_penalty <= 1:
+            raise ValueError("memory.ranking.anchorless_penalty must be in [0, 1]")
+        if not 0 <= self.carried_penalty <= 1:
+            raise ValueError("memory.ranking.carried_penalty must be in [0, 1]")
 
 
 @dataclass(frozen=True, slots=True)

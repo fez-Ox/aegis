@@ -1,0 +1,41 @@
+{
+  "_instructions": [
+    "Hand-labelled from visual inspection of frames t=5,15,30,45s of egolife_d1_s00 (group meeting around a checkered table). Independent of Aegis output.",
+    "expect_place is a coarse noun accepted in the candidate anchor/room text; null means no reliable place or object absent."
+  ],
+  "dataset_id": "stress_egolife_s00",
+  "queries": [
+    {
+      "id": "stress_bottle",
+      "item": "bottle",
+      "frame_t": 30,
+      "expect_place": ["table"],
+      "ambiguity_expected": false,
+      "note": "Red-cap water bottle on the checkered table in all sampled frames."
+    },
+    {
+      "id": "stress_trash_bin",
+      "item": "trash bin",
+      "frame_t": 30,
+      "expect_place": ["kitchen"],
+      "ambiguity_expected": false,
+      "note": "Trash bin beside the kitchen counter, right side of frame."
+    },
+    {
+      "id": "stress_toilet",
+      "item": "toilet",
+      "frame_t": 15,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No toilet visible in the meeting/kitchen area."
+    },
+    {
+      "id": "stress_cooking_pot",
+      "item": "cooking pot",
+      "frame_t": 45,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No cooking pot visible on the table or kitchen counter."
+    }
+  ]
+}

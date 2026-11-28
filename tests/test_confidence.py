@@ -109,6 +109,25 @@ def test_reference_time_uses_memory_timeline() -> None:
     assert rank_candidates(states, "mug")["resolution_mode"] == "direct"
 
 
+def test_calibration_is_monotonic_in_evidence_quality() -> None:
+    def score(**extra):
+        return calibrated_confidence(state(**extra), NOW)["score"]
+
+    assert score(confidence=0.9) > score(confidence=0.3)
+    assert score(relation_certain=True) > score(relation_certain=False)
+    assert score(observation_count=10) >= score(observation_count=1)
+    recent = score(last_seen_wallclock="2026-01-11T12:30:00+00:00")
+    old = score(last_seen_wallclock="2026-01-10T12:00:00+00:00")
+    assert recent > old
+    for value in (
+        score(),
+        score(confidence=0.0),
+        score(last_seen_wallclock="2020-01-01T00:00:00+00:00"),
+        score(relation_certain=False, observation_count=0),
+    ):
+        assert 0.0 <= value <= 1.0
+
+
 def test_config_validation() -> None:
     try:
         replace(ConfidenceConfig(), abstain_below=1.5)

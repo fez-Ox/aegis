@@ -38,35 +38,80 @@ def latest_states_from_graph(data: dict[str, Any]) -> dict[int, dict[str, Any]]:
             for state in data["latest_states"]
             if isinstance(state, dict) and state.get("instance_id") is not None
         }
-        # Session graphs have no wall-clock time, but their state runs carry
-        # observation counts, evidence and relative timestamps. Propagate those
-        # so answer-confidence calibration sees the same features as the
-        # durable home store; ranking fields are left untouched.
+        # Session graphs have no wall clock, but state runs and events carry
+        # everything the ranker needs (observation counts, first placement,
+        # movement history). Without this the salience ranker sees a vector of
+        # zeroes on the JSON path and silently stops ranking at all. Relative
+        # seconds are mapped onto a fixed epoch; only ages within the session
+        # are compared, so the choice of epoch is arbitrary.
+        from datetime import UTC, datetime, timedelta
+
+        epoch = datetime(2000, 1, 1, tzinfo=UTC)
+
+        def wallclock(seconds: float | None) -> str | None:
+            if seconds is None:
+                return None
+            try:
+                return (epoch + timedelta(seconds=float(seconds))).isoformat()
+            except (TypeError, ValueError, OverflowError):
+                return None
+
+        def run_time(run: dict[str, Any]) -> float:
+            moment = run.get("end_time")
+            if moment is None:
+                moment = run.get("start_time")
+            try:
+                return float(moment) if moment is not None else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
         runs: dict[int, list[dict[str, Any]]] = {}
         for run in data.get("state_runs", []) or []:
             if isinstance(run, dict) and run.get("instance_id") is not None:
                 runs.setdefault(int(run["instance_id"]), []).append(run)
-        references: list[float] = []
-        for group in runs.values():
-            for run in group:
-                moment = run.get("end_time", run.get("start_time"))
+        movements: dict[int, list[float]] = {}
+        placements: dict[int, int] = {}
+        for event in data.get("events", []) or []:
+            if not isinstance(event, dict) or event.get("instance_id") is None:
+                continue
+            instance_id = int(event["instance_id"])
+            if event.get("event_type") in {
+                "placement",
+                "anchor_change",
+                "moved_while_unobserved",
+            }:
+                moment = event.get("end_time")
+                if moment is None:
+                    moment = event.get("start_time")
                 if moment is not None:
-                    references.append(float(moment))
+                    try:
+                        movements.setdefault(instance_id, []).append(float(moment))
+                    except (TypeError, ValueError):
+                        pass
+            if event.get("event_type") == "placement":
+                placements[instance_id] = placements.get(instance_id, 0) + 1
+        references = [run_time(run) for group in runs.values() for run in group]
         reference = max(references, default=0.0)
+
         for instance_id, state in latest.items():
-            for run in sorted(
-                runs.get(instance_id, []),
-                key=lambda item: float(
-                    item.get("end_time", item.get("start_time")) or 0.0
-                ),
-            ):
-                if run.get("observation_count") is not None:
-                    state["observation_count"] = int(run["observation_count"])
-                if run.get("evidence"):
+            ordered = sorted(runs.get(instance_id, []), key=run_time)
+            if ordered:
+                first, last = ordered[0], ordered[-1]
+                if state.get("observation_count") is None:
+                    state["observation_count"] = int(last.get("observation_count") or 0)
+                if last.get("evidence"):
                     state.setdefault("evidence_id", 1)
-                moment = run.get("end_time", run.get("start_time"))
-                if moment is not None:
-                    state["last_seen_relative"] = float(moment)
+                if state.get("last_seen_wallclock") is None:
+                    state["last_seen_wallclock"] = wallclock(run_time(last))
+                    state["last_seen_relative"] = run_time(last)
+                if state.get("first_room_id") is None:
+                    state["first_room_id"] = first.get("room_id")
+                if state.get("first_anchor_id") is None:
+                    state["first_anchor_id"] = first.get("anchor_id")
+            if state.get("last_moved_wallclock") is None and movements.get(instance_id):
+                state["last_moved_wallclock"] = wallclock(max(movements[instance_id]))
+            if state.get("placement_count") is None:
+                state["placement_count"] = placements.get(instance_id, 0)
             state["reference_relative"] = reference
         return latest
     timeline = data.get("timeline", {}) or {}

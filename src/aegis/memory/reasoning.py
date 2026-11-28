@@ -607,6 +607,14 @@ def rank_candidates(
                 + cfg.w_visual * visual
             )
 
+        # Place-evidence priors: a where-answer grounded only in a room, or in
+        # a hand, cannot name a specific anchor as confidently as a placed
+        # instance. Multiplicative, so they never inflate a weak candidate.
+        if state.get("anchor_id") is None and cfg.anchorless_penalty:
+            total *= 1.0 - cfg.anchorless_penalty
+        if state.get("relation") == "carried_by_user" and cfg.carried_penalty:
+            total *= 1.0 - cfg.carried_penalty
+
         calibrated = calibrated_confidence(state, moment, confidence_config)
         scored.append(
             {
@@ -697,6 +705,16 @@ def rank_candidates(
             reason = "multiple_active_instances_same_class"
 
     abstain_reason = candidates[0]["abstain_reason"] if candidates else None
+    has_anchored = any(state.get("anchor_id") is not None for state in hits)
+    if (
+        cfg.require_anchor_for_direct
+        and has_anchored
+        and candidates
+        and candidates[0]["anchor_id"] is None
+    ):
+        # A room-only or carried state cannot answer "where exactly?".
+        is_ambiguous = True
+        reason = "no_anchored_place"
     if not candidates:
         resolution = "not_found"
     elif is_ambiguous:

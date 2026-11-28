@@ -116,7 +116,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
-    bank = json.loads(args.bank.read_text())["queries"]
+    document = json.loads(args.bank.read_text())
+    bank = document["queries"]
+    if "dataset_id" in document:
+        for query in bank:
+            query.setdefault("dataset_id", document["dataset_id"])
     graphs: dict[str, list[dict[str, Any]]] = {}
     for dataset_id in sorted({query["dataset_id"] for query in bank}):
         graph = json.loads(
