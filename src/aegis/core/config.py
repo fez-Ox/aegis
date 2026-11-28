@@ -404,6 +404,50 @@ class RankingConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ConfidenceConfig:
+    """Generic confidence calibration and abstention for answer ranking.
+
+    The final score is raw detection confidence multiplied by penalising
+    identity, support and recency factors. Neutral factors are exactly 1.0, so
+    they cannot inflate a weak detection; any factor of 0 vetoes the answer.
+    Weights are category-independent: no per-object or per-dataset settings.
+    """
+
+    w_identity: float = 0.2
+    w_support: float = 0.2
+    w_recency: float = 0.2
+    # A candidate with fewer observations than this is only partially trusted.
+    support_saturation: float = 3.0
+    # Half-life (hours) used only by the confidence recency factor.
+    confidence_half_life_hours: float = 24.0
+    # Answers below this calibrated confidence abstain instead of guessing.
+    abstain_below: float = 0.35
+    # Older evidence than this cannot support a direct answer.
+    stale_after_hours: float = 168.0
+    # An uncertain relation cannot ground a direct answer: measured on the
+    # frozen 17-query EgoLife bank, this cut wrong confident answers 5 -> 2
+    # without regressing any ask-day slice.
+    uncertain_identity: float = 0.0
+
+    def __post_init__(self) -> None:
+        weights = (self.w_identity, self.w_support, self.w_recency)
+        if any(not 0 <= weight <= 1 for weight in weights):
+            raise ValueError("memory.confidence weights must be in [0, 1]")
+        if self.support_saturation <= 0:
+            raise ValueError("memory.confidence.support_saturation must be positive")
+        if self.confidence_half_life_hours <= 0:
+            raise ValueError(
+                "memory.confidence.confidence_half_life_hours must be positive"
+            )
+        if not 0 <= self.abstain_below <= 1:
+            raise ValueError("memory.confidence.abstain_below must be in [0, 1]")
+        if self.stale_after_hours <= 0:
+            raise ValueError("memory.confidence.stale_after_hours must be positive")
+        if not 0 <= self.uncertain_identity <= 1:
+            raise ValueError("memory.confidence.uncertain_identity must be in [0, 1]")
+
+
+@dataclass(frozen=True, slots=True)
 class EvidenceConfig:
     """Object-only evidence crops kept after raw frames are purged.
 
@@ -459,6 +503,7 @@ class MemoryConfig:
     gravity: GravityConfig = field(default_factory=GravityConfig)
     build: MemoryBuildConfig = field(default_factory=MemoryBuildConfig)
     ranking: RankingConfig = field(default_factory=RankingConfig)
+    confidence: ConfidenceConfig = field(default_factory=ConfidenceConfig)
     evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
     retention: RetentionConfig = field(default_factory=RetentionConfig)
     # Durable per-home memory (laptop side): <store_root>/<home_id>/memory.db
@@ -875,6 +920,11 @@ class RuntimeConfig:
                 ),
                 ranking=_section(
                     RankingConfig, memory_raw.get("ranking"), "memory.ranking"
+                ),
+                confidence=_section(
+                    ConfidenceConfig,
+                    memory_raw.get("confidence"),
+                    "memory.confidence",
                 ),
                 evidence=_section(
                     EvidenceConfig, memory_raw.get("evidence"), "memory.evidence"

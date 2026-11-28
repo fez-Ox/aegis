@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from aegis.memory.reasoning import calibrated_confidence, reference_time
+
 from .dictionary import DictionaryIndex
 
 IN_HAND = "carried_by_user"
@@ -207,6 +209,19 @@ class AnswerEngine:
             reverse=True,
         )
         primary = candidates[0]
+        assessment = calibrated_confidence(primary, reference_time(states))
+        if assessment["reason"] is not None:
+            reason = assessment["reason"]
+            return self._abstain(
+                q,
+                Intent.LOCATE,
+                reason,
+                {
+                    "never_observed": "I have no reliable memory of that item.",
+                    "stale": "I only have old information about that item.",
+                    "low_confidence": "I'm not confident enough to say where that is.",
+                }.get(reason, "I'm not confident enough to say where that is."),
+            )
         answer = self._compose(slots.item, primary)
         evidence = [
             {
@@ -230,7 +245,7 @@ class AnswerEngine:
             anchor_label=primary.get("anchor_label"),
             room_label=primary.get("room_label"),
             relation=primary.get("relation"),
-            confidence=primary.get("confidence"),
+            confidence=assessment["score"],
             last_seen_timestamp=primary.get("last_seen_timestamp"),
             last_seen_wallclock=primary.get("last_seen_wallclock"),
             other_instances=[str(s.get("label")) for s in candidates[1:]],

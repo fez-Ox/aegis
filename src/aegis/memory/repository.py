@@ -33,11 +33,42 @@ def latest_states_from_graph(data: dict[str, Any]) -> dict[int, dict[str, Any]]:
     """Last-known state per instance for a v1 or v2 graph."""
 
     if isinstance(data.get("latest_states"), list):
-        return {
-            int(state["instance_id"]): state
+        latest = {
+            int(state["instance_id"]): dict(state)
             for state in data["latest_states"]
             if isinstance(state, dict) and state.get("instance_id") is not None
         }
+        # Session graphs have no wall-clock time, but their state runs carry
+        # observation counts, evidence and relative timestamps. Propagate those
+        # so answer-confidence calibration sees the same features as the
+        # durable home store; ranking fields are left untouched.
+        runs: dict[int, list[dict[str, Any]]] = {}
+        for run in data.get("state_runs", []) or []:
+            if isinstance(run, dict) and run.get("instance_id") is not None:
+                runs.setdefault(int(run["instance_id"]), []).append(run)
+        references: list[float] = []
+        for group in runs.values():
+            for run in group:
+                moment = run.get("end_time", run.get("start_time"))
+                if moment is not None:
+                    references.append(float(moment))
+        reference = max(references, default=0.0)
+        for instance_id, state in latest.items():
+            for run in sorted(
+                runs.get(instance_id, []),
+                key=lambda item: float(
+                    item.get("end_time", item.get("start_time")) or 0.0
+                ),
+            ):
+                if run.get("observation_count") is not None:
+                    state["observation_count"] = int(run["observation_count"])
+                if run.get("evidence"):
+                    state.setdefault("evidence_id", 1)
+                moment = run.get("end_time", run.get("start_time"))
+                if moment is not None:
+                    state["last_seen_relative"] = float(moment)
+            state["reference_relative"] = reference
+        return latest
     timeline = data.get("timeline", {}) or {}
     try:
         frames = sorted(timeline, key=int)

@@ -1,0 +1,144 @@
+{
+  "_instructions": [
+    "Hand-labelled from visual inspection of frames extracted from each demo video at the cited timestamp; not derived from Aegis output.",
+    "expect_place is a coarse place noun accepted anywhere in the candidate anchor/room/relation text; null means the object is in hand or has no reliable place, so a single direct place answer is not acceptable.",
+    "ambiguity_expected is true when the frame shows several instances of the class or several distinct placements."
+  ],
+  "queries": [
+    {
+      "id": "demo01_shoes",
+      "dataset_id": "demo01_sam3",
+      "item": "shoes",
+      "frame_t": 37.6,
+      "expect_place": ["cabinet"],
+      "ambiguity_expected": true,
+      "note": "Hand opening wooden shoe cabinet; many shoes on several shelves."
+    },
+    {
+      "id": "demo01_container",
+      "dataset_id": "demo01_sam3",
+      "item": "food container",
+      "frame_t": 37.6,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No food container visible in the shoe-cabinet frame."
+    },
+    {
+      "id": "demo01_toilet",
+      "dataset_id": "demo01_sam3",
+      "item": "toilet",
+      "frame_t": 37.6,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No toilet in this scene."
+    },
+    {
+      "id": "pots_cooking_pot",
+      "dataset_id": "demo_pots_sam3",
+      "item": "cooking pot",
+      "frame_t": 74.7,
+      "expect_place": ["cabinet"],
+      "ambiguity_expected": true,
+      "note": "Glass cabinet with several pots and pans on two shelves."
+    },
+    {
+      "id": "pots_plate",
+      "dataset_id": "demo_pots_sam3",
+      "item": "plate",
+      "frame_t": 74.7,
+      "expect_place": ["cabinet"],
+      "ambiguity_expected": false,
+      "note": "Plates stacked inside the same glass cabinet."
+    },
+    {
+      "id": "pots_toilet",
+      "dataset_id": "demo_pots_sam3",
+      "item": "toilet",
+      "frame_t": 74.7,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No toilet in the dish-rack scene."
+    },
+    {
+      "id": "demo03_pot",
+      "dataset_id": "demo03_sam3",
+      "item": "cooking pot",
+      "frame_t": 92.0,
+      "expect_place": ["kitchen"],
+      "ambiguity_expected": false,
+      "note": "Hand holding a pot in front of an open cabinet; class is in the kitchen."
+    },
+    {
+      "id": "demo03_bowl",
+      "dataset_id": "demo03_sam3",
+      "item": "bowl",
+      "frame_t": 92.0,
+      "expect_place": ["cabinet"],
+      "ambiguity_expected": true,
+      "note": "Bowls are in the open cabinet/fridge; several visible."
+    },
+    {
+      "id": "demo03_toilet",
+      "dataset_id": "demo03_sam3",
+      "item": "toilet",
+      "frame_t": 92.0,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No toilet in the kitchen scene."
+    },
+    {
+      "id": "demo04_bag",
+      "dataset_id": "demo04_sam3",
+      "item": "garbage bag",
+      "frame_t": 40.4,
+      "expect_place": null,
+      "ambiguity_expected": true,
+      "note": "Two hands tying a black bag; it is being carried, not placed."
+    },
+    {
+      "id": "demo04_bottle",
+      "dataset_id": "demo04_sam3",
+      "item": "bottle",
+      "frame_t": 40.4,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No bottle visible in the bag-tying frame."
+    },
+    {
+      "id": "demo04_shoes",
+      "dataset_id": "demo04_sam3",
+      "item": "shoes",
+      "frame_t": 40.4,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No shoes visible in the bag-tying frame."
+    },
+    {
+      "id": "demo05_clothes",
+      "dataset_id": "demo05_sam3",
+      "item": "clothes",
+      "frame_t": 141.3,
+      "expect_place": ["kitchen"],
+      "ambiguity_expected": true,
+      "note": "Two laundry baskets full of clothes beside a washing machine."
+    },
+    {
+      "id": "demo05_basket",
+      "dataset_id": "demo05_sam3",
+      "item": "basket",
+      "frame_t": 141.3,
+      "expect_place": ["kitchen"],
+      "ambiguity_expected": false,
+      "note": "Laundry baskets on the floor of this utility/kitchen area."
+    },
+    {
+      "id": "demo05_toilet",
+      "dataset_id": "demo05_sam3",
+      "item": "toilet",
+      "frame_t": 141.3,
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No toilet in the laundry scene."
+    }
+  ]
+}

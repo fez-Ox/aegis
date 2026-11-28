@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar
 
-from aegis.core.config import RankingConfig
+from aegis.core.config import ConfidenceConfig, RankingConfig
 from aegis.core.timeutil import parse_iso, to_utc_iso, utc_now
 from aegis.core.vocabulary import Vocabulary, default_vocabulary
 
@@ -391,6 +391,116 @@ def _recency(value: Any, moment: datetime, half_life_hours: float) -> float:
     return 0.5 ** (age_hours / half_life_hours)
 
 
+def reference_time(states: Sequence[dict[str, Any]]) -> datetime:
+    """Latest evidence time, so historical datasets are not 'stale' by default.
+
+    An explicit query time always wins; this is only the fallback when the
+    caller asks "now" against a memory captured days or weeks ago.
+    """
+    stamps: list[datetime] = []
+    for state in states:
+        seen = state.get("last_seen_wallclock")
+        if not seen:
+            continue
+        try:
+            parsed = parse_iso(str(seen))
+        except ValueError:
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        stamps.append(parsed)
+    return max(stamps) if stamps else utc_now()
+
+
+def calibrated_confidence(
+    state: dict[str, Any],
+    moment: datetime,
+    config: ConfidenceConfig | None = None,
+) -> dict[str, Any]:
+    """Turn raw detection confidence into an evidence-aware answer score.
+
+    A weighted geometric mean of detection, identity, support and recency keeps
+    the result in [0, 1] and lets any weak factor veto a direct answer. The
+    returned ``reason`` distinguishes never-observed, stale and low-confidence
+    states instead of collapsing them into one "not found".
+    """
+    cfg = config or ConfidenceConfig()
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+
+    def unit(value: Any) -> float:
+        try:
+            return min(1.0, max(0.0, float(value)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    # Missing fields are neutral, not punitive: graph-only states legitimately
+    # lack wall-clock time and evidence ids, while durable store states have
+    # them. Only present evidence can lower the score.
+    raw_confidence = state.get("confidence")
+    detection = 1.0 if raw_confidence is None else unit(raw_confidence)
+    identity = (
+        1.0 if state.get("relation_certain") is not False else cfg.uncertain_identity
+    )
+    if "observation_count" in state:
+        try:
+            observations = max(0, int(state.get("observation_count") or 0))
+        except (TypeError, ValueError):
+            observations = 1
+    else:
+        observations = 1
+    support = 1.0 if observations >= 1 else cfg.uncertain_identity
+
+    seen = state.get("last_seen_wallclock")
+    age_hours: float | None = None
+    if seen:
+        try:
+            age_hours = max(
+                0.0, (moment - parse_iso(str(seen))).total_seconds() / 3600.0
+            )
+        except ValueError:
+            age_hours = None
+    elif "last_seen_relative" in state:
+        # Session graphs have no wall clock; their relative times are measured
+        # against the newest evidence in the same session.
+        try:
+            seen_relative = float(state["last_seen_relative"])
+            reference = float(state.get("reference_relative", seen_relative))
+            age_hours = max(0.0, (reference - seen_relative) / 3600.0)
+        except (TypeError, ValueError):
+            age_hours = None
+    recency = (
+        1.0
+        if age_hours is None
+        else 0.5 ** (age_hours / cfg.confidence_half_life_hours)
+    )
+
+    # Neutral factors are 1.0, so a weak detection is never inflated by
+    # uninformative identity/support/recency fields.
+    score = (
+        detection
+        * identity**cfg.w_identity
+        * support**cfg.w_support
+        * recency**cfg.w_recency
+    )
+
+    reason: str | None = None
+    if age_hours is not None and age_hours > cfg.stale_after_hours:
+        reason = "stale"
+    elif score < cfg.abstain_below:
+        reason = "low_confidence"
+
+    return {
+        "score": round(float(score), 6),
+        "reason": reason,
+        "detection": round(detection, 6),
+        "identity": round(identity, 6),
+        "support": round(support, 6),
+        "recency": round(recency, 6),
+        "age_hours": None if age_hours is None else round(age_hours, 3),
+    }
+
+
 def _in_window(value: Any, cues: QueryCues | None) -> bool:
     if not cues or not cues.window_start or not cues.window_end or not value:
         return False
@@ -407,6 +517,7 @@ def rank_candidates(
     cues: QueryCues | None = None,
     config: RankingConfig | None = None,
     personal_ids: Collection[int] = (),
+    confidence_config: ConfidenceConfig | None = None,
 ) -> dict[str, Any]:
     """Rank same-class candidates and decide whether to answer or ask.
 
@@ -418,7 +529,7 @@ def rank_candidates(
     if mode not in {"recency_only", "salience", "full"}:
         raise ValueError("ranker mode must be recency_only, salience, or full")
     cfg = config or RankingConfig()
-    moment = now or utc_now()
+    moment = now or reference_time(states)
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=UTC)
 
@@ -496,6 +607,7 @@ def rank_candidates(
                 + cfg.w_visual * visual
             )
 
+        calibrated = calibrated_confidence(state, moment, confidence_config)
         scored.append(
             {
                 "instance_id": state.get("instance_id"),
@@ -510,7 +622,20 @@ def rank_candidates(
                 "anchor_label": state.get("anchor_label"),
                 "relation": state.get("relation"),
                 "relation_certain": state.get("relation_certain"),
-                "confidence": state.get("confidence"),
+                "confidence": calibrated["score"],
+                "confidence_factors": {
+                    key: calibrated[key]
+                    for key in (
+                        "detection",
+                        "identity",
+                        "support",
+                        "recency",
+                        "age_hours",
+                    )
+                },
+                "abstain_reason": calibrated["reason"],
+                "last_seen_relative": state.get("last_seen_relative"),
+                "reference_relative": state.get("reference_relative"),
                 "last_seen_at": state.get("last_seen_wallclock"),
                 "last_moved_at": state.get("last_moved_wallclock"),
                 "placement_count": int(state.get("placement_count") or 0),
@@ -571,10 +696,15 @@ def rank_candidates(
             is_ambiguous = True
             reason = "multiple_active_instances_same_class"
 
+    abstain_reason = candidates[0]["abstain_reason"] if candidates else None
     if not candidates:
         resolution = "not_found"
     elif is_ambiguous:
+        # Recognition over recall: when several real instances compete, show
+        # their photos instead of hiding them behind a generic abstention.
         resolution = "disambiguate"
+    elif abstain_reason is not None:
+        resolution = "abstain"
     else:
         resolution = "direct"
     return {
@@ -582,6 +712,7 @@ def rank_candidates(
         "resolution_mode": resolution,
         "is_ambiguous": is_ambiguous,
         "ambiguity_reason": reason,
+        "abstain_reason": abstain_reason,
         "candidates": candidates,
     }
 

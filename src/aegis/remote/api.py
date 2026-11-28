@@ -166,6 +166,7 @@ class MemoryQueryResponse(BaseModel):
     resolution_mode: str | None = None
     is_ambiguous: bool = False
     ambiguity_reason: str | None = None
+    abstain_reason: str | None = None
     candidates: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -749,6 +750,23 @@ def query_memory(
         personal_ids=personal_ids,
     )
     candidates = ranking["candidates"]
+    if ranking["resolution_mode"] == "abstain":
+        reason = ranking["abstain_reason"] or "low_confidence"
+        summary = {
+            "never_observed": "I have no reliable memory of that item.",
+            "stale": "I only have old information about that item.",
+            "low_confidence": "I'm not confident enough to say where that is.",
+        }.get(reason, "I'm not confident enough to say where that is.")
+        return MemoryQueryResponse(
+            query=item,
+            found=False,
+            item=item,
+            location_summary=summary,
+            explanation=summary,
+            resolution_mode="abstain",
+            abstain_reason=reason,
+            candidates=candidates,
+        )
     primary_id = candidates[0]["instance_id"] if candidates else None
     primary = next(
         (m for m in matches if m.get("instance_id") == primary_id), matches[0]
