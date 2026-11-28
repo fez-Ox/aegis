@@ -1,0 +1,43 @@
+{
+  "_instructions": [
+    "Derived once from the frozen EgoLife bank (egolife_queries.json) and its caption notes; no Aegis output used.",
+    "expect_tokens are the object noun and coarse place noun stated in the caption. A correct activity answer must mention the object; place is reported separately."
+  ],
+  "queries": [
+    {
+      "id": "mug_d3_ask_d4",
+      "item": "mug",
+      "at": "2026-01-07T12:02:07Z",
+      "expect_tokens": ["mug"],
+      "expect_place": ["table", "desk"]
+    },
+    {
+      "id": "mug_d3_ask_d5",
+      "item": "mug",
+      "at": "2026-01-07T12:02:07Z",
+      "expect_tokens": ["mug"],
+      "expect_place": ["table", "desk"]
+    },
+    {
+      "id": "bag_d3_ask_d5",
+      "item": "garbage bag",
+      "at": "2026-01-07T12:05:45Z",
+      "expect_tokens": ["garbage bag", "bag"],
+      "expect_place": ["sofa"]
+    },
+    {
+      "id": "bag_d3_ask_d6",
+      "item": "garbage bag",
+      "at": "2026-01-07T12:05:45Z",
+      "expect_tokens": ["garbage bag", "bag"],
+      "expect_place": ["sofa"]
+    },
+    {
+      "id": "bag_d3_ask_d7",
+      "item": "garbage bag",
+      "at": "2026-01-07T12:05:45Z",
+      "expect_tokens": ["garbage bag", "bag"],
+      "expect_place": ["sofa"]
+    }
+  ]
+}

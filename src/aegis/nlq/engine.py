@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import timedelta
 from enum import Enum
 from typing import Any
 
-from aegis.core.timeutil import parse_iso, time_ago
+from aegis.core.timeutil import parse_iso, time_ago, to_utc_iso
 from aegis.core.vocabulary import default_vocabulary
-from aegis.memory.reasoning import calibrated_confidence, reference_time
+from aegis.memory.reasoning import (
+    calibrated_confidence,
+    parse_query_cues,
+    reference_time,
+)
 
 from .dictionary import DictionaryIndex
 
@@ -80,8 +85,15 @@ def memory_view_from_repo(
 ) -> dict[str, Any]:
     """Adapt a `MemoryRepository` to the engine's memory-view contract."""
     states = repo.latest_states() if states is None else states
+    activities: list[dict[str, Any]] = []
+    if hasattr(repo, "store") and hasattr(repo.store, "activities"):
+        try:
+            activities = [dict(row) for row in repo.store.activities()]
+        except (ValueError, OSError, KeyError):
+            activities = []
     return {
         "as_of": as_of,
+        "activities": activities,
         "dataset_id": getattr(repo, "dataset_id", None),
         "latest_objects": list(states.values())
         if isinstance(states, dict)
@@ -143,17 +155,96 @@ class AnswerEngine:
         if intent is Intent.TEMPORAL:
             return self._answer_temporal(q, memory)
         if intent is Intent.ACTIVITY:
-            return self._abstain(
-                q,
-                intent,
-                "activity_handler_not_implemented",
-                "I don't track activities yet. Ask me where something is.",
-            )
+            return self._answer_activity(q, memory)
         if intent is Intent.UNKNOWN:
             return self._abstain(
                 q, intent, "unknown_intent", "I don't understand that question yet."
             )
         return self._answer_locate(q, memory)
+
+    # -- activity answers --------------------------------------------------
+    def _answer_activity(self, q: str, memory: dict[str, Any]) -> AskResult:
+        """Summarise stored room stays and object changes in a time window."""
+        activities = [
+            activity
+            for activity in memory.get("activities", [])
+            if isinstance(activity, dict)
+        ]
+        if not activities:
+            return self._abstain(
+                q,
+                Intent.ACTIVITY,
+                "no_activity_history",
+                "I don't have an activity history for this home yet.",
+            )
+
+        snapshot = memory.get("as_of")
+        try:
+            cue_now = parse_iso(str(snapshot)) if snapshot else None
+        except ValueError:
+            cue_now = None
+        cues = parse_query_cues(q, now=cue_now)
+        focus = memory.get("focus_time") or memory.get("as_of")
+        start, end = cues.window_start, cues.window_end
+        if focus:
+            try:
+                moment = parse_iso(str(focus))
+                start = to_utc_iso(moment - timedelta(minutes=10))
+                end = to_utc_iso(moment + timedelta(minutes=10))
+            except ValueError:
+                start = end = None
+
+        selected = []
+        for activity in activities:
+            stamp = activity.get("start_at")
+            if not stamp:
+                continue
+            if start and str(stamp) < str(start):
+                continue
+            if end and str(stamp) > str(end):
+                continue
+            selected.append(activity)
+        if not selected:
+            return self._abstain(
+                q,
+                Intent.ACTIVITY,
+                "no_activities_in_window",
+                "I don't have any recorded activity for that time.",
+            )
+
+        selected.sort(
+            key=lambda item: (
+                str(item.get("start_at") or ""),
+                str(item.get("activity_id") or ""),
+            )
+        )
+        clauses = []
+        for activity in selected[:3]:
+            room = activity.get("room_label") or "Home"
+            summary = str(activity.get("summary") or "")
+            # Drop "HH:MM–HH:MM Room:" without splitting on the colon inside
+            # the clock range itself.
+            summary = re.sub(r"^\d{2}:\d{2}\s*[–-]\s*\d{2}:\d{2}\s+", "", summary)
+            summary = re.sub(r"^[^:]+:\s*", "", summary, count=1).strip()
+            summary = re.sub(r"\s+", " ", summary)
+            clauses.append(f"in {room}, {summary}" if summary else f"in {room}")
+        answer = self._cap("You were " + "; ".join(clauses) + ".")
+        return AskResult(
+            question=q,
+            intent=Intent.ACTIVITY.value,
+            status="answered",
+            answer=answer,
+            evidence=[
+                {
+                    "observation_id": f"activity:{item.get('activity_id')}",
+                    "description": str(item.get("summary") or ""),
+                    "observed_at": item.get("start_at"),
+                    "room_label": item.get("room_label"),
+                }
+                for item in selected[:3]
+            ],
+            dataset_id=memory.get("dataset_id"),
+        )
 
     # -- temporal answers --------------------------------------------------
     def _answer_temporal(self, q: str, memory: dict[str, Any]) -> AskResult:

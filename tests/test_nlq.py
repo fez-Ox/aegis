@@ -69,9 +69,9 @@ def test_temporal_handler_abstains_when_no_timestamp(engine, memory):
     assert when.abstained and when.abstain_reason == "no_timestamp"
 
 
-def test_activity_intent_remains_an_honest_stub(engine, memory):
+def test_activity_intent_abstains_without_history(engine, memory):
     what = engine.ask("what did I do this morning", memory)
-    assert what.abstained and what.abstain_reason == "activity_handler_not_implemented"
+    assert what.abstained and what.abstain_reason == "no_activity_history"
 
 
 def test_ask_endpoint_answers_and_abstains():
