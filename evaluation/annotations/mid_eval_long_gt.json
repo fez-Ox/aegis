@@ -1,0 +1,51 @@
+{
+  "_instructions": [
+    "Hand-labelled by visual inspection of contact sheets extracted from mid_eval_long.mp4 (three concatenated A1_JAKE DAY2 clips, 668.6s). No Aegis output used.",
+    "Intervals are seconds from the start of the concatenated video. Place nouns are coarse and vocabulary-compatible."
+  ],
+  "dataset_id": "mid_eval_long",
+  "duration": 668.6,
+  "rooms": [
+    {"name": "Living Room", "intervals": [[0.0, 195.0], [334.0, 555.0]]},
+    {"name": "Kitchen", "intervals": [[195.0, 334.0]]},
+    {"name": "Bedroom", "intervals": [[555.0, 668.6]]}
+  ],
+  "transitions": [{"t": 195.0}, {"t": 334.0}, {"t": 555.0}],
+  "queries": [
+    {
+      "id": "mid_bottle_table",
+      "item": "bottle",
+      "expect_place": ["table", "dining table"],
+      "ambiguity_expected": false,
+      "note": "Red-cap water bottle on the checkered meeting table."
+    },
+    {
+      "id": "mid_laptop_office",
+      "item": "laptop",
+      "expect_place": ["desk", "bedroom"],
+      "ambiguity_expected": false,
+      "note": "Laptop on the desk in the final bedroom/office segment."
+    },
+    {
+      "id": "mid_bowl_kitchen",
+      "item": "bowl",
+      "expect_place": ["kitchen", "counter", "sink"],
+      "ambiguity_expected": true,
+      "note": "Dishes and bowls on the kitchen counter around 300s."
+    },
+    {
+      "id": "mid_toilet_absent",
+      "item": "toilet",
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No toilet visible anywhere in the sampled frames."
+    },
+    {
+      "id": "mid_shoes_absent",
+      "item": "shoes",
+      "expect_place": null,
+      "ambiguity_expected": false,
+      "note": "No shoes visible in the sampled frames."
+    }
+  ]
+}
