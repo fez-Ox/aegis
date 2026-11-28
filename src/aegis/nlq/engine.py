@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from aegis.core.timeutil import parse_iso, time_ago
+from aegis.core.vocabulary import default_vocabulary
 from aegis.memory.reasoning import calibrated_confidence, reference_time
 
 from .dictionary import DictionaryIndex
@@ -70,10 +72,16 @@ class AskResult:
         }
 
 
-def memory_view_from_repo(repo: Any) -> dict[str, Any]:
+def memory_view_from_repo(
+    repo: Any,
+    states: Any = None,
+    focus_time: str | None = None,
+    as_of: str | None = None,
+) -> dict[str, Any]:
     """Adapt a `MemoryRepository` to the engine's memory-view contract."""
-    states = repo.latest_states()
+    states = repo.latest_states() if states is None else states
     return {
+        "as_of": as_of,
         "dataset_id": getattr(repo, "dataset_id", None),
         "latest_objects": list(states.values())
         if isinstance(states, dict)
@@ -82,6 +90,7 @@ def memory_view_from_repo(repo: Any) -> dict[str, Any]:
         "rooms": repo.rooms(),
         "events": repo.events(),
         "timeline_frames": repo.keyframe_count(),
+        "focus_time": focus_time,
     }
 
 
@@ -105,6 +114,11 @@ def memory_view_from_graph(
 class AnswerEngine:
     def __init__(self, dictionary: DictionaryIndex | None = None) -> None:
         self.dictionary = dictionary or DictionaryIndex.seeded()
+        self.vocabulary = default_vocabulary()
+
+    def _canonical(self, item: str | None) -> str | None:
+        """Map dictionary words ("cup") onto stored canonicals ("mug")."""
+        return self.vocabulary.canonical(item) if item else None
 
     def classify_intent(self, question: str) -> Intent:
         q = question.lower()
@@ -127,12 +141,7 @@ class AnswerEngine:
             )
         intent = self.classify_intent(q)
         if intent is Intent.TEMPORAL:
-            return self._abstain(
-                q,
-                intent,
-                "temporal_handler_not_implemented",
-                "I can't answer time questions about this memory yet. Ask me where something is.",
-            )
+            return self._answer_temporal(q, memory)
         if intent is Intent.ACTIVITY:
             return self._abstain(
                 q,
@@ -146,10 +155,144 @@ class AnswerEngine:
             )
         return self._answer_locate(q, memory)
 
+    # -- temporal answers --------------------------------------------------
+    def _answer_temporal(self, q: str, memory: dict[str, Any]) -> AskResult:
+        """Answer "when did I last see X" from the state's own wall clock.
+
+        An optional ``focus_time`` in the memory view turns the same handler
+        into a T4 oracle lookup: the closest dated state within the tolerance
+        is used, and anything further away is an honest abstention.
+        """
+        slots = self.dictionary.lookup_item(q)
+        item = self._canonical(slots.item)
+        if not item:
+            suggestions = self.dictionary.suggestions_for(slots.item_raw)
+            return self._abstain(
+                q,
+                Intent.TEMPORAL,
+                "item_not_in_dictionary",
+                "I don't know that word. Try: " + ", ".join(suggestions)
+                if suggestions
+                else "I don't know that word. Try another object name.",
+                suggestions=suggestions,
+            )
+        states = [
+            state
+            for state in memory.get("latest_objects", [])
+            if isinstance(state, dict)
+            and (
+                state.get("canonical")
+                or self.dictionary.canonical_of(state.get("label", ""))
+            )
+            == item
+        ]
+        if not states:
+            return self._abstain(
+                q,
+                Intent.TEMPORAL,
+                "not_observed_in_memory",
+                f"I haven't seen your {item}.",
+            )
+        as_of_raw = memory.get("as_of")
+        as_of_moment = None
+        if as_of_raw:
+            try:
+                as_of_moment = parse_iso(str(as_of_raw))
+            except ValueError:
+                as_of_moment = None
+        if as_of_moment is not None:
+            # A run that ended after the question time is future evidence;
+            # "last saw" must not peek past the snapshot the caller asked for.
+            dated = [
+                state
+                for state in states
+                if state.get("last_seen_wallclock")
+                and parse_iso(str(state["last_seen_wallclock"])) <= as_of_moment
+            ]
+        else:
+            dated = [state for state in states if state.get("last_seen_wallclock")]
+        if not dated:
+            return self._abstain(
+                q,
+                Intent.TEMPORAL,
+                "no_timestamp",
+                f"I remember your {item}, but not when.",
+            )
+
+        focus_raw = memory.get("focus_time")
+        if focus_raw:
+            try:
+                focus = parse_iso(str(focus_raw))
+            except ValueError:
+                return self._abstain(
+                    q,
+                    Intent.TEMPORAL,
+                    "invalid_focus_time",
+                    "I couldn't read that time.",
+                )
+
+            def episode_distance(state: dict[str, Any]) -> float:
+                end = parse_iso(str(state["last_seen_wallclock"]))
+                start_raw = state.get("run_start_wallclock")
+                start = parse_iso(str(start_raw)) if start_raw else end
+                if start <= focus <= end:
+                    return 0.0
+                return min(abs(start - focus), abs(end - focus)).total_seconds()
+
+            closest = min(dated, key=episode_distance)
+            delta = episode_distance(closest)
+            if delta > 180.0:
+                return self._abstain(
+                    q,
+                    Intent.TEMPORAL,
+                    "no_evidence_at_time",
+                    f"I have no record of your {item} at that time.",
+                )
+            lead = f"At that time, your {item} was"
+        else:
+            now = as_of_moment or reference_time(states)
+            closest = max(
+                dated, key=lambda state: parse_iso(str(state["last_seen_wallclock"]))
+            )
+            freshness = (
+                time_ago(closest["last_seen_wallclock"], now) or "at an unknown time"
+            )
+            lead = f"I last saw your {item} {freshness}"
+
+        place = self._place(closest)
+        answer = self._cap(f"{lead} {place}{self._room_clause(closest)}.")
+        assessment = calibrated_confidence(closest, reference_time(states))
+        result = AskResult(
+            question=q,
+            intent=Intent.TEMPORAL.value,
+            status="answered",
+            answer=answer,
+            instance_label=closest.get("label"),
+            anchor_label=closest.get("anchor_label"),
+            room_label=closest.get("room_label"),
+            relation=closest.get("relation"),
+            confidence=assessment["score"],
+            last_seen_timestamp=closest.get("last_seen_timestamp"),
+            last_seen_wallclock=closest.get("last_seen_wallclock"),
+            evidence=[
+                {
+                    "observation_id": f"state:{closest.get('instance_id', 'unknown')}",
+                    "description": f"{item} seen {place}{self._room_clause(closest)}.",
+                    "observed_at": closest.get("last_seen_wallclock"),
+                    "anchor_label": closest.get("anchor_label"),
+                    "room_label": closest.get("room_label"),
+                    "crop_url": closest.get("crop_url"),
+                }
+            ],
+            dataset_id=memory.get("dataset_id"),
+        )
+        return result
+
     # -- location answers --------------------------------------------------
     def _answer_locate(self, q: str, memory: dict[str, Any]) -> AskResult:
         slots = self.dictionary.lookup_item(q)
-        if not slots.item:
+        item = self._canonical(slots.item)
+        if not item:
             suggestions = self.dictionary.suggestions_for(slots.item_raw)
             return self._abstain(
                 q,
@@ -166,7 +309,7 @@ class AnswerEngine:
             s
             for s in states
             if (s.get("canonical") or self.dictionary.canonical_of(s.get("label", "")))
-            == slots.item
+            == item
         ]
         if not candidates:
             known = sorted(
@@ -181,7 +324,7 @@ class AnswerEngine:
                 q,
                 Intent.LOCATE,
                 "not_observed_in_memory",
-                f"I haven't seen your {slots.item}.{hint}",
+                f"I haven't seen your {item}.{hint}",
             )
 
         if slots.room:
@@ -196,7 +339,7 @@ class AnswerEngine:
                     q,
                     Intent.LOCATE,
                     "no_match_in_room",
-                    f"I couldn't find your {slots.item} in the {slots.room}.",
+                    f"I couldn't find your {item} in the {slots.room}.",
                 )
             candidates = filtered
 
@@ -222,7 +365,7 @@ class AnswerEngine:
                     "low_confidence": "I'm not confident enough to say where that is.",
                 }.get(reason, "I'm not confident enough to say where that is."),
             )
-        answer = self._compose(slots.item, primary)
+        answer = self._compose(item, primary)
         evidence = [
             {
                 "observation_id": f"state:{primary.get('instance_id', 'unknown')}",

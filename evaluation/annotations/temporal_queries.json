@@ -1,0 +1,63 @@
+{
+  "_instructions": [
+    "Derived once from the frozen EgoLife bank (egolife_queries.json) and its independently labelled tiers sidecar; no Aegis output used.",
+    "expect_time is the caption timestamp of the placement, taken from the frozen bank. expect_place is the place noun from the same file.",
+    "t3_question / t4_question are the sidecar's mechanically derived prompts, kept verbatim."
+  ],
+  "queries": [
+    {
+      "id": "mug_d3_ask_d4",
+      "item": "mug",
+      "asked_at": "2026-01-08T12:59:00+00:00",
+      "expect_time": "2026-01-07T12:02:07+00:00",
+      "expect_place": ["table", "desk"],
+      "t3_question": "Where is the mug I used yesterday?",
+      "t4_question": "Where was the mug at 2026-01-07T12:02:07Z?"
+    },
+    {
+      "id": "mug_d3_ask_d5",
+      "item": "mug",
+      "asked_at": "2026-01-09T12:59:00+00:00",
+      "expect_time": "2026-01-07T12:02:07+00:00",
+      "expect_place": ["table", "desk"],
+      "t3_question": "Where is the mug I used two days ago?",
+      "t4_question": "Where was the mug at 2026-01-07T12:02:07Z?"
+    },
+    {
+      "id": "mug_d3_ask_d6",
+      "item": "mug",
+      "asked_at": "2026-01-10T12:59:00+00:00",
+      "expect_time": "2026-01-07T12:02:07+00:00",
+      "expect_place": ["table", "desk"],
+      "t3_question": "Where is the mug I used three days ago?",
+      "t4_question": "Where was the mug at 2026-01-07T12:02:07Z?"
+    },
+    {
+      "id": "bag_d3_ask_d5",
+      "item": "garbage bag",
+      "asked_at": "2026-01-09T12:59:00+00:00",
+      "expect_time": "2026-01-07T12:05:45+00:00",
+      "expect_place": ["sofa"],
+      "t3_question": "Where is the garbage bag I put down two days ago?",
+      "t4_question": "Where was the garbage bag at 2026-01-07T12:05:45Z?"
+    },
+    {
+      "id": "bag_d3_ask_d6",
+      "item": "garbage bag",
+      "asked_at": "2026-01-10T12:59:00+00:00",
+      "expect_time": "2026-01-07T12:05:45+00:00",
+      "expect_place": ["sofa"],
+      "t3_question": "Where is the garbage bag I put down three days ago?",
+      "t4_question": "Where was the garbage bag at 2026-01-07T12:05:45Z?"
+    },
+    {
+      "id": "bag_d3_ask_d7",
+      "item": "garbage bag",
+      "asked_at": "2026-01-11T12:59:00+00:00",
+      "expect_time": "2026-01-07T12:05:45+00:00",
+      "expect_place": ["sofa"],
+      "t3_question": "Where is the garbage bag I put down four days ago?",
+      "t4_question": "Where was the garbage bag at 2026-01-07T12:05:45Z?"
+    }
+  ]
+}

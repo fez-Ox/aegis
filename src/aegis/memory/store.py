@@ -662,6 +662,7 @@ class HomeStore:
             "room_id": field("last_room_id", room_id),
             "room_label": row["room_label"],
             "last_seen_wallclock": last_seen,
+            "run_start_wallclock": dict(row).get("start_at"),
             "last_seen_timestamp": _epoch(last_seen),
             "last_moved_wallclock": moved,
             "last_moved_timestamp": _epoch(moved),

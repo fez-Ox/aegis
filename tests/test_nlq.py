@@ -64,10 +64,13 @@ def test_known_but_unobserved_item_abstains(engine, memory):
     assert result.abstain_reason == "not_observed_in_memory"
 
 
-def test_temporal_and_activity_stub_abstain(engine, memory):
+def test_temporal_handler_abstains_when_no_timestamp(engine, memory):
     when = engine.ask("when did I last see my shoes", memory)
+    assert when.abstained and when.abstain_reason == "no_timestamp"
+
+
+def test_activity_intent_remains_an_honest_stub(engine, memory):
     what = engine.ask("what did I do this morning", memory)
-    assert when.abstained and when.abstain_reason == "temporal_handler_not_implemented"
     assert what.abstained and what.abstain_reason == "activity_handler_not_implemented"
 
 

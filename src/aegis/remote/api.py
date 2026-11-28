@@ -13,6 +13,7 @@ import html
 import json
 import logging
 import os
+from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from aegis.core.paths import validate_dataset_id
+from aegis.core.timeutil import time_ago
 from aegis.core.vocabulary import default_vocabulary
 from aegis.memory.compaction import compaction_ok
 from aegis.memory.homes import DuplicateRoomLabelError, get_store
@@ -32,6 +34,7 @@ from aegis.memory.reasoning import (
     event_summary,
     parse_query_cues,
     rank_candidates,
+    reference_time,
     room_phrase,
 )
 from aegis.memory.repository import (
@@ -184,6 +187,8 @@ class AskRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=300)
     dataset_id: str | None = None
     home_id: str | None = None
+    as_of: str | None = None
+    at: str | None = None
 
 
 class AskResponse(BaseModel):
@@ -201,6 +206,7 @@ class AskResponse(BaseModel):
     confidence: float | None = None
     last_seen_timestamp: float | None = None
     last_seen_wallclock: str | None = None
+    last_seen_time_ago: str | None = None
     suggestions: list[str] = Field(default_factory=list)
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     other_instances: list[str] = Field(default_factory=list)
@@ -603,11 +609,49 @@ def _ask_engine() -> AnswerEngine:
 
 
 def _answer_question(
-    text: str, dataset_id: str | None, home_id: str | None
+    text: str,
+    dataset_id: str | None,
+    home_id: str | None,
+    as_of: str | None = None,
+    at: str | None = None,
 ) -> AskResponse:
     """The single NLQ path: one memory view in, one grounded answer out."""
     key, repo = resolve_repository(dataset_id, home_id)
-    memory = memory_view_from_repo(repo)
+    from aegis.core.timeutil import parse_iso
+
+    for label, value in (("as_of", as_of), ("at", at)):
+        if value:
+            try:
+                parse_iso(value)
+            except ValueError:
+                return AskResponse(
+                    question=text,
+                    intent="temporal",
+                    status="invalid_time",
+                    answer=f"I couldn't read the {label} time.",
+                    found=False,
+                    abstained=True,
+                    abstain_reason=f"invalid_{label}",
+                    dataset_id=key,
+                )
+    states = None
+    if as_of and isinstance(repo, StoreRepository):
+        states = repo.store.states_as_of(as_of)
+    elif at and isinstance(repo, StoreRepository):
+        # T4 oracle: keep a narrow window around the requested instant so the
+        # engine can pick the closest dated state without using its place.
+        from aegis.core.timeutil import parse_iso, to_utc_iso
+
+        try:
+            moment = parse_iso(at)
+        except ValueError:
+            moment = None
+        if moment is not None:
+            states = repo.store.states_as_of(
+                to_utc_iso(moment + timedelta(seconds=180)),
+                since=to_utc_iso(moment - timedelta(seconds=180)),
+            )
+    memory = memory_view_from_repo(repo, states, focus_time=at, as_of=as_of)
     memory["dataset_id"] = key
     # Evidence URLs use the same path rules as the lower-level query endpoint.
     for state in memory["latest_objects"]:
@@ -628,6 +672,10 @@ def _answer_question(
         confidence=result.confidence,
         last_seen_timestamp=result.last_seen_timestamp,
         last_seen_wallclock=result.last_seen_wallclock,
+        last_seen_time_ago=time_ago(
+            result.last_seen_wallclock,
+            reference_time(memory.get("latest_objects", [])),
+        ),
         suggestions=result.suggestions,
         evidence=result.evidence,
         other_instances=result.other_instances,
@@ -664,14 +712,18 @@ def ask_question(
     text: str = Query(..., description="A question, e.g. 'where are my keys?'"),
     dataset_id: str | None = None,
     home_id: str | None = None,
+    as_of: str | None = None,
+    at: str | None = None,
 ) -> AskResponse:
     """Ask Aegis memory in natural language. No fabricated locations."""
-    return _answer_question(text, dataset_id, home_id)
+    return _answer_question(text, dataset_id, home_id, as_of, at)
 
 
 @app.post("/api/v1/ask", response_model=AskResponse)
 def ask_question_post(body: AskRequest) -> AskResponse:
-    return _answer_question(body.text, body.dataset_id, body.home_id)
+    return _answer_question(
+        body.text, body.dataset_id, body.home_id, body.as_of, body.at
+    )
 
 
 @app.get("/api/v1/query", response_model=MemoryQueryResponse)
@@ -805,6 +857,9 @@ def query_memory(
         explanation=reasoning["explanation"],
         last_seen_timestamp_s=primary.get("last_seen_timestamp"),
         last_seen_at=primary.get("last_seen_wallclock"),
+        last_seen_time_ago=time_ago(
+            primary.get("last_seen_wallclock"), reference_time(matches)
+        ),
         is_persistent_memory=reasoning["is_persistent_memory"],
         crop_url=_crop_url(repo, ds, primary),
         confidence=float(confidence) if confidence is not None else None,

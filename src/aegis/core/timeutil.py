@@ -38,3 +38,36 @@ def shift_iso(value: str, seconds: float) -> str:
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def time_ago(value: str | datetime | None, now: datetime | None = None) -> str | None:
+    """Plain-language freshness from a wall-clock timestamp.
+
+    Buckets are generic and conservative: an uncertain or missing timestamp
+    yields ``None`` rather than a fabricated "just now". Future timestamps
+    (clock skew) are clamped to "just now".
+    """
+    if value is None:
+        return None
+    try:
+        seen = parse_iso(str(value)) if isinstance(value, str) else value
+    except ValueError:
+        return None
+    if seen.tzinfo is None:
+        return None
+    moment = now or utc_now()
+    seconds = (moment - seen).total_seconds()
+    if seconds < 120:
+        return "just now"
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return f"{minutes} minutes ago"
+    hours = int(seconds // 3600)
+    if hours < 24:
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    days = int(seconds // 86400)
+    if days == 1:
+        return "yesterday"
+    if days < 7:
+        return f"{days} days ago"
+    return "over a week ago"
