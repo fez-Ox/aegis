@@ -16,6 +16,7 @@ from typing import Any
 
 from aegis.core.timeutil import parse_iso, time_ago, to_utc_iso
 from aegis.core.vocabulary import default_vocabulary
+from aegis.memory.evidence import answer_evidence
 from aegis.memory.reasoning import (
     calibrated_confidence,
     parse_query_cues,
@@ -235,12 +236,14 @@ class AnswerEngine:
             status="answered",
             answer=answer,
             evidence=[
-                {
-                    "observation_id": f"activity:{item.get('activity_id')}",
-                    "description": str(item.get("summary") or ""),
-                    "observed_at": item.get("start_at"),
-                    "room_label": item.get("room_label"),
-                }
+                answer_evidence(
+                    {
+                        "evidence_id": item.get("activity_id"),
+                        "last_seen_wallclock": item.get("start_at"),
+                        "room_label": item.get("room_label"),
+                    },
+                    description=str(item.get("summary") or ""),
+                )
                 for item in selected[:3]
             ],
             dataset_id=memory.get("dataset_id"),
@@ -366,14 +369,11 @@ class AnswerEngine:
             last_seen_timestamp=closest.get("last_seen_timestamp"),
             last_seen_wallclock=closest.get("last_seen_wallclock"),
             evidence=[
-                {
-                    "observation_id": f"state:{closest.get('instance_id', 'unknown')}",
-                    "description": f"{item} seen {place}{self._room_clause(closest)}.",
-                    "observed_at": closest.get("last_seen_wallclock"),
-                    "anchor_label": closest.get("anchor_label"),
-                    "room_label": closest.get("room_label"),
-                    "crop_url": closest.get("crop_url"),
-                }
+                answer_evidence(
+                    closest,
+                    crop_url=closest.get("crop_url"),
+                    description=f"{item} seen {place}{self._room_clause(closest)}.",
+                )
             ],
             dataset_id=memory.get("dataset_id"),
         )
@@ -458,17 +458,14 @@ class AnswerEngine:
             )
         answer = self._compose(item, primary)
         evidence = [
-            {
-                "observation_id": f"state:{primary.get('instance_id', 'unknown')}",
-                "description": (
+            answer_evidence(
+                primary,
+                crop_url=primary.get("crop_url"),
+                description=(
                     f"{primary.get('label', slots.item)} seen "
                     f"{self._place(primary)}{self._room_clause(primary)}."
                 ),
-                "observed_at": primary.get("last_seen_wallclock"),
-                "anchor_label": primary.get("anchor_label"),
-                "room_label": primary.get("room_label"),
-                "crop_url": primary.get("crop_url"),
-            }
+            )
         ]
         result = AskResult(
             question=q,

@@ -26,6 +26,7 @@ from aegis.core.paths import validate_dataset_id
 from aegis.core.timeutil import time_ago
 from aegis.core.vocabulary import default_vocabulary
 from aegis.memory.compaction import compaction_ok
+from aegis.memory.evidence import answer_evidence
 from aegis.memory.homes import DuplicateRoomLabelError, get_store
 from aegis.memory.personal import enroll as enroll_personal_item
 from aegis.memory.personal import personal_ids_for_query, resolve_alias
@@ -164,6 +165,7 @@ class MemoryQueryResponse(BaseModel):
     is_persistent_memory: bool = False
     crop_url: str | None = None
     confidence: float | None = None
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
     other_instances: list[dict[str, Any]] = Field(default_factory=list)
     # Ambiguity-aware answers. Optional so older clients keep working.
     resolution_mode: str | None = None
@@ -863,6 +865,16 @@ def query_memory(
         is_persistent_memory=reasoning["is_persistent_memory"],
         crop_url=_crop_url(repo, ds, primary),
         confidence=float(confidence) if confidence is not None else None,
+        evidence=[
+            answer_evidence(
+                state,
+                crop_url=_crop_url(repo, ds, state),
+                description=f"{state.get('label') or item} "
+                f"{state.get('relation') or 'last seen'} "
+                f"{state.get('anchor_label') or state.get('room_label') or ''}".strip(),
+            )
+            for state in candidates[:3]
+        ],
         other_instances=[
             {
                 "instance_id": m.get("instance_id"),

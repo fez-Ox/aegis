@@ -17,6 +17,60 @@ from typing import Any
 CARRIED = "carried_by_user"
 
 
+def answer_evidence(
+    state: Mapping[str, Any],
+    *,
+    crop_url: str | None = None,
+    description: str | None = None,
+) -> dict[str, Any]:
+    """One complete evidence record for a non-abstaining answer.
+
+    Every record carries an observation id, a timestamp, the anchor/room when
+    known, and either a crop URL or an explicit text fallback. Missing image
+    evidence is never silently represented as a null crop alone.
+    """
+    observation = (
+        state.get("instance_id")
+        or state.get("evidence_id")
+        or state.get("activity_id")
+    )
+    observed_at = (
+        state.get("last_seen_wallclock")
+        or state.get("observed_at")
+        or state.get("last_seen_at")
+        or state.get("last_seen_ts")
+    )
+    anchor = state.get("anchor_label")
+    room = state.get("room_label")
+    description = description or "Object state from memory."
+    if crop_url:
+        fallback = None
+    else:
+        place = ", ".join(str(value) for value in (anchor, room) if value)
+        fallback = f"No image crop available; {description}" + (
+            f" ({place})." if place else "."
+        )
+    return {
+        "observation_id": f"state:{observation}" if observation is not None else None,
+        "observed_at": observed_at,
+        "anchor_label": anchor,
+        "room_label": room,
+        "crop_url": crop_url,
+        "text_fallback": fallback,
+        "description": description,
+    }
+
+
+def evidence_complete(record: Mapping[str, Any]) -> bool:
+    """Whether a record satisfies the P1.4 contract."""
+    return bool(
+        record.get("observation_id")
+        and record.get("observed_at")
+        and (record.get("anchor_label") or record.get("room_label"))
+        and (record.get("crop_url") or record.get("text_fallback"))
+    )
+
+
 def crop_box(
     width: int, height: int, bbox: Sequence[float], pad: float
 ) -> tuple[int, int, int, int] | None:
