@@ -85,6 +85,14 @@ perception:
   hand_contact_max_distance: 0.35
 
 memory:
+  # Cross-session matching (measured on 18 controlled sessions from six real
+  # graphs): pair unsigned rooms, require a second cue for singleton/carried
+  # matches, and use a conservative appearance threshold.
+  matching:
+    room_pair_bare: true
+    singleton_requires_evidence: true
+    carried_requires_appearance: true
+    appearance_threshold: 0.25
   ranking:
     # Candidate ranking for ambiguous class queries ("Where is the mug?").
     candidate_limit: 3

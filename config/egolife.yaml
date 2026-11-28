@@ -51,6 +51,11 @@ perception:
 
 memory:
   home_id: egolife_jake
+  matching:
+    room_pair_bare: true
+    singleton_requires_evidence: true
+    carried_requires_appearance: true
+    appearance_threshold: 0.25
   ranking:
     candidate_limit: 3
     ambiguity_margin: 0.08

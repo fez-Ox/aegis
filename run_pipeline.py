@@ -452,6 +452,7 @@ def _ingest_into_home(dataset_id: str, config: RuntimeConfig, home_id: str) -> N
             vocabulary=config.vocab(),
             evidence_root=graph_path.parent,
             retention=config.memory.retention,
+            matching=config.memory.matching,
         )
     finally:
         store.close()

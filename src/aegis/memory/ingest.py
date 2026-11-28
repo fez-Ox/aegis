@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from aegis.core.config import RetentionConfig
+from aegis.core.config import MatchingConfig, RetentionConfig
 from aegis.core.timeutil import parse_iso, shift_iso, to_utc_iso, utc_now
 from aegis.core.vocabulary import Vocabulary, default_vocabulary
 from aegis.geometry.gravity import GravityFrame
@@ -111,6 +111,7 @@ def ingest_session(
     timezone: str = DEFAULT_TIMEZONE,
     evidence_root: Path | str | None = None,
     retention: RetentionConfig | None = None,
+    matching: MatchingConfig | None = None,
 ) -> IngestReport:
     """Merge ``graph`` into ``store``; see the module docstring.
 
@@ -164,9 +165,15 @@ def ingest_session(
             },
         )
 
-        room_map = _ingest_rooms(store, graph, session_id, latest, clock, report)
-        anchor_map = _ingest_anchors(store, graph, session_id, room_map, vocab, report)
-        instance_map = _ingest_instances(store, graph, anchor_map, vocab, report)
+        room_map = _ingest_rooms(
+            store, graph, session_id, latest, clock, report, matching
+        )
+        anchor_map = _ingest_anchors(
+            store, graph, session_id, room_map, vocab, report, matching
+        )
+        instance_map = _ingest_instances(
+            store, graph, anchor_map, vocab, report, matching, room_map
+        )
         _ingest_runs(
             store,
             graph,
@@ -209,7 +216,13 @@ def ingest_session(
 
 # ----------------------------------------------------------------- rooms
 def _ingest_rooms(
-    store, graph, session_id, previous, clock, report
+    store,
+    graph,
+    session_id,
+    previous,
+    clock,
+    report,
+    matching: MatchingConfig | None = None,
 ) -> dict[int, int | None]:
     anchors = graph.get("anchors", [])
     session_rooms: list[RoomInfo] = []
@@ -250,7 +263,16 @@ def _ingest_rooms(
                 int(previous["last_wearer_room_id"]),
             )
 
-    mapping = match_rooms(session_rooms, home_rooms, continuity=continuity)
+    cfg = matching or MatchingConfig()
+    mapping = match_rooms(
+        session_rooms,
+        home_rooms,
+        continuity=continuity,
+        min_similarity=cfg.room_min_similarity,
+        min_margin=cfg.room_min_margin,
+        min_overlap=cfg.room_min_overlap,
+        pair_bare_rooms=cfg.room_pair_bare,
+    )
     labels = {r["label"] for r in store.rooms()}
     stamp = now_iso()
     result: dict[int, int | None] = {}
@@ -307,7 +329,13 @@ def _canonical_of(state: Mapping[str, Any], vocab: Vocabulary) -> str:
 
 
 def _ingest_anchors(
-    store, graph, session_id, room_map, vocab, report
+    store,
+    graph,
+    session_id,
+    room_map,
+    vocab,
+    report,
+    matching: MatchingConfig | None = None,
 ) -> dict[int, int]:
     gravity = GravityFrame.from_dict(graph.get("gravity"))
     canonical_by_instance = {
@@ -351,7 +379,13 @@ def _ingest_anchors(
         for r in home_rows
     ]
     first_frame = not any(a.position is not None for a in home_anchors)
-    matched = match_anchors(session_anchors, home_anchors, room_map)
+    cfg = matching or MatchingConfig()
+    matched = match_anchors(
+        session_anchors,
+        home_anchors,
+        room_map,
+        max_residual_fraction=cfg.anchor_max_residual_fraction,
+    )
     transform = matched.transform
 
     result: dict[int, int] = {}
@@ -406,7 +440,15 @@ def _ingest_anchors(
 
 
 # ------------------------------------------------------------- instances
-def _ingest_instances(store, graph, anchor_map, vocab, report) -> dict[int, int | None]:
+def _ingest_instances(
+    store,
+    graph,
+    anchor_map,
+    vocab,
+    report,
+    matching: MatchingConfig | None = None,
+    room_map: dict[int, int | None] | None = None,
+) -> dict[int, int | None]:
     first = _first_runs(graph)
     session_instances = []
     for state in graph.get("latest_states", []):
@@ -420,6 +462,7 @@ def _ingest_instances(store, graph, anchor_map, vocab, report) -> dict[int, int 
                 relation=run["relation"] if run else None,
                 anchor_id=run.get("anchor_id") if run else None,
                 appearance=tuple(appearance) if appearance else None,
+                room_id=run.get("room_id") if run else None,
             )
         )
     home_instances = [
@@ -429,13 +472,20 @@ def _ingest_instances(store, graph, anchor_map, vocab, report) -> dict[int, int 
             relation=r["last_relation"],
             anchor_id=r["last_anchor_id"],
             appearance=tuple(json.loads(r["appearance"])) if r["appearance"] else None,
+            room_id=r["last_room_id"],
         )
         for r in store.instances()
     ]
+    cfg = matching or MatchingConfig()
     mapping = match_instances(
         session_instances,
         home_instances,
         lambda sid: anchor_map.get(sid) if sid else None,
+        room_map,
+        appearance_threshold=cfg.appearance_threshold,
+        appearance_margin=cfg.appearance_margin,
+        singleton_requires_evidence=cfg.singleton_requires_evidence,
+        carried_requires_appearance=cfg.carried_requires_appearance,
     )
     result: dict[int, int | None] = {}
     for info in session_instances:

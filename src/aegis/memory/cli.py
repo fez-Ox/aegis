@@ -28,6 +28,14 @@ def _retention(config_path: str | None):
     return RetentionConfig()
 
 
+def _matching(config_path: str | None):
+    if config_path:
+        return load_config(config_path).memory.matching
+    from aegis.core.config import MatchingConfig
+
+    return MatchingConfig()
+
+
 def _home(args) -> str:
     if args.home_id:
         return args.home_id
@@ -77,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
                 vocabulary=_vocabulary(args.config_path),
                 evidence_root=args.graph.parent,
                 retention=_retention(args.config_path),
+                matching=_matching(args.config_path),
             )
             print(json.dumps(report.as_dict(), indent=2))
         elif args.command == "show":

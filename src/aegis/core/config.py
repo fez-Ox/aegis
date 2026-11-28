@@ -463,6 +463,42 @@ class ConfidenceConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class MatchingConfig:
+    """Generic cross-session matching thresholds (no per-home settings)."""
+
+    room_min_similarity: float = 0.5
+    room_min_margin: float = 0.05
+    room_min_overlap: int = 1
+    # When several rooms have no landmark signature, pair them in id order
+    # instead of giving up on all of them. Measured on 18 controlled sessions:
+    # same-home room recall 0.556 -> 1.000 with no extra cross-home false match.
+    room_pair_bare: bool = True
+    anchor_max_residual_fraction: float = 0.25
+    # 0.25 instead of 0.35 cut cross-home false merges 16 -> 4 with unchanged
+    # same-home recall in the controlled benchmark.
+    appearance_threshold: float = 0.25
+    appearance_margin: float = 0.1
+    # A singleton class match or a carried-item match needs a second cue
+    # (same anchored place or appearance agreement) before merging identities.
+    singleton_requires_evidence: bool = True
+    carried_requires_appearance: bool = True
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.room_min_similarity <= 1:
+            raise ValueError("matching.room_min_similarity must be in [0, 1]")
+        if not 0 <= self.room_min_margin <= 1:
+            raise ValueError("matching.room_min_margin must be in [0, 1]")
+        if self.room_min_overlap < 1:
+            raise ValueError("matching.room_min_overlap must be at least 1")
+        if self.anchor_max_residual_fraction <= 0:
+            raise ValueError("matching.anchor_max_residual_fraction must be positive")
+        if not 0 <= self.appearance_threshold <= 1:
+            raise ValueError("matching.appearance_threshold must be in [0, 1]")
+        if not 0 <= self.appearance_margin <= 1:
+            raise ValueError("matching.appearance_margin must be in [0, 1]")
+
+
+@dataclass(frozen=True, slots=True)
 class EvidenceConfig:
     """Object-only evidence crops kept after raw frames are purged.
 
@@ -519,6 +555,7 @@ class MemoryConfig:
     build: MemoryBuildConfig = field(default_factory=MemoryBuildConfig)
     ranking: RankingConfig = field(default_factory=RankingConfig)
     confidence: ConfidenceConfig = field(default_factory=ConfidenceConfig)
+    matching: MatchingConfig = field(default_factory=MatchingConfig)
     evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
     retention: RetentionConfig = field(default_factory=RetentionConfig)
     # Durable per-home memory (laptop side): <store_root>/<home_id>/memory.db
@@ -940,6 +977,11 @@ class RuntimeConfig:
                     ConfidenceConfig,
                     memory_raw.get("confidence"),
                     "memory.confidence",
+                ),
+                matching=_section(
+                    MatchingConfig,
+                    memory_raw.get("matching"),
+                    "memory.matching",
                 ),
                 evidence=_section(
                     EvidenceConfig, memory_raw.get("evidence"), "memory.evidence"

@@ -41,6 +41,7 @@ def match_rooms(
     min_similarity: float = 0.5,
     min_margin: float = 0.05,
     min_overlap: int = 1,
+    pair_bare_rooms: bool = False,
 ) -> dict[int, int | None]:
     """Map session room ids to home room ids (None = create a new room).
 
@@ -114,6 +115,18 @@ def match_rooms(
     bare_home = [h for h in home_rooms if h.room_id not in used and not h.signature]
     if len(unassigned_session) == 1 and len(bare_session) == 1 and len(bare_home) == 1:
         result[bare_session[0].room_id] = bare_home[0].room_id
+    elif (
+        pair_bare_rooms
+        and len(unassigned_session) == len(bare_session)
+        and len(bare_session) == len(bare_home)
+        and bare_session
+    ):
+        for session_room, home_room in zip(
+            sorted(bare_session, key=lambda room: room.room_id),
+            sorted(bare_home, key=lambda room: room.room_id),
+            strict=True,
+        ):
+            result[session_room.room_id] = home_room.room_id
     return result
 
 
@@ -309,15 +322,19 @@ class InstanceInfo:
     relation: str | None = None
     anchor_id: int | None = None
     appearance: tuple[float, ...] | None = None
+    room_id: int | None = None
 
 
 def match_instances(
     session_instances: Sequence[InstanceInfo],
     home_instances: Sequence[InstanceInfo],
     anchor_map: Callable[[int | None], int | None],
+    room_map: Mapping[int, int | None] | None = None,
     *,
     appearance_threshold: float = 0.35,
     appearance_margin: float = 0.1,
+    singleton_requires_evidence: bool = False,
+    carried_requires_appearance: bool = False,
 ) -> dict[int, int | None]:
     """Map session instances (state = first run) to home instances (last-known).
 
@@ -383,11 +400,36 @@ def match_instances(
                 continue
             carried = [h for h in free() if h.relation == "carried_by_user"]
             if len(carried) == 1:
-                assign(s, carried[0])
+                home = carried[0]
+                if carried_requires_appearance and s.appearance and home.appearance:
+                    distance = appearance_distance(home.appearance, s.appearance)
+                    if distance is None or distance > appearance_threshold:
+                        continue
+                assign(s, home)
 
         # 3. The only one of its class on both sides.
         if len(pending()) == 1 and len(free()) == 1:
-            assign(pending()[0], free()[0])
+            session, home = pending()[0], free()[0]
+            if singleton_requires_evidence:
+                mapped = anchor_map(session.anchor_id)
+                same_anchor = (
+                    mapped is not None
+                    and home.anchor_id is not None
+                    and mapped == home.anchor_id
+                )
+                distance = appearance_distance(home.appearance, session.appearance)
+                similar = distance is not None and distance <= appearance_threshold
+                same_room = bool(
+                    room_map
+                    and session.room_id is not None
+                    and home.room_id is not None
+                    and room_map.get(session.room_id) == home.room_id
+                )
+                if not same_anchor and not same_room and not similar:
+                    # Leave it pending for the appearance tier, or new.
+                    result[session.instance_id] = None
+                    continue
+            assign(session, home)
 
         # 4. Appearance with a margin over the runner-up.
         for s in pending():
