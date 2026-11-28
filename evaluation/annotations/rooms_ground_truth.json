@@ -1,0 +1,47 @@
+{
+  "_instructions": [
+    "Room intervals hand-labelled by visual inspection of 12-frame contact sheets extracted from each video (scripts/make_contact_sheet.py). Times are seconds from video start, intervals half-open.",
+    "Room names describe the visible environment type, not Aegis output. A single room means the wearer stayed in one area for the whole clip."
+  ],
+  "datasets": {
+    "demo01_sam3": {
+      "duration": 43.2,
+      "rooms": [{"name": "Entryway", "intervals": [[0.0, 43.2]]}],
+      "transitions": [],
+      "note": "Wooden shoe cabinet and tiled floor throughout; entryway/hallway."
+    },
+    "demo_pots_sam3": {
+      "duration": 76.6,
+      "rooms": [{"name": "Kitchen", "intervals": [[0.0, 76.6]]}],
+      "transitions": [],
+      "note": "Glass dish cabinet with pots, pans and plates throughout."
+    },
+    "demo03_sam3": {
+      "duration": 99.9,
+      "rooms": [{"name": "Kitchen", "intervals": [[0.0, 99.9]]}],
+      "transitions": [],
+      "note": "Stove, sink, counter and fridge visible throughout."
+    },
+    "demo04_sam3": {
+      "duration": 46.7,
+      "rooms": [{"name": "Utility", "intervals": [[0.0, 46.7]]}],
+      "transitions": [],
+      "note": "Trash bin, mop bucket and bagged waste in one small utility/bathroom area; doorway visible but wearer stays in the same area."
+    },
+    "demo05_sam3": {
+      "duration": 141.4,
+      "rooms": [{"name": "Laundry", "intervals": [[0.0, 141.4]]}],
+      "transitions": [],
+      "note": "Washing machine and two laundry baskets on wood floor throughout."
+    },
+    "stress_egolife_s00": {
+      "duration": 300.4,
+      "rooms": [
+        {"name": "Living Room", "intervals": [[0.0, 190.0], [245.0, 300.4]]},
+        {"name": "Bedroom", "intervals": [[190.0, 245.0]]}
+      ],
+      "transitions": [{"t": 190.0}, {"t": 245.0}],
+      "note": "Group meeting around table with TV/whiteboard, then a bedroom with a bed (~3:10-4:05), then back to the meeting area."
+    }
+  }
+}

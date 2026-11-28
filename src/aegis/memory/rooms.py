@@ -174,6 +174,12 @@ def extract_room_regions(
     *,
     zone_link_radius: float = 1.5,
     min_zone_keyframes: int = 3,
+    landmark_radius: float | None = None,
+    landmark_min_votes: int = 1,
+    landmark_min_confidence: float = 0.0,
+    landmark_distinct_instances: bool = False,
+    doorway_step: float | None = None,
+    merge_same_type: bool = False,
     vocabulary: Vocabulary | None = None,
     gravity: GravityFrame | None = None,
     unit: float = 1.0,
@@ -193,29 +199,58 @@ def extract_room_regions(
     vocab = vocabulary or default_vocabulary()
     frame = gravity or GravityFrame.assumed()
     link_radius = zone_link_radius * unit
+    evidence_radius = (
+        max(link_radius, 2.0 * unit)
+        if landmark_radius is None
+        else landmark_radius * unit
+    )
 
     if zone_link_radius <= 0:
         raise ValueError("zone_link_radius must be positive")
+    if landmark_radius is not None and landmark_radius <= 0:
+        raise ValueError("landmark_radius must be positive")
     if min_zone_keyframes < 1:
         raise ValueError("min_zone_keyframes must be at least 1")
+    if doorway_step is not None and doorway_step <= 0:
+        raise ValueError("doorway_step must be positive")
+    if landmark_min_votes < 1:
+        raise ValueError("landmark_min_votes must be at least 1")
+    if not 0 <= landmark_min_confidence <= 1:
+        raise ValueError("landmark_min_confidence must be in [0, 1]")
 
     keyframes = parse_camera_positions(camera_poses)
     if not keyframes:
         return []
 
     zones: list[_Zone] = []
+    zone_groups: list[int] = []
+    previous_position: np.ndarray | None = None
     for frame_id, timestamp, position in keyframes:
+        step = (
+            float(np.linalg.norm(position - previous_position))
+            if previous_position is not None
+            else 0.0
+        )
+        previous_position = position
+        # A single large stride is a doorway crossing, not drift inside one
+        # room. Force a new zone even if an old centroid is within link_radius.
+        crossed = doorway_step is not None and step > doorway_step * unit
         best_zone: _Zone | None = None
         best_distance = float("inf")
-        for zone in zones:
-            distance = _horizontal_distance(position, zone.centroid, frame)
-            if distance < best_distance:
-                best_distance = distance
-                best_zone = zone
+        if not crossed:
+            for zone in zones:
+                distance = _horizontal_distance(position, zone.centroid, frame)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_zone = zone
         if best_zone is not None and best_distance <= link_radius:
             best_zone.add(position, frame_id, timestamp)
         else:
             zones.append(_Zone(position, frame_id, timestamp))
+            if crossed:
+                zone_groups.append(max(zone_groups, default=-1) + 1)
+            else:
+                zone_groups.append(zone_groups[-1] if zone_groups else 0)
 
     # Merge revisited zones (single-linkage over zone centroids).
     merge_parent = list(range(len(zones)))
@@ -228,6 +263,8 @@ def extract_room_regions(
 
     for i in range(len(zones)):
         for j in range(i + 1, len(zones)):
+            if zone_groups[i] != zone_groups[j]:
+                continue
             if _horizontal_distance(zones[i].centroid, zones[j].centroid, frame) <= (
                 link_radius
             ):
@@ -253,7 +290,10 @@ def extract_room_regions(
     # Collect landmark evidence votes per zone.
     votes: list[dict[str, int]] = [{} for _ in valid_zones]
     evidence: list[set[str]] = [set() for _ in valid_zones]
+    tracks: list[dict[str, set[int]]] = [{} for _ in valid_zones]
     for box in boxes_3d:
+        if float(box.confidence) < landmark_min_confidence:
+            continue
         entry = vocab.entry(box.label)
         if entry.room_type is None or entry.role not in {"landmark", "anchor"}:
             continue
@@ -265,9 +305,10 @@ def extract_room_regions(
             if distance < best_distance:
                 best_distance = distance
                 best_index = zone_index
-        if best_index >= 0 and best_distance <= max(link_radius, 2.0 * unit):
+        if best_index >= 0 and best_distance <= evidence_radius:
             room_type = entry.room_type
             votes[best_index][room_type] = votes[best_index].get(room_type, 0) + 1
+            tracks[best_index].setdefault(room_type, set()).add(int(box.track_id))
             evidence[best_index].add(entry.display)
 
     # Deterministic room IDs in temporal order of first observation.
@@ -285,10 +326,17 @@ def extract_room_regions(
             for h1, h2 in hull
         ]
 
-        if votes[zone_index]:
-            room_type = min(
-                votes[zone_index].items(), key=lambda item: (-item[1], item[0])
-            )[0]
+        eligible = {
+            room_type: count
+            for room_type, count in votes[zone_index].items()
+            if count >= landmark_min_votes
+            and (
+                not landmark_distinct_instances
+                or len(tracks[zone_index].get(room_type, ())) >= landmark_min_votes
+            )
+        }
+        if eligible:
+            room_type = min(eligible.items(), key=lambda item: (-item[1], item[0]))[0]
             typed_counts[room_type] = typed_counts.get(room_type, 0) + 1
             label = (
                 room_type
@@ -313,6 +361,46 @@ def extract_room_regions(
                 end_timestamp=float(max(zone.timestamps)),
             )
         )
+
+    if merge_same_type and len(regions) > 1:
+        # A small link radius can split one room into several zones as the
+        # wearer drifts. Adjacent zones with the same dominant type are the
+        # same room; distinct types (or a neutral label) are kept separate.
+        merged_regions: list[RoomRegion] = []
+        for region in regions:
+            target = None
+            for existing in merged_regions:
+                if existing.room_type != region.room_type or region.room_type == "Room":
+                    continue
+                distance = float(
+                    np.linalg.norm(
+                        np.asarray(existing.centroid) - np.asarray(region.centroid)
+                    )
+                )
+                if distance <= 2.0 * link_radius:
+                    target = existing
+                    break
+            if target is None:
+                merged_regions.append(region)
+                continue
+            combined = target.keyframe_count + region.keyframe_count
+            target.centroid = tuple(
+                (
+                    target.centroid[axis] * target.keyframe_count
+                    + region.centroid[axis] * region.keyframe_count
+                )
+                / combined
+                for axis in range(3)
+            )
+            target.keyframe_count = combined
+            target.start_timestamp = min(target.start_timestamp, region.start_timestamp)
+            target.end_timestamp = max(target.end_timestamp, region.end_timestamp)
+            target.evidence_labels = sorted(
+                set(target.evidence_labels) | set(region.evidence_labels)
+            )
+        for index, region in enumerate(merged_regions, start=1):
+            region.room_id = index
+        regions = merged_regions
     return regions
 
 

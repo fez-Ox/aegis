@@ -101,7 +101,12 @@ memory:
     enabled: true
     # Floor-plane radius (meters, VGGT-Ω scale) at which two camera keyframes
     # belong to the same room zone; doorway crossings split beyond this.
-    zone_link_radius: 1.5
+    zone_link_radius: 2.5
+    # One confident landmark is not enough to type a whole room; require two
+    # distinct, high-confidence instances (generic, measured on six videos).
+    landmark_min_votes: 2
+    landmark_min_confidence: 0.8
+    landmark_distinct_instances: true
     # Minimum keyframes observed in a zone before it becomes a room region.
     min_zone_keyframes: 3
   gravity:

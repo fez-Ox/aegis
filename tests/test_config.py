@@ -22,8 +22,11 @@ def test_example_config_loads() -> None:
 def test_room_memory_config_defaults_and_overrides() -> None:
     config = RuntimeConfig.from_mapping({})
     assert config.memory.rooms.enabled is True
-    assert config.memory.rooms.zone_link_radius == 1.5
+    assert config.memory.rooms.zone_link_radius == 2.5
     assert config.memory.rooms.min_zone_keyframes == 3
+    assert config.memory.rooms.landmark_min_votes == 2
+    assert config.memory.rooms.landmark_min_confidence == 0.8
+    assert config.memory.rooms.landmark_distinct_instances is True
 
     custom = RuntimeConfig.from_mapping(
         {

@@ -240,9 +240,15 @@ class RoomMemoryConfig:
 
     enabled: bool = True
     # Floor-plane distance at which two keyframe positions join one room zone.
-    zone_link_radius: float = 1.5
+    zone_link_radius: float = 2.5
     # Minimum keyframes a trajectory zone needs before it becomes a room.
     min_zone_keyframes: int = 3
+    # A room type needs several distinct, confident landmark instances before
+    # it overrides the neutral "Room #N" label; one stray "stove" detection
+    # must not type a whole laundry area as a kitchen.
+    landmark_min_votes: int = 2
+    landmark_min_confidence: float = 0.8
+    landmark_distinct_instances: bool = True
 
 
 @dataclass(frozen=True, slots=True)

@@ -68,7 +68,10 @@ memory:
     important_hot_days: 365
   rooms:
     enabled: true
-    zone_link_radius: 1.5
+    zone_link_radius: 2.5
+    landmark_min_votes: 2
+    landmark_min_confidence: 0.8
+    landmark_distinct_instances: true
     min_zone_keyframes: 3
   gravity:
     enabled: true
