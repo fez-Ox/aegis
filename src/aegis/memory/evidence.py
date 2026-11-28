@@ -30,9 +30,7 @@ def answer_evidence(
     evidence is never silently represented as a null crop alone.
     """
     observation = (
-        state.get("instance_id")
-        or state.get("evidence_id")
-        or state.get("activity_id")
+        state.get("instance_id") or state.get("evidence_id") or state.get("activity_id")
     )
     observed_at = (
         state.get("last_seen_wallclock")

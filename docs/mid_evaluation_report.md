@@ -24,7 +24,8 @@ on Modal GPU.
 | Points per 3D box | mean 2,089; p10 103, p50 638; mean box volume 0.000194 m³ |
 | Spatial states | in_hand 569, hand 495, static_structure 39, on_surface only **19** |
 | Memory | 1 room ("Kitchen"), 5 anchors, 34 instances (only **2** with an anchor), 1 room visit, 4 pickups + 1 placement |
-| Rerun | in progress at time of writing; recording written to the Modal volume |
+| Rerun | **1,926 s** (168.6 MB RRD) — the dominant cost of the run |
+| Total pipeline | **2,928 s** (48.8 min compute; ~82 min wall-clock with image build + upload + download) |
 
 Label mix: hand 495, clothes 268, shoes 82, bowl 58, plate 52, cooking pot 47,
 trash bin 41, bottle 39, kitchen counter 16, sink 12, storage cabinet 10.
